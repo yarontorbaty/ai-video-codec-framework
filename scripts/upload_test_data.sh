@@ -2,7 +2,7 @@
 set -e
 
 # AI Video Codec Framework - Test Data Upload Script
-# This script uploads test videos to S3 for the framework to process
+# This script uploads test videos to S3 for the framework
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,7 +15,6 @@ NC='\033[0m' # No Color
 PROJECT_NAME="ai-video-codec"
 ENVIRONMENT="production"
 REGION="us-east-1"
-STACK_NAME="${PROJECT_NAME}-${ENVIRONMENT}"
 
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}AI Video Codec Framework - Test Data Upload${NC}"
@@ -28,187 +27,171 @@ if ! aws sts get-caller-identity > /dev/null 2>&1; then
     exit 1
 fi
 
-# Get S3 bucket names
-echo -e "${BLUE}Getting S3 bucket information...${NC}"
-ARTIFACTS_BUCKET=$(aws cloudformation describe-stacks \
-    --stack-name ${STACK_NAME}-storage \
-    --query 'Stacks[0].Outputs[?OutputKey==`ArtifactsBucketName`].OutputValue' \
-    --output text \
-    --region ${REGION} 2>/dev/null)
+echo -e "${GREEN}✓ AWS CLI configured${NC}"
 
+# Get S3 bucket names from CloudFormation
+echo -e "${BLUE}Getting S3 bucket names...${NC}"
 VIDEOS_BUCKET=$(aws cloudformation describe-stacks \
-    --stack-name ${STACK_NAME}-storage \
+    --stack-name ${PROJECT_NAME}-${ENVIRONMENT}-storage \
     --query 'Stacks[0].Outputs[?OutputKey==`VideosBucketName`].OutputValue' \
     --output text \
-    --region ${REGION} 2>/dev/null)
-
-if [ "$ARTIFACTS_BUCKET" = "None" ] || [ -z "$ARTIFACTS_BUCKET" ]; then
-    echo -e "${RED}Error: Could not get artifacts bucket. Is the storage stack deployed?${NC}"
-    exit 1
-fi
+    --region ${REGION})
 
 if [ "$VIDEOS_BUCKET" = "None" ] || [ -z "$VIDEOS_BUCKET" ]; then
-    echo -e "${RED}Error: Could not get videos bucket. Is the storage stack deployed?${NC}"
+    echo -e "${RED}Error: Could not get videos bucket name${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}Artifacts Bucket: ${ARTIFACTS_BUCKET}${NC}"
-echo -e "${GREEN}Videos Bucket: ${VIDEOS_BUCKET}${NC}"
-echo ""
+echo -e "${GREEN}✓ Videos bucket: ${VIDEOS_BUCKET}${NC}"
 
-# Check if test data directory exists
-if [ ! -d "data" ]; then
-    echo -e "${YELLOW}Creating data directory...${NC}"
-    mkdir -p data
+# Check if test data exists
+TEST_DATA_DIR="test_data"
+if [ ! -d "$TEST_DATA_DIR" ]; then
+    echo -e "${YELLOW}Test data directory not found. Creating test videos...${NC}"
+    
+    # Check if Python and OpenCV are available
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${RED}Error: Python3 not found${NC}"
+        exit 1
+    fi
+    
+    # Install required packages
+    echo -e "${BLUE}Installing required packages...${NC}"
+    pip3 install opencv-python numpy --user
+    
+    # Generate test videos
+    echo -e "${BLUE}Generating test videos...${NC}"
+    python3 scripts/generate_test_videos.py \
+        --output-dir "$TEST_DATA_DIR" \
+        --width 3840 \
+        --height 2160 \
+        --duration 10 \
+        --fps 60 \
+        --patterns mixed natural \
+        --create-hevc \
+        --hevc-crf 23
 fi
 
 # Check if test videos exist
-if [ ! -f "data/source_4k60_10s.mp4" ]; then
-    echo -e "${YELLOW}Test video not found: data/source_4k60_10s.mp4${NC}"
-    echo "Please provide a 4K60 10-second test video"
-    echo "You can:"
-    echo "1. Download a sample video"
-    echo "2. Create your own test video"
-    echo "3. Use an existing video file"
-    echo ""
-    read -p "Enter path to your test video (or press Enter to skip): " VIDEO_PATH
-    
-    if [ -n "$VIDEO_PATH" ] && [ -f "$VIDEO_PATH" ]; then
-        echo -e "${BLUE}Copying video to data directory...${NC}"
-        cp "$VIDEO_PATH" data/source_4k60_10s.mp4
-        echo -e "${GREEN}✓ Video copied${NC}"
-    else
-        echo -e "${YELLOW}Skipping video upload${NC}"
-        exit 0
-    fi
+SOURCE_VIDEO=""
+HEVC_VIDEO=""
+
+# Look for HD test videos first
+if [ -f "$TEST_DATA_DIR/SOURCE_HD_RAW.mp4" ]; then
+    SOURCE_VIDEO="$TEST_DATA_DIR/SOURCE_HD_RAW.mp4"
+    HEVC_VIDEO="$TEST_DATA_DIR/HEVC_HD_10Mbps.mp4"
+    echo -e "${GREEN}✓ Found HD test videos${NC}"
+elif [ -f "$TEST_DATA_DIR/source_tiny.mp4" ]; then
+    SOURCE_VIDEO="$TEST_DATA_DIR/source_tiny.mp4"
+    HEVC_VIDEO="$TEST_DATA_DIR/hevc_tiny.mp4"
+    echo -e "${GREEN}✓ Found tiny test videos${NC}"
+else
+    # Look for source videos (legacy)
+    for video in "$TEST_DATA_DIR"/source_4k60_10s_*.mp4; do
+        if [ -f "$video" ]; then
+            SOURCE_VIDEO="$video"
+            break
+        fi
+    done
+
+    # Look for HEVC videos (legacy)
+    for video in "$TEST_DATA_DIR"/hevc_4k60_10s_*.mp4; do
+        if [ -f "$video" ]; then
+            HEVC_VIDEO="$video"
+            break
+        fi
+    done
 fi
 
-# Check if HEVC reference exists
-if [ ! -f "data/hevc_reference.mp4" ]; then
-    echo -e "${YELLOW}HEVC reference not found: data/hevc_reference.mp4${NC}"
-    echo "Creating HEVC reference from source video..."
+if [ -z "$SOURCE_VIDEO" ]; then
+    echo -e "${RED}Error: No source test video found in $TEST_DATA_DIR${NC}"
+    echo "Please run: ./scripts/create_hd_test.sh"
+    exit 1
+fi
+
+if [ -z "$HEVC_VIDEO" ]; then
+    echo -e "${YELLOW}Warning: No HEVC reference video found${NC}"
+    echo "Creating HEVC reference..."
     
-    if command -v ffmpeg &> /dev/null; then
-        echo -e "${BLUE}Encoding HEVC reference...${NC}"
-        ffmpeg -i data/source_4k60_10s.mp4 -c:v libx265 -preset medium -crf 23 -c:a copy data/hevc_reference.mp4 -y
-        echo -e "${GREEN}✓ HEVC reference created${NC}"
-    else
+    # Check if FFmpeg is available
+    if ! command -v ffmpeg &> /dev/null; then
         echo -e "${RED}Error: FFmpeg not found. Please install FFmpeg to create HEVC reference${NC}"
-        echo "You can install it with: brew install ffmpeg (macOS) or apt install ffmpeg (Ubuntu)"
+        echo "On macOS: brew install ffmpeg"
+        echo "On Ubuntu: sudo apt install ffmpeg"
         exit 1
     fi
+    
+    HEVC_VIDEO="$TEST_DATA_DIR/hevc_4k60_10s_reference.mp4"
+    ffmpeg -i "$SOURCE_VIDEO" -c:v libx265 -crf 23 -preset medium -pix_fmt yuv420p -y "$HEVC_VIDEO"
+    echo -e "${GREEN}✓ HEVC reference created${NC}"
 fi
+
+echo -e "${BLUE}Uploading test videos to S3...${NC}"
 
 # Upload source video
-echo -e "${BLUE}Uploading source video...${NC}"
-aws s3 cp data/source_4k60_10s.mp4 s3://${VIDEOS_BUCKET}/source.mp4 \
-    --region ${REGION} \
-    --metadata "type=source,resolution=4k,fps=60,duration=10s"
-
-echo -e "${GREEN}✓ Source video uploaded${NC}"
+echo -e "${BLUE}Uploading source video: $(basename "$SOURCE_VIDEO")${NC}"
+if [[ "$SOURCE_VIDEO" == *"SOURCE_HD_RAW"* ]]; then
+    aws s3 cp "$SOURCE_VIDEO" "s3://$VIDEOS_BUCKET/source/" \
+        --region "$REGION" \
+        --metadata "type=source,resolution=1080p,fps=30,duration=10s"
+else
+    aws s3 cp "$SOURCE_VIDEO" "s3://$VIDEOS_BUCKET/source/" \
+        --region "$REGION" \
+        --metadata "type=source,resolution=4k,fps=60,duration=10s"
+fi
 
 # Upload HEVC reference
-echo -e "${BLUE}Uploading HEVC reference...${NC}"
-aws s3 cp data/hevc_reference.mp4 s3://${VIDEOS_BUCKET}/hevc_reference.mp4 \
-    --region ${REGION} \
-    --metadata "type=hevc_reference,codec=hevc,preset=medium,crf=23"
-
-echo -e "${GREEN}✓ HEVC reference uploaded${NC}"
-
-# Create metadata file
-echo -e "${BLUE}Creating metadata file...${NC}"
-cat > data/metadata.json << EOF
-{
-  "source_video": {
-    "filename": "source.mp4",
-    "resolution": "4K",
-    "fps": 60,
-    "duration": 10,
-    "codec": "uncompressed",
-    "description": "Original uncompressed 4K60 10-second test video"
-  },
-  "hevc_reference": {
-    "filename": "hevc_reference.mp4",
-    "codec": "hevc",
-    "preset": "medium",
-    "crf": 23,
-    "description": "HEVC-encoded reference for comparison"
-  },
-  "upload_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "framework_version": "0.1.0"
-}
-EOF
-
-# Upload metadata
-aws s3 cp data/metadata.json s3://${ARTIFACTS_BUCKET}/metadata.json \
-    --region ${REGION} \
-    --content-type "application/json"
-
-echo -e "${GREEN}✓ Metadata uploaded${NC}"
-
-# Create experiment configuration
-echo -e "${BLUE}Creating experiment configuration...${NC}"
-cat > data/experiment_config.json << EOF
-{
-  "experiment_id": "baseline_test_$(date +%Y%m%d_%H%M%S)",
-  "name": "Baseline Test Experiment",
-  "description": "Initial baseline test with provided video",
-  "source_video": "s3://${VIDEOS_BUCKET}/source.mp4",
-  "hevc_reference": "s3://${VIDEOS_BUCKET}/hevc_reference.mp4",
-  "target_compression": 0.90,
-  "target_psnr": 95.0,
-  "max_training_time": 7200,
-  "max_epochs": 100,
-  "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "status": "pending"
-}
-EOF
-
-# Upload experiment configuration
-aws s3 cp data/experiment_config.json s3://${ARTIFACTS_BUCKET}/experiments/baseline_test.json \
-    --region ${REGION} \
-    --content-type "application/json"
-
-echo -e "${GREEN}✓ Experiment configuration uploaded${NC}"
-
-# Show file sizes
-echo -e "${BLUE}File sizes:${NC}"
-if [ -f "data/source_4k60_10s.mp4" ]; then
-    SOURCE_SIZE=$(du -h data/source_4k60_10s.mp4 | cut -f1)
-    echo -e "${GREEN}Source video: ${SOURCE_SIZE}${NC}"
+echo -e "${BLUE}Uploading HEVC reference: $(basename "$HEVC_VIDEO")${NC}"
+if [[ "$HEVC_VIDEO" == *"HEVC_HD_10Mbps"* ]]; then
+    aws s3 cp "$HEVC_VIDEO" "s3://$VIDEOS_BUCKET/hevc/" \
+        --region "$REGION" \
+        --metadata "type=hevc,resolution=1080p,fps=30,duration=10s,bitrate=10mbps"
+else
+    aws s3 cp "$HEVC_VIDEO" "s3://$VIDEOS_BUCKET/hevc/" \
+        --region "$REGION" \
+        --metadata "type=hevc,resolution=4k,fps=60,duration=10s,crf=23"
 fi
 
-if [ -f "data/hevc_reference.mp4" ]; then
-    HEVC_SIZE=$(du -h data/hevc_reference.mp4 | cut -f1)
-    echo -e "${GREEN}HEVC reference: ${HEVC_SIZE}${NC}"
-fi
+# Get file sizes for comparison
+SOURCE_SIZE=$(stat -f%z "$SOURCE_VIDEO" 2>/dev/null || stat -c%s "$SOURCE_VIDEO" 2>/dev/null)
+HEVC_SIZE=$(stat -f%z "$HEVC_VIDEO" 2>/dev/null || stat -c%s "$HEVC_VIDEO" 2>/dev/null)
 
-# Calculate compression ratio
-if [ -f "data/source_4k60_10s.mp4" ] && [ -f "data/hevc_reference.mp4" ]; then
-    SOURCE_BYTES=$(stat -f%z data/source_4k60_10s.mp4 2>/dev/null || stat -c%s data/source_4k60_10s.mp4 2>/dev/null)
-    HEVC_BYTES=$(stat -f%z data/hevc_reference.mp4 2>/dev/null || stat -c%s data/hevc_reference.mp4 2>/dev/null)
-    
-    if [ -n "$SOURCE_BYTES" ] && [ -n "$HEVC_BYTES" ] && [ "$SOURCE_BYTES" -gt 0 ]; then
-        COMPRESSION_RATIO=$(echo "scale=2; $HEVC_BYTES * 100 / $SOURCE_BYTES" | bc -l 2>/dev/null || echo "N/A")
-        echo -e "${GREEN}HEVC compression ratio: ${COMPRESSION_RATIO}%${NC}"
-    fi
-fi
+# Convert to MB
+SOURCE_SIZE_MB=$((SOURCE_SIZE / 1024 / 1024))
+HEVC_SIZE_MB=$((HEVC_SIZE / 1024 / 1024))
 
+echo -e "${GREEN}✓ Test data upload complete${NC}"
 echo ""
 echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}Test data upload complete!${NC}"
+echo -e "${GREEN}Test Data Upload Complete!${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
-echo -e "${BLUE}Uploaded files:${NC}"
-echo "- Source video: s3://${VIDEOS_BUCKET}/source.mp4"
-echo "- HEVC reference: s3://${VIDEOS_BUCKET}/hevc_reference.mp4"
-echo "- Metadata: s3://${ARTIFACTS_BUCKET}/metadata.json"
-echo "- Experiment config: s3://${ARTIFACTS_BUCKET}/experiments/baseline_test.json"
+echo -e "${BLUE}Uploaded Files:${NC}"
+echo -e "${GREEN}Source Video:${NC} $(basename "$SOURCE_VIDEO") (${SOURCE_SIZE_MB} MB)"
+echo -e "${GREEN}HEVC Reference:${NC} $(basename "$HEVC_VIDEO") (${HEVC_SIZE_MB} MB)"
+echo ""
+echo -e "${BLUE}S3 Locations:${NC}"
+echo -e "${GREEN}Source:${NC} s3://$VIDEOS_BUCKET/source/"
+echo -e "${GREEN}HEVC:${NC} s3://$VIDEOS_BUCKET/hevc/"
+echo ""
+echo -e "${BLUE}Video Characteristics:${NC}"
+if [[ "$SOURCE_VIDEO" == *"SOURCE_HD_RAW"* ]]; then
+    echo "• Resolution: 1080p (1920x1080)"
+    echo "• Frame Rate: 30 FPS"
+    echo "• Duration: 10 seconds"
+    echo "• Pattern: Geometric test patterns with noise"
+    echo "• Challenge: High-frequency details, contrast, motion"
+else
+    echo "• Resolution: 4K (3840x2160)"
+    echo "• Frame Rate: 60 FPS"
+    echo "• Duration: 10 seconds"
+    echo "• Pattern: Complex mixed patterns"
+    echo "• Challenge: High-frequency details, motion, textures"
+fi
 echo ""
 echo -e "${BLUE}Next Steps:${NC}"
-echo "1. Check orchestrator status: ./scripts/monitor_aws.sh"
-echo "2. SSH to orchestrator: ssh ec2-user@\$(aws cloudformation describe-stacks --stack-name ${STACK_NAME}-compute --query 'Stacks[0].Outputs[?OutputKey==\`OrchestratorPublicIP\`].OutputValue' --output text --region ${REGION})"
-echo "3. View orchestrator logs: sudo journalctl -u ai-video-codec-orchestrator -f"
-echo "4. Monitor experiment progress: ./scripts/monitor_aws.sh --watch"
+echo "1. Start an experiment using the uploaded test data"
+echo "2. Monitor progress on the dashboard"
+echo "3. Compare AI codec results vs HEVC reference"
 echo ""
-echo -e "${GREEN}Ready to start experiments! 🚀${NC}"
+echo -e "${GREEN}Ready for AI codec testing! 🎬🚀${NC}"
