@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Codec Framework - Live Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-video"></i>
+                    <h1>AI Video Codec Framework</h1>
+                </div>
+                <div class="status-indicator">
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="status-text">Connecting...</span>
+                </div>
+                <div class="last-updated">
+                    <i class="fas fa-clock"></i>
+                    <span id="last-updated">Never</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Cards -->
+            <section class="overview-section">
+                <div class="overview-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-line"></i>
+                            <h3>Experiments</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value" id="total-experiments">-</div>
+                            <div class="metric-label">Total Experiments</div>
+                            <div class="metric-change" id="experiments-change">
+                                <i class="fas fa-arrow-up"></i>
+                                <span>+0 this hour</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-compress-arrows-alt"></i>
+                            <h3>Best Compression</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value" id="best-compression">-</div>
+                            <div class="metric-label">Bitrate Reduction</div>
+                            <div class="metric-change" id="compression-change">
+                                <i class="fas fa-trophy"></i>
+                                <span>Target: 90%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-star"></i>
+                            <h3>Best Quality</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value" id="best-quality">-</div>
+                            <div class="metric-label">PSNR (dB)</div>
+                            <div class="metric-change" id="quality-change">
+                                <i class="fas fa-target"></i>
+                                <span>Target: 95%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-dollar-sign"></i>
+                            <h3>Monthly Cost</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value" id="monthly-cost">-</div>
+                            <div class="metric-label">USD</div>
+                            <div class="metric-change" id="cost-change">
+                                <i class="fas fa-wallet"></i>
+                                <span>Budget: $5,000</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Infrastructure Status -->
+            <section class="infrastructure-section">
+                <h2><i class="fas fa-server"></i> Infrastructure Status</h2>
+                <div class="infrastructure-grid">
+                    <div class="infra-card">
+                        <div class="infra-header">
+                            <i class="fas fa-brain"></i>
+                            <h4>Orchestrator</h4>
+                        </div>
+                        <div class="infra-status" id="orchestrator-status">
+                            <div class="status-dot"></div>
+                            <span>Unknown</span>
+                        </div>
+                        <div class="infra-details">
+                            <div class="detail">
+                                <span>Instance:</span>
+                                <span>c6i.xlarge</span>
+                            </div>
+                            <div class="detail">
+                                <span>CPU:</span>
+                                <span id="orchestrator-cpu">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>Memory:</span>
+                                <span id="orchestrator-memory">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="infra-card">
+                        <div class="infra-header">
+                            <i class="fas fa-cogs"></i>
+                            <h4>Training Workers</h4>
+                        </div>
+                        <div class="infra-status" id="training-status">
+                            <div class="status-dot"></div>
+                            <span>Unknown</span>
+                        </div>
+                        <div class="infra-details">
+                            <div class="detail">
+                                <span>Active:</span>
+                                <span id="training-active">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>Queue:</span>
+                                <span id="training-queue">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>Spot Instances:</span>
+                                <span id="training-spot">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="infra-card">
+                        <div class="infra-header">
+                            <i class="fas fa-bolt"></i>
+                            <h4>Inference Workers</h4>
+                        </div>
+                        <div class="infra-status" id="inference-status">
+                            <div class="status-dot"></div>
+                            <span>Unknown</span>
+                        </div>
+                        <div class="infra-details">
+                            <div class="detail">
+                                <span>Active:</span>
+                                <span id="inference-active">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>Queue:</span>
+                                <span id="inference-queue">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>FPS:</span>
+                                <span id="inference-fps">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="infra-card">
+                        <div class="infra-header">
+                            <i class="fas fa-database"></i>
+                            <h4>Storage</h4>
+                        </div>
+                        <div class="infra-status" id="storage-status">
+                            <div class="status-dot"></div>
+                            <span>Unknown</span>
+                        </div>
+                        <div class="infra-details">
+                            <div class="detail">
+                                <span>S3 Objects:</span>
+                                <span id="s3-objects">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>EFS Usage:</span>
+                                <span id="efs-usage">-</span>
+                            </div>
+                            <div class="detail">
+                                <span>DynamoDB Items:</span>
+                                <span id="dynamodb-items">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Experiments -->
+            <section class="experiments-section">
+                <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
+                <div class="experiments-table">
+                    <div class="table-header">
+                        <div class="col">ID</div>
+                        <div class="col">Status</div>
+                        <div class="col">Compression</div>
+                        <div class="col">Quality</div>
+                        <div class="col">Duration</div>
+                        <div class="col">Cost</div>
+                    </div>
+                    <div class="table-body" id="experiments-table-body">
+                        <div class="table-row loading">
+                            <div class="col">Loading...</div>
+                            <div class="col">-</div>
+                            <div class="col">-</div>
+                            <div class="col">-</div>
+                            <div class="col">-</div>
+                            <div class="col">-</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Cost Breakdown -->
+            <section class="cost-section">
+                <h2><i class="fas fa-chart-pie"></i> Cost Breakdown</h2>
+                <div class="cost-grid">
+                    <div class="cost-chart">
+                        <canvas id="cost-chart" width="400" height="300"></canvas>
+                    </div>
+                    <div class="cost-details">
+                        <div class="cost-item">
+                            <div class="cost-label">Training Workers</div>
+                            <div class="cost-value" id="cost-training">$0</div>
+                            <div class="cost-percentage" id="cost-training-pct">0%</div>
+                        </div>
+                        <div class="cost-item">
+                            <div class="cost-label">Inference Workers</div>
+                            <div class="cost-value" id="cost-inference">$0</div>
+                            <div class="cost-percentage" id="cost-inference-pct">0%</div>
+                        </div>
+                        <div class="cost-item">
+                            <div class="cost-label">Storage</div>
+                            <div class="cost-value" id="cost-storage">$0</div>
+                            <div class="cost-percentage" id="cost-storage-pct">0%</div>
+                        </div>
+                        <div class="cost-item">
+                            <div class="cost-label">Orchestrator</div>
+                            <div class="cost-value" id="cost-orchestrator">$0</div>
+                            <div class="cost-percentage" id="cost-orchestrator-pct">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Performance Metrics -->
+            <section class="performance-section">
+                <h2><i class="fas fa-tachometer-alt"></i> Performance Metrics</h2>
+                <div class="performance-grid">
+                    <div class="performance-chart">
+                        <h4>Compression Progress</h4>
+                        <canvas id="compression-chart" width="400" height="200"></canvas>
+                    </div>
+                    <div class="performance-chart">
+                        <h4>Quality Progress</h4>
+                        <canvas id="quality-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p>&copy; 2025 AI Video Codec Framework. Open source under Apache 2.0.</p>
+                </div>
+                <div class="footer-right">
+                    <div class="footer-links">
+                        <a href="https://github.com/yarontorbaty/ai-video-codec-framework" target="_blank">
+                            <i class="fab fa-github"></i> GitHub
+                        </a>
+                        <a href="https://github.com/yarontorbaty/ai-video-codec-framework/issues" target="_blank">
+                            <i class="fas fa-bug"></i> Issues
+                        </a>
+                        <a href="https://github.com/yarontorbaty/ai-video-codec-framework/wiki" target="_blank">
+                            <i class="fas fa-book"></i> Docs
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Loading dashboard...</p>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aws-sdk@2.1490.0/dist/aws-sdk.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

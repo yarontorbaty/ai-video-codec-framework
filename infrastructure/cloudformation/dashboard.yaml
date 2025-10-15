@@ -1,0 +1,480 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Video Codec Framework - Dashboard Hosting'
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: ai-video-codec
+    Description: Name of the project
+    
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - development
+      - production
+    Description: Environment name
+    
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name (optional)
+    
+  CertificateArn:
+    Type: String
+    Default: ''
+    Description: SSL certificate ARN for custom domain (optional)
+
+Resources:
+  # S3 Bucket for Dashboard
+  DashboardBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-dashboard-${AWS::AccountId}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-dashboard'
+        - Key: Environment
+          Value: !Ref Environment
+          
+  # S3 Bucket Policy
+  DashboardBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DashboardBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${DashboardBucket}/*'
+            
+  # CloudFront Distribution
+  DashboardDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt DashboardBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+        Enabled: true
+        DefaultRootObject: index.html
+        Comment: !Sub '${ProjectName} Dashboard Distribution'
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+        CacheBehaviors:
+          - PathPattern: '*.js'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            TTL:
+              DefaultTTL: 86400
+              MaxTTL: 31536000
+          - PathPattern: '*.css'
+            TargetOriginId: S3Origin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            ForwardedValues:
+              QueryString: false
+              Cookies:
+                Forward: none
+            TTL:
+              DefaultTTL: 86400
+              MaxTTL: 31536000
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        PriceClass: PriceClass_100
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Tags:
+          - Key: Name
+            Value: !Sub '${ProjectName}-dashboard-distribution'
+          - Key: Environment
+            Value: !Ref Environment
+            
+  # CloudFront Origin Access Identity
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub '${ProjectName} Dashboard OAI'
+        
+  # Lambda Function for API Gateway
+  DashboardAPIFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-dashboard-api'
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt DashboardAPIFunctionRole.Arn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime, timedelta
+          
+          def handler(event, context):
+              try:
+                  # Get the requested endpoint
+                  path = event.get('path', '')
+                  
+                  if path == '/metrics':
+                      return get_metrics()
+                  elif path == '/experiments':
+                      return get_experiments()
+                  elif path == '/costs':
+                      return get_costs()
+                  else:
+                      return {
+                          'statusCode': 404,
+                          'headers': {
+                              'Access-Control-Allow-Origin': '*',
+                              'Content-Type': 'application/json'
+                          },
+                          'body': json.dumps({'error': 'Not found'})
+                      }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({'error': str(e)})
+                  }
+          
+          def get_metrics():
+              # Get CloudFormation outputs
+              cf = boto3.client('cloudformation')
+              try:
+                  stack_outputs = cf.describe_stacks(
+                      StackName=f'ai-video-codec-{os.environ.get("ENVIRONMENT", "production")}-compute'
+                  )['Stacks'][0]['Outputs']
+                  
+                  outputs = {output['OutputKey']: output['OutputValue'] for output in stack_outputs}
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'orchestrator_ip': outputs.get('OrchestratorPublicIP', ''),
+                          'training_queue': outputs.get('TrainingQueueUrl', ''),
+                          'evaluation_queue': outputs.get('EvaluationQueueUrl', '')
+                      })
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'orchestrator_ip': '',
+                          'training_queue': '',
+                          'evaluation_queue': ''
+                      })
+                  }
+          
+          def get_experiments():
+              # Get experiments from DynamoDB
+              dynamodb = boto3.resource('dynamodb')
+              table = dynamodb.Table(f'ai-video-codec-experiments')
+              
+              try:
+                  response = table.scan(Limit=10)
+                  experiments = []
+                  
+                  for item in response.get('Items', []):
+                      experiments.append({
+                          'id': item.get('experiment_id', ''),
+                          'status': item.get('status', 'unknown'),
+                          'compression': item.get('compression_ratio', 0),
+                          'quality': item.get('psnr', 0),
+                          'created_at': item.get('created_at', ''),
+                          'cost': item.get('cost', 0)
+                      })
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps(experiments)
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps([])
+                  }
+          
+          def get_costs():
+              # Get cost data from Cost Explorer
+              ce = boto3.client('ce')
+              
+              try:
+                  # Get current month costs
+                  start_date = datetime.now().replace(day=1).strftime('%Y-%m-%d')
+                  end_date = datetime.now().strftime('%Y-%m-%d')
+                  
+                  response = ce.get_cost_and_usage(
+                      TimePeriod={'Start': start_date, 'End': end_date},
+                      Granularity='MONTHLY',
+                      Metrics=['UnblendedCost']
+                  )
+                  
+                  total_cost = float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'monthly_cost': total_cost,
+                          'daily_cost': total_cost / datetime.now().day,
+                          'breakdown': {
+                              'training': total_cost * 0.6,
+                              'inference': total_cost * 0.2,
+                              'storage': total_cost * 0.1,
+                              'orchestrator': total_cost * 0.1
+                          }
+                      })
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Access-Control-Allow-Origin': '*',
+                          'Content-Type': 'application/json'
+                      },
+                      'body': json.dumps({
+                          'monthly_cost': 0,
+                          'daily_cost': 0,
+                          'breakdown': {
+                              'training': 0,
+                              'inference': 0,
+                              'storage': 0,
+                              'orchestrator': 0
+                          }
+                      })
+                  }
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-dashboard-api'
+        - Key: Environment
+          Value: !Ref Environment
+          
+  # Lambda Function Role
+  DashboardAPIFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-dashboard-api-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DashboardAPIPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeStacks
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - ce:GetCostAndUsage
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-dashboard-api-role'
+        - Key: Environment
+          Value: !Ref Environment
+          
+  # API Gateway
+  DashboardAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-dashboard-api'
+      Description: 'API for AI Video Codec Framework Dashboard'
+      EndpointConfiguration:
+        Types: [REGIONAL]
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-dashboard-api'
+        - Key: Environment
+          Value: !Ref Environment
+          
+  # API Gateway Resources
+  DashboardAPIMetricsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ParentId: !GetAtt DashboardAPI.RootResourceId
+      PathPart: metrics
+      
+  DashboardAPIExperimentsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ParentId: !GetAtt DashboardAPI.RootResourceId
+      PathPart: experiments
+      
+  DashboardAPICostsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ParentId: !GetAtt DashboardAPI.RootResourceId
+      PathPart: costs
+      
+  # API Gateway Methods
+  DashboardAPIMetricsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ResourceId: !Ref DashboardAPIMetricsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardAPIFunction.Arn}/invocations'
+        
+  DashboardAPIExperimentsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ResourceId: !Ref DashboardAPIExperimentsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardAPIFunction.Arn}/invocations'
+        
+  DashboardAPICostsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ResourceId: !Ref DashboardAPICostsResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardAPIFunction.Arn}/invocations'
+        
+  # Lambda Permission for API Gateway
+  DashboardAPILambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DashboardAPIFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DashboardAPI}/*/*'
+      
+  # API Gateway Deployment
+  DashboardAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - DashboardAPIMetricsMethod
+      - DashboardAPIExperimentsMethod
+      - DashboardAPICostsMethod
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      StageName: !Ref Environment
+      
+  # CloudWatch Log Group
+  DashboardAPILogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${DashboardAPIFunction}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-dashboard-api-logs'
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  DashboardURL:
+    Description: Dashboard URL
+    Value: !Sub 'https://${DashboardDistribution.DomainName}'
+    Export:
+      Name: !Sub '${ProjectName}-dashboard-url'
+      
+  DashboardBucketName:
+    Description: S3 bucket name for dashboard
+    Value: !Ref DashboardBucket
+    Export:
+      Name: !Sub '${ProjectName}-dashboard-bucket'
+      
+  DashboardAPIGatewayURL:
+    Description: API Gateway URL
+    Value: !Sub 'https://${DashboardAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-dashboard-api-url'
+      
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref DashboardDistribution
+    Export:
+      Name: !Sub '${ProjectName}-dashboard-distribution-id'
