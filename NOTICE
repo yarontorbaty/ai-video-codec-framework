@@ -1,0 +1,43 @@
+AI Video Codec Framework
+Copyright 2025 Yaron Torbaty
+
+This product includes software developed by various open source projects.
+
+This software includes components with the following licenses:
+
+Apache License 2.0:
+- TensorFlow (Copyright The TensorFlow Authors)
+- OpenCV (Copyright OpenCV team)
+- ONNX (Copyright ONNX Project contributors)
+
+BSD-3-Clause License:
+- PyTorch (Copyright Facebook, Inc. and its affiliates)
+- CompressAI (Copyright InterDigital)
+- NumPy (Copyright NumPy Developers)
+- pandas (Copyright pandas Development Team)
+- SciPy (Copyright SciPy Developers)
+
+MIT License:
+- ONNX Runtime (Copyright Microsoft Corporation)
+- Pillow (Copyright Alex Clark and Contributors)
+- Flask (Copyright Pallets)
+- pytest (Copyright Holger Krekel and others)
+- LPIPS (Copyright Richard Zhang, Phillip Isola, Alexei A. Efros)
+- pytorch-msssim (Copyright Jorge Pessoa)
+
+BSD-2-Clause License:
+- imageio (Copyright imageio contributors)
+
+LGPL 2.1+ License:
+- FFmpeg (Copyright FFmpeg developers)
+
+For complete license texts of third-party components, see the respective
+project repositories or the file docs/LICENSES_THIRD_PARTY.md
+
+This project optionally supports proprietary third-party tools:
+- NVIDIA TensorRT (Proprietary, optional optimization)
+- Weights & Biases client (MIT license, service requires account)
+
+These optional components are not required for core functionality.
+
+
