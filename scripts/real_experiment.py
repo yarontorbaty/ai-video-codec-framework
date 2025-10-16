@@ -114,6 +114,115 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
             'error': str(e)
         }
 
+def run_llm_generated_experiment(llm_config: Optional[Dict] = None):
+    """Run experiment with LLM-generated compression code."""
+    logger.info("Starting LLM-GENERATED CODE experiment...")
+    
+    try:
+        from utils.code_sandbox import CodeSandbox
+        import numpy as np
+        import cv2
+        
+        # Check if LLM generated code
+        if not llm_config or 'generated_code' not in llm_config:
+            logger.warning("No generated code available - skipping")
+            return {
+                'timestamp': datetime.utcnow().isoformat(),
+                'experiment_type': 'llm_generated_code',
+                'status': 'skipped',
+                'reason': 'no_generated_code'
+            }
+        
+        code_info = llm_config['generated_code']
+        code = code_info['code']
+        function_name = code_info['function_name']
+        
+        logger.info(f"Testing LLM-generated compression function: {function_name}")
+        logger.info(f"Code length: {len(code)} characters")
+        
+        # Create sandbox
+        sandbox = CodeSandbox(timeout=30)
+        
+        # Validate code
+        is_valid, error = sandbox.validate_code(code)
+        if not is_valid:
+            logger.error(f"Code validation failed: {error}")
+            return {
+                'timestamp': datetime.utcnow().isoformat(),
+                'experiment_type': 'llm_generated_code',
+                'status': 'validation_failed',
+                'error': error,
+                'code_snippet': code[:200]
+            }
+        
+        logger.info("✅ Code validation passed")
+        
+        # Test on a sample frame
+        test_frame = np.random.randint(0, 255, (1080, 1920, 3), dtype=np.uint8)
+        config = {'quality': 0.8}
+        
+        logger.info("Executing LLM-generated code on test frame...")
+        success, result, error = sandbox.execute_function(
+            code, function_name, 
+            args=(test_frame, 0, config)
+        )
+        
+        if not success:
+            logger.error(f"Code execution failed: {error}")
+            return {
+                'timestamp': datetime.utcnow().isoformat(),
+                'experiment_type': 'llm_generated_code',
+                'status': 'execution_failed',
+                'error': error,
+                'code_snippet': code[:200]
+            }
+        
+        # Calculate compression
+        original_size = test_frame.nbytes
+        compressed_size = len(result) if isinstance(result, bytes) else len(str(result))
+        compression_ratio = compressed_size / original_size
+        bitrate_mbps = (compressed_size * 8 * 30) / 1_000_000  # Assuming 30fps
+        
+        logger.info(f"✅ LLM code executed successfully!")
+        logger.info(f"   Original: {original_size/1024:.1f} KB")
+        logger.info(f"   Compressed: {compressed_size/1024:.1f} KB")
+        logger.info(f"   Ratio: {compression_ratio:.6f}")
+        logger.info(f"   Estimated bitrate: {bitrate_mbps:.2f} Mbps")
+        
+        return {
+            'timestamp': datetime.utcnow().isoformat(),
+            'experiment_type': 'llm_generated_code',
+            'status': 'completed',
+            'code_info': {
+                'function_name': function_name,
+                'code_length': len(code),
+                'based_on': code_info.get('based_on_analysis', '')
+            },
+            'metrics': {
+                'original_size_kb': original_size / 1024,
+                'compressed_size_kb': compressed_size / 1024,
+                'compression_ratio': compression_ratio,
+                'estimated_bitrate_mbps': bitrate_mbps,
+                'test_frame_size': '1920x1080'
+            },
+            'comparison': {
+                'hevc_baseline_mbps': 10.0,
+                'reduction_percent': ((10.0 - bitrate_mbps) / 10.0) * 100,
+                'target_achieved': bitrate_mbps < 1.0
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"LLM-generated experiment failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'timestamp': datetime.utcnow().isoformat(),
+            'experiment_type': 'llm_generated_code',
+            'status': 'failed',
+            'error': str(e)
+        }
+
 def run_real_ai_experiment():
     """Run actual AI neural network experiment."""
     logger.info("Starting REAL AI neural network experiment...")
@@ -256,6 +365,16 @@ def run_llm_pre_analysis(past_experiments):
             if analysis:
                 logger.info(f"💡 LLM Hypothesis: {analysis.get('hypothesis', 'N/A')[:100]}...")
                 logger.info(f"🎯 Expected improvement: {analysis.get('expected_bitrate_mbps', 'N/A')} Mbps")
+                
+                # NEW: Generate compression code based on analysis
+                logger.info("🔧 Generating new compression algorithm...")
+                generated_code = planner.generate_compression_code(analysis)
+                if generated_code:
+                    analysis['generated_code'] = generated_code
+                    logger.info(f"✅ Generated {len(generated_code['code'])} chars of compression code")
+                else:
+                    logger.warning("Code generation failed - will use default algorithms")
+                
                 return analysis
             else:
                 logger.warning("No LLM analysis available")
@@ -347,16 +466,23 @@ def main():
             all_results['pre_analysis'] = pre_analysis
         
         logger.info("=" * 50)
+        # Run LLM-GENERATED CODE experiment FIRST (if available)
+        logger.info("=" * 50)
+        logger.info("EXPERIMENT 1: LLM-Generated Code")
+        logger.info("=" * 50)
+        llm_code_results = run_llm_generated_experiment(llm_config=pre_analysis)
+        all_results['experiments'].append(llm_code_results)
+        
         # Run procedural generation experiment WITH LLM CONFIG
         logger.info("=" * 50)
-        logger.info("EXPERIMENT 1: Procedural Generation")
+        logger.info("EXPERIMENT 2: Procedural Generation")
         logger.info("=" * 50)
         procedural_results = run_real_procedural_experiment(llm_config=pre_analysis)
         all_results['experiments'].append(procedural_results)
         
         # Run AI neural networks experiment
         logger.info("=" * 50)
-        logger.info("EXPERIMENT 2: AI Neural Networks")
+        logger.info("EXPERIMENT 3: AI Neural Networks")
         logger.info("=" * 50)
         ai_results = run_real_ai_experiment()
         all_results['experiments'].append(ai_results)

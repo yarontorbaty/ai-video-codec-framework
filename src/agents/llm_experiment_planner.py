@@ -354,6 +354,76 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
         except Exception as e:
             logger.error(f"Error logging reasoning: {e}")
     
+    def generate_compression_code(self, analysis: Dict) -> Optional[Dict]:
+        """
+        Generate new compression algorithm code based on LLM analysis.
+        
+        Args:
+            analysis: LLM analysis of past experiments
+            
+        Returns:
+            Dict with generated code and metadata
+        """
+        if not self.client and not self.use_direct_api:
+            logger.warning("LLM not available for code generation")
+            return None
+        
+        try:
+            prompt = f"""Based on this video compression experiment analysis, generate a NEW Python compression function.
+
+ANALYSIS:
+Root Cause: {analysis.get('root_cause', '')}
+Hypothesis: {analysis.get('hypothesis', '')}
+Insights: {json.dumps(analysis.get('insights', []))}
+
+REQUIREMENTS:
+1. Function signature: def compress_video_frame(frame: np.ndarray, frame_index: int, config: dict) -> bytes
+2. Input: frame is numpy array (H, W, 3) uint8 RGB, frame_index is int, config has parameters
+3. Output: compressed bytes for this frame
+4. Use only: numpy, cv2, math, json, struct, base64
+5. NO imports of: os, sys, subprocess, socket, requests, urllib
+6. Focus on the hypothesis from the analysis
+7. Be creative but practical - this will run on real video
+8. Include comments explaining your approach
+
+Generate ONLY the Python function code, no explanations outside the code.
+Start with 'import' statements, then the function definition.
+"""
+            
+            if self.client:
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    temperature=0.8,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                code = message.content[0].text
+            else:
+                code = self._call_claude_direct(prompt)
+            
+            if not code:
+                return None
+            
+            # Extract code from markdown if present
+            if "```python" in code:
+                code = code.split("```python")[1].split("```")[0].strip()
+            elif "```" in code:
+                code = code.split("```")[1].split("```")[0].strip()
+            
+            logger.info("✅ Generated compression code")
+            logger.info(f"Code length: {len(code)} characters")
+            
+            return {
+                'code': code,
+                'function_name': 'compress_video_frame',
+                'generated_at': datetime.utcnow().isoformat(),
+                'based_on_analysis': analysis.get('hypothesis', '')[:200]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating code: {e}")
+            return None
+    
     def plan_next_experiment(self) -> Dict:
         """
         Main method: Analyze past experiments and plan the next one.
