@@ -95,19 +95,60 @@ Resources:
                   # Get orchestrator metrics
                   orchestrator_cpu = get_cloudwatch_metric(cloudwatch, 'AWS/EC2', 'CPUUtilization', 'i-063947ae46af6dbf8')
                   
-                  # Get worker activity logs
+                  # Get worker activity logs from metrics table
                   worker_logs = []
                   try:
                       metrics_table = dynamodb.Table('ai-video-codec-metrics')
                       response = metrics_table.scan(Limit=20)
+                      
+                      # Group metrics by experiment and type
                       for item in response.get('Items', []):
+                          experiment_id = item.get('experiment_id', '')
+                          experiment_type = item.get('experiment_type', 'Unknown')
+                          timestamp_iso = item.get('timestamp_iso', '')
+                          timestamp_ms = int(item.get('timestamp', 0)) * 1000
+                          
+                          # Parse metrics JSON
+                          metrics_json = item.get('metrics', '')
+                          activity_details = ''
+                          progress = 100  # Completed metrics
+                          
+                          try:
+                              import json as json_parser
+                              metrics_data = json_parser.loads(metrics_json)
+                              
+                              # Create activity description based on experiment type
+                              if experiment_type == 'real_procedural_generation':
+                                  bitrate = metrics_data.get('bitrate_mbps', 'N/A')
+                                  resolution = metrics_data.get('resolution', 'N/A')
+                                  fps = metrics_data.get('fps', 'N/A')
+                                  activity = f"Procedural Video Generation"
+                                  activity_details = f"Resolution: {resolution}, FPS: {fps}, Bitrate: {bitrate} Mbps"
+                              elif experiment_type == 'real_ai_neural_networks':
+                                  pytorch_version = metrics_data.get('pytorch_version', 'N/A')
+                                  cuda = 'Yes' if metrics_data.get('cuda_available') else 'No'
+                                  activity = f"AI Neural Network Processing"
+                                  activity_details = f"PyTorch: {pytorch_version}, CUDA: {cuda}"
+                              else:
+                                  activity = experiment_type.replace('_', ' ').title()
+                                  activity_details = f"Metrics captured"
+                          except Exception as e:
+                              print(f"Error parsing metrics: {str(e)}")
+                              activity = experiment_type.replace('_', ' ').title()
+                              activity_details = 'Processing...'
+                          
                           worker_logs.append({
-                              'timestamp': item.get('timestamp', ''),
-                              'worker_id': item.get('worker_id', ''),
-                              'activity': item.get('activity', ''),
-                              'experiment_id': item.get('experiment_id', ''),
-                              'progress': item.get('progress', 0)
+                              'timestamp': timestamp_ms,
+                              'worker_id': experiment_id,
+                              'activity': activity,
+                              'details': activity_details,
+                              'experiment_id': experiment_id,
+                              'progress': progress
                           })
+                      
+                      # Sort by timestamp descending (most recent first)
+                      worker_logs.sort(key=lambda x: x['timestamp'], reverse=True)
+                      worker_logs = worker_logs[:10]  # Limit to 10 most recent
                   except Exception as e:
                       print(f"Worker logs error: {str(e)}")
                       # No mock data - will show "No data" in UI
@@ -356,13 +397,23 @@ Resources:
                   .cost-item {{ background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 0.75rem; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); text-align: center; }}
                   .cost-item h4 {{ font-size: 0.875rem; color: #4a5568; margin-bottom: 0.5rem; }}
                   .cost-item .amount {{ font-size: 1.5rem; font-weight: 700; color: #2d3748; }}
+                  .current-experiment-section {{ margin-bottom: 3rem; }}
+                  .current-experiment-section h2 {{ font-size: 1.5rem; font-weight: 700; color: #1a202c; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); }}
+                  .current-experiment {{ background: rgba(102, 126, 234, 0.1); backdrop-filter: blur(10px); border-radius: 0.75rem; padding: 1.5rem; border: 2px solid rgba(102, 126, 234, 0.3); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); }}
+                  .experiment-title {{ font-size: 1.25rem; font-weight: 600; color: #667eea; margin-bottom: 1rem; }}
+                  .experiment-description {{ color: #4a5568; line-height: 1.6; margin-bottom: 1rem; }}
+                  .experiment-details {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1rem; }}
+                  .experiment-detail {{ }}
+                  .experiment-detail-label {{ font-size: 0.875rem; color: #718096; margin-bottom: 0.25rem; }}
+                  .experiment-detail-value {{ font-weight: 600; color: #2d3748; }}
                   .worker-logs-section {{ margin-bottom: 3rem; }}
                   .worker-logs-section h2 {{ font-size: 1.5rem; font-weight: 700; color: #1a202c; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8); }}
                   .worker-log {{ background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 0.75rem; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1); margin-bottom: 1rem; }}
                   .worker-log-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }}
                   .worker-id {{ font-weight: 600; color: #667eea; }}
                   .worker-timestamp {{ font-size: 0.875rem; color: #718096; }}
-                  .worker-activity {{ color: #2d3748; margin-bottom: 0.5rem; }}
+                  .worker-activity {{ color: #2d3748; margin-bottom: 0.5rem; font-weight: 500; }}
+                  .worker-details {{ font-size: 0.875rem; color: #718096; margin-bottom: 0.5rem; }}
                   .worker-progress {{ display: flex; align-items: center; gap: 0.5rem; }}
                   .progress-bar {{ flex: 1; height: 8px; background: rgba(102, 126, 234, 0.2); border-radius: 4px; overflow: hidden; }}
                   .progress-fill {{ height: 100%; background: #667eea; border-radius: 4px; transition: width 0.3s ease; }}
@@ -414,7 +465,7 @@ Resources:
                                       <h3>Experiments</h3>
                                   </div>
                                   <div class="card-content">
-                                      <div class="metric-value">{len(data['experiments']) if data['experiments'] and len(data['experiments']) > 0 and data['experiments'][0]['id'] != 'No data' else 0}</div>
+                                      <div class="metric-value">{len(data['experiments']) if data['experiments'] and len(data['experiments']) > 0 and data['experiments'][0].get('id', '') != 'No data' else 0}</div>
                                       <div class="metric-label">Total Experiments</div>
                                   </div>
                               </div>
@@ -425,7 +476,7 @@ Resources:
                                       <h3>Best Compression</h3>
                                   </div>
                                   <div class="card-content">
-                                      <div class="metric-value">{max([exp.get('compression', 0) for exp in data['experiments'] if isinstance(exp.get('compression'), (int, float))], default=0) if data['experiments'] and len(data['experiments']) > 0 and data['experiments'][0]['id'] != 'No data' else 0}%</div>
+                                      <div class="metric-value">{max([exp.get('compression', 0) for exp in data['experiments'] if isinstance(exp.get('compression'), (int, float))], default=0) if data['experiments'] and len(data['experiments']) > 0 and data['experiments'][0].get('id', '') != 'No data' else 0}%</div>
                                       <div class="metric-label">Bitrate Reduction</div>
                                   </div>
                               </div>
@@ -436,7 +487,7 @@ Resources:
                                       <h3>Best Quality</h3>
                                   </div>
                                   <div class="card-content">
-                                      <div class="metric-value">{max([exp.get('quality', 0) for exp in data['experiments'] if isinstance(exp.get('quality'), (int, float))], default=0) if data['experiments'] and len(data['experiments']) > 0 and data['experiments'][0]['id'] != 'No data' else 0}</div>
+                                      <div class="metric-value">{max([exp.get('quality', 0) for exp in data['experiments'] if isinstance(exp.get('quality'), (int, float))], default=0) if data['experiments'] and len(data['experiments']) > 0 and data['experiments'][0].get('id', '') != 'No data' else 0}</div>
                                       <div class="metric-label">PSNR (dB)</div>
                                   </div>
                               </div>
@@ -522,6 +573,13 @@ Resources:
                           </div>
                       </section>
 
+                      <section class="current-experiment-section">
+                          <h2><i class="fas fa-flask"></i> Current Experiment</h2>
+                          <div class="current-experiment">
+                              {'<div class="experiment-title">Experiment: ' + data['experiments'][0].get('id', 'No active experiment') + '</div><div class="experiment-description">Testing procedural video generation with AI-assisted compression. This experiment evaluates the effectiveness of combining procedural generation techniques (demoscene-style rendering) with neural network semantic encoding to achieve high compression ratios while maintaining visual quality.</div><div class="experiment-details"><div class="experiment-detail"><div class="experiment-detail-label">Status</div><div class="experiment-detail-value">' + data['experiments'][0].get('status', 'N/A').capitalize() + '</div></div><div class="experiment-detail"><div class="experiment-detail-label">Progress</div><div class="experiment-detail-value">' + str(data['experiments'][0].get('progress', 0)) + '%</div></div><div class="experiment-detail"><div class="experiment-detail-label">Started</div><div class="experiment-detail-value">' + data['experiments'][0].get('created_at', 'N/A')[:16].replace('T', ' ') + '</div></div><div class="experiment-detail"><div class="experiment-detail-label">Completion</div><div class="experiment-detail-value">' + data['experiments'][0].get('estimated_completion', 'N/A') + '</div></div></div>' if data['experiments'] and len(data['experiments']) > 0 else '<div class="experiment-title">No Active Experiment</div><div class="experiment-description">No experiments are currently running. Start a new experiment to begin tracking progress and metrics.</div>'}
+                          </div>
+                      </section>
+
                       <section class="costs-section">
                           <h2><i class="fas fa-chart-pie"></i> Cost Breakdown</h2>
                           <div class="costs-grid">
@@ -546,7 +604,7 @@ Resources:
 
                       <section class="worker-logs-section">
                           <h2><i class="fas fa-clipboard-list"></i> Worker Activity Log</h2>
-                          {''.join([f'<div class="worker-log"><div class="worker-log-header"><span class="worker-id">{log["worker_id"]}</span><span class="worker-timestamp">{datetime.fromtimestamp(log["timestamp"]/1000).strftime("%I:%M:%S %p UTC")}</span></div><div class="worker-activity">{log["activity"]}</div><div class="worker-progress"><div class="progress-bar"><div class="progress-fill" style="width: {log["progress"]}%"></div></div><span class="progress-text">{log["progress"]}%</span></div></div>' for log in data['worker_logs']]) if data['worker_logs'] else '<div class="worker-log"><div class="worker-activity">No worker activity data available</div></div>'}
+                          {''.join([f'<div class="worker-log"><div class="worker-log-header"><span class="worker-id">Experiment: {log["worker_id"]}</span><span class="worker-timestamp">{datetime.fromtimestamp(log["timestamp"]/1000).strftime("%Y-%m-%d %I:%M:%S %p UTC")}</span></div><div class="worker-activity">{log["activity"]}</div><div class="worker-details">{log.get("details", "")}</div><div class="worker-progress"><div class="progress-bar"><div class="progress-fill" style="width: {log["progress"]}%"></div></div><span class="progress-text">{log["progress"]}%</span></div></div>' for log in data['worker_logs']]) if data['worker_logs'] else '<div class="worker-log"><div class="worker-activity">No worker activity data available</div></div>'}
                       </section>
 
                       <section class="test-results-section">

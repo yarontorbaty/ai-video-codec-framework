@@ -34,6 +34,9 @@ boto3>=1.28.0
 botocore>=1.31.0
 awscli>=1.29.0
 
+# LLM Integration
+anthropic>=0.18.0  # Claude API for autonomous planning
+
 # Data Processing
 numpy>=1.24.0
 pandas>=2.0.0

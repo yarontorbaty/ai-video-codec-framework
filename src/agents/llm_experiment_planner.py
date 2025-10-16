@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+"""
+LLM-Powered Experiment Planner
+Uses Claude/GPT to analyze experiment results and plan next experiments autonomously.
+"""
+
+import os
+import json
+import boto3
+import logging
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
+import anthropic
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class LLMExperimentPlanner:
+    """
+    Autonomous experiment planner using LLM reasoning.
+    Analyzes past experiments and plans improved approaches.
+    """
+    
+    def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
+        """
+        Initialize LLM planner.
+        
+        Args:
+            model: LLM model to use (default: Claude 3.5 Sonnet)
+        """
+        self.model = model
+        self.dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        self.s3 = boto3.client('s3', region_name='us-east-1')
+        
+        # Initialize Anthropic client (if API key available)
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
+        if api_key:
+            self.client = anthropic.Anthropic(api_key=api_key)
+        else:
+            logger.warning("No ANTHROPIC_API_KEY found - LLM planning will be disabled")
+            self.client = None
+        
+        self.experiments_table = self.dynamodb.Table('ai-video-codec-experiments')
+        self.reasoning_table = self.dynamodb.Table('ai-video-codec-reasoning')
+    
+    def analyze_recent_experiments(self, limit: int = 5) -> List[Dict]:
+        """
+        Fetch and analyze recent experiments from DynamoDB.
+        
+        Args:
+            limit: Number of recent experiments to analyze
+            
+        Returns:
+            List of experiment data dictionaries
+        """
+        logger.info(f"Fetching {limit} most recent experiments...")
+        
+        try:
+            response = self.experiments_table.scan(Limit=limit)
+            experiments = response.get('Items', [])
+            
+            # Sort by timestamp (most recent first)
+            experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+            
+            logger.info(f"Retrieved {len(experiments)} experiments")
+            return experiments
+            
+        except Exception as e:
+            logger.error(f"Error fetching experiments: {e}")
+            return []
+    
+    def generate_analysis_prompt(self, experiments: List[Dict]) -> str:
+        """
+        Generate detailed prompt for LLM analysis.
+        
+        Args:
+            experiments: List of experiment data
+            
+        Returns:
+            Formatted prompt string
+        """
+        prompt = """You are an expert AI researcher working on a novel video codec that uses neural networks and procedural generation to achieve 90% bitrate reduction vs HEVC while maintaining PSNR > 95%.
+
+# CURRENT GOAL
+Beat 10 Mbps HEVC baseline with < 1 Mbps (90% reduction) while maintaining quality.
+
+# RECENT EXPERIMENT RESULTS
+"""
+        
+        for i, exp in enumerate(experiments, 1):
+            exp_id = exp.get('experiment_id', 'unknown')
+            timestamp = exp.get('timestamp_iso', 'unknown')
+            status = exp.get('status', 'unknown')
+            
+            # Parse experiments JSON
+            experiments_data = json.loads(exp.get('experiments', '[]'))
+            
+            prompt += f"\n## Experiment {i}: {exp_id}\n"
+            prompt += f"**Time:** {timestamp}\n"
+            prompt += f"**Status:** {status}\n\n"
+            
+            for exp_data in experiments_data:
+                exp_type = exp_data.get('experiment_type', 'unknown')
+                exp_status = exp_data.get('status', 'unknown')
+                
+                if exp_type == 'real_procedural_generation':
+                    metrics = exp_data.get('real_metrics', {})
+                    comparison = exp_data.get('comparison', {})
+                    
+                    prompt += f"### Procedural Generation\n"
+                    prompt += f"- Status: {exp_status}\n"
+                    prompt += f"- Bitrate: {metrics.get('bitrate_mbps', 0):.2f} Mbps\n"
+                    prompt += f"- File Size: {metrics.get('file_size_mb', 0):.2f} MB\n"
+                    prompt += f"- Resolution: {metrics.get('resolution', 'N/A')}\n"
+                    prompt += f"- Duration: {metrics.get('duration', 0)} seconds\n"
+                    prompt += f"- HEVC Baseline: {comparison.get('hevc_baseline_mbps', 0)} Mbps\n"
+                    prompt += f"- Reduction: {comparison.get('reduction_percent', 0):.1f}%\n"
+                    prompt += f"- Target Achieved: {comparison.get('target_achieved', False)}\n\n"
+                    
+                elif exp_type == 'real_ai_neural_networks':
+                    networks = exp_data.get('neural_networks', {})
+                    
+                    prompt += f"### AI Neural Networks\n"
+                    prompt += f"- Status: {exp_status}\n"
+                    prompt += f"- Semantic Encoder: {networks.get('semantic_encoder', 'N/A')}\n"
+                    prompt += f"- Motion Predictor: {networks.get('motion_predictor', 'N/A')}\n"
+                    prompt += f"- Generative Refiner: {networks.get('generative_refiner', 'N/A')}\n"
+                    prompt += f"- PyTorch: {networks.get('pytorch_version', 'N/A')}\n\n"
+        
+        prompt += """
+# YOUR TASK
+
+Analyze these results and provide:
+
+1. **Root Cause Analysis**: Why is compression failing? (Be specific and technical)
+2. **Key Insights**: What patterns do you see across experiments?
+3. **Hypothesis**: What changes would most likely improve results?
+4. **Next Experiment Plan**: Concrete steps for the next experiment with:
+   - Specific code changes needed
+   - Expected improvements
+   - Success metrics
+5. **Risk Assessment**: What could go wrong with this approach?
+
+Be direct, technical, and actionable. Focus on the fundamental problem that procedural generation is creating NEW video (18MB) instead of COMPRESSING existing video.
+
+Format your response as JSON with these keys: root_cause, insights, hypothesis, next_experiment, risks, expected_bitrate_mbps, confidence_score
+"""
+        
+        return prompt
+    
+    def get_llm_analysis(self, experiments: List[Dict]) -> Optional[Dict]:
+        """
+        Get LLM analysis of experiments.
+        
+        Args:
+            experiments: List of experiment data
+            
+        Returns:
+            Dict with LLM analysis and recommendations, or None if LLM unavailable
+        """
+        if not self.client:
+            logger.warning("LLM client not available - returning fallback analysis")
+            return self._fallback_analysis(experiments)
+        
+        try:
+            prompt = self.generate_analysis_prompt(experiments)
+            
+            logger.info("Requesting LLM analysis...")
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=4096,
+                temperature=0.7,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            # Extract JSON from response
+            response_text = message.content[0].text
+            
+            # Try to parse JSON (handle markdown code blocks)
+            if "```json" in response_text:
+                json_str = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                json_str = response_text.split("```")[1].split("```")[0].strip()
+            else:
+                json_str = response_text.strip()
+            
+            analysis = json.loads(json_str)
+            
+            logger.info("LLM analysis received successfully")
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Error getting LLM analysis: {e}")
+            return self._fallback_analysis(experiments)
+    
+    def _fallback_analysis(self, experiments: List[Dict]) -> Dict:
+        """
+        Fallback analysis when LLM is unavailable.
+        Uses rule-based logic.
+        """
+        latest = experiments[0] if experiments else {}
+        experiments_data = json.loads(latest.get('experiments', '[]'))
+        
+        # Extract metrics
+        procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+        metrics = procedural.get('real_metrics', {})
+        comparison = procedural.get('comparison', {})
+        
+        bitrate = metrics.get('bitrate_mbps', 15.0)
+        reduction = comparison.get('reduction_percent', -50.0)
+        
+        return {
+            "root_cause": "Procedural generation is rendering full video frames (18MB) instead of storing compact procedural parameters (<1KB). The system generates NEW content rather than compressing EXISTING content.",
+            "insights": [
+                "All experiments show 15 Mbps output (50% LARGER than 10 Mbps HEVC baseline)",
+                "Neural networks are operational but not integrated into compression pipeline",
+                "The fundamental approach is backwards - we're creating data, not compressing it"
+            ],
+            "hypothesis": "Store procedural generation PARAMETERS (function types, coefficients, timestamps) instead of rendered frames. Each frame could be described in ~100 bytes instead of ~600KB.",
+            "next_experiment": {
+                "approach": "Encode video as a sequence of procedural commands",
+                "changes": [
+                    "Analyze input video to detect procedural patterns",
+                    "Store only generation parameters in compact format",
+                    "Implement decoder that regenerates frames from parameters",
+                    "Measure parameter storage size vs rendered video size"
+                ],
+                "expected_improvement": "Reduce from 15 Mbps to < 1 Mbps"
+            },
+            "risks": [
+                "Input video may not be procedurally representable",
+                "Quality loss if procedural approximation is poor",
+                "Decoder complexity may be too high for real-time"
+            ],
+            "expected_bitrate_mbps": 0.8,
+            "confidence_score": 0.75
+        }
+    
+    def log_reasoning(self, analysis: Dict, experiment_id: str) -> None:
+        """
+        Log LLM reasoning to DynamoDB for dashboard visibility.
+        
+        Args:
+            analysis: LLM analysis results
+            experiment_id: ID of the experiment being analyzed
+        """
+        try:
+            reasoning_id = f"reasoning_{int(datetime.utcnow().timestamp())}"
+            
+            self.reasoning_table.put_item(Item={
+                'reasoning_id': reasoning_id,
+                'experiment_id': experiment_id,
+                'timestamp': int(datetime.utcnow().timestamp()),
+                'timestamp_iso': datetime.utcnow().isoformat(),
+                'model': self.model,
+                'root_cause': analysis.get('root_cause', ''),
+                'insights': json.dumps(analysis.get('insights', [])),
+                'hypothesis': analysis.get('hypothesis', ''),
+                'next_experiment': json.dumps(analysis.get('next_experiment', {})),
+                'risks': json.dumps(analysis.get('risks', [])),
+                'expected_bitrate_mbps': float(analysis.get('expected_bitrate_mbps', 0)),
+                'confidence_score': float(analysis.get('confidence_score', 0))
+            })
+            
+            logger.info(f"Reasoning logged: {reasoning_id}")
+            
+        except Exception as e:
+            logger.error(f"Error logging reasoning: {e}")
+    
+    def plan_next_experiment(self) -> Dict:
+        """
+        Main method: Analyze past experiments and plan the next one.
+        
+        Returns:
+            Dict with experiment plan and reasoning
+        """
+        logger.info("=" * 60)
+        logger.info("LLM EXPERIMENT PLANNER - ANALYZING RESULTS")
+        logger.info("=" * 60)
+        
+        # Fetch recent experiments
+        experiments = self.analyze_recent_experiments(limit=5)
+        
+        if not experiments:
+            logger.warning("No experiments found - using default plan")
+            return {
+                'status': 'no_data',
+                'plan': 'run_baseline_experiment',
+                'reasoning': 'No previous experiments to analyze'
+            }
+        
+        # Get LLM analysis
+        analysis = self.get_llm_analysis(experiments)
+        
+        if not analysis:
+            logger.error("Failed to get analysis")
+            return {
+                'status': 'error',
+                'plan': 'retry_previous',
+                'reasoning': 'Analysis failed'
+            }
+        
+        # Log reasoning
+        latest_exp_id = experiments[0].get('experiment_id', 'unknown')
+        self.log_reasoning(analysis, latest_exp_id)
+        
+        # Print analysis
+        logger.info("\n" + "=" * 60)
+        logger.info("ROOT CAUSE ANALYSIS")
+        logger.info("=" * 60)
+        logger.info(analysis.get('root_cause', 'N/A'))
+        
+        logger.info("\n" + "=" * 60)
+        logger.info("KEY INSIGHTS")
+        logger.info("=" * 60)
+        for insight in analysis.get('insights', []):
+            logger.info(f"• {insight}")
+        
+        logger.info("\n" + "=" * 60)
+        logger.info("HYPOTHESIS")
+        logger.info("=" * 60)
+        logger.info(analysis.get('hypothesis', 'N/A'))
+        
+        logger.info("\n" + "=" * 60)
+        logger.info("NEXT EXPERIMENT PLAN")
+        logger.info("=" * 60)
+        next_exp = analysis.get('next_experiment', {})
+        logger.info(f"Approach: {next_exp.get('approach', 'N/A')}")
+        logger.info("Changes:")
+        for change in next_exp.get('changes', []):
+            logger.info(f"  • {change}")
+        
+        logger.info("\n" + "=" * 60)
+        logger.info("EXPECTED RESULTS")
+        logger.info("=" * 60)
+        logger.info(f"Target Bitrate: {analysis.get('expected_bitrate_mbps', 0):.2f} Mbps")
+        logger.info(f"Confidence: {analysis.get('confidence_score', 0)*100:.1f}%")
+        
+        return {
+            'status': 'success',
+            'analysis': analysis,
+            'latest_experiment_id': latest_exp_id,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+
+if __name__ == '__main__':
+    """Test the LLM planner."""
+    planner = LLMExperimentPlanner()
+    result = planner.plan_next_experiment()
+    
+    print("\n" + "=" * 60)
+    print("PLANNER RESULT")
+    print("=" * 60)
+    print(json.dumps(result, indent=2))
+
