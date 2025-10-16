@@ -292,9 +292,11 @@ def render_dashboard_page():
             if exp.get('evolution'):
                 evo = exp['evolution']
                 if evo.get('adopted'):
-                    evolution_badge = f'<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="Code v{evo.get(\'version\')} adopted">🎉 v{evo.get("version")}</span>'
+                    version = evo.get('version', 0)
+                    evolution_badge = f'<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="Code v{version} adopted">🎉 v{version}</span>'
                 elif evo.get('status') == 'rejected':
-                    evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{evo.get(\'reason\', \'Not better\')}">⏭️</span>'
+                    reason = evo.get('reason', 'Not better')
+                    evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{reason}">⏭️</span>'
             
             experiments_html += f'''
                 <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
