@@ -83,6 +83,7 @@ Resources:
               cf = boto3.client('cloudformation')
               cloudwatch = boto3.client('cloudwatch')
               ce = boto3.client('ce')
+              dynamodb = boto3.resource('dynamodb')
               
               try:
                   # Get CloudFormation outputs
@@ -122,33 +123,59 @@ Resources:
                           progress = 0
                           estimated_completion = 'N/A'
                           
-                          if status == 'running':
-                              # Simulate progress based on experiment duration
-                              created_at = item.get('created_at', '')
-                              if created_at:
-                                  try:
-                                      created_time = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                                      elapsed_hours = (datetime.utcnow() - created_time.replace(tzinfo=None)).total_seconds() / 3600
-                                      progress = min(int((elapsed_hours / 24) * 100), 95)  # Assume 24h total duration
-                                      
+                          # Parse timestamp for progress calculation
+                          timestamp_iso = item.get('timestamp_iso', '')
+                          if timestamp_iso:
+                              try:
+                                  created_time = datetime.fromisoformat(timestamp_iso.replace('Z', ''))
+                                  elapsed_hours = (datetime.utcnow() - created_time).total_seconds() / 3600
+                                  
+                                  if status == 'running':
+                                      progress = min(int((elapsed_hours / 24) * 100), 95)  # Assume 24h total
                                       remaining_hours = 24 - elapsed_hours
                                       if remaining_hours > 0:
                                           completion_time = datetime.utcnow() + timedelta(hours=remaining_hours)
                                           estimated_completion = completion_time.strftime('%I:%M %p UTC (%m/%d)')
-                                  except:
-                                      progress = 50  # Default progress
-                                      estimated_completion = 'Unknown'
-                          elif status == 'completed':
-                              progress = 100
-                              estimated_completion = 'Completed'
+                                  elif status == 'completed':
+                                      progress = 100
+                                      estimated_completion = 'Completed'
+                              except Exception as e:
+                                  print(f"Date parsing error: {str(e)}")
+                                  if status == 'completed':
+                                      progress = 100
+                                      estimated_completion = 'Completed'
+                          else:
+                              if status == 'completed':
+                                  progress = 100
+                                  estimated_completion = 'Completed'
+                          
+                          # Parse nested experiments JSON to get metrics
+                          compression = 'N/A'
+                          quality = 'N/A'
+                          try:
+                              experiments_json = item.get('experiments', '')
+                              if experiments_json:
+                                  import json as json_parser
+                                  exp_list = json_parser.loads(experiments_json)
+                                  for exp in exp_list:
+                                      if 'real_metrics' in exp:
+                                          bitrate = exp['real_metrics'].get('bitrate_mbps', 0)
+                                          compression = f"{bitrate:.1f} Mbps"
+                                          # Calculate quality from comparison
+                                          if 'comparison' in exp:
+                                              reduction = exp['comparison'].get('reduction_percent', 0)
+                                              quality = f"{abs(reduction):.1f}%"
+                                          break
+                          except Exception as e:
+                              print(f"Error parsing experiment metrics: {str(e)}")
                           
                           experiments.append({
                               'id': item.get('experiment_id', ''),
                               'status': status,
-                              'compression': item.get('compression_ratio', ''),
-                              'quality': item.get('quality_score', ''),
-                              'created_at': item.get('created_at', ''),
-                              'cost': item.get('estimated_cost', ''),
+                              'compression': compression,
+                              'quality': quality,
+                              'created_at': timestamp_iso,
+                              'cost': 'N/A',  # Not tracked yet
                               'progress': progress,
                               'estimated_completion': estimated_completion
                           })
@@ -156,23 +183,29 @@ Resources:
                       print(f"Experiments error: {str(e)}")
                       # No mock data - will show "No data" in UI
                   
-                  # Get test results data
+                  # Get test results data from experiments table
                   test_results = []
                   try:
-                      # Try to get test results from DynamoDB (if table exists)
-                      test_table = dynamodb.Table('ai-video-codec-test-results')
+                      # Get test results from DynamoDB experiments table
+                      test_table = dynamodb.Table('ai-video-codec-experiments')
                       response = test_table.scan(Limit=10)
                       for item in response.get('Items', []):
+                          # Parse experiments JSON to extract metrics
+                          experiments = json.loads(item.get('experiments', '[]'))
+                          procedural = next((e for e in experiments if e.get('experiment_type') == 'real_procedural_generation'), {})
+                          metrics = procedural.get('real_metrics', {})
+                          comparison = procedural.get('comparison', {})
+                          
                           test_results.append({
-                              'id': item.get('test_id', ''),
+                              'id': item.get('experiment_id', ''),
                               'status': item.get('status', ''),
-                              'compression_ratio': item.get('compression_ratio', ''),
-                              'quality_score': item.get('quality_score', ''),
-                              'psnr': item.get('psnr', ''),
-                              'ssim': item.get('ssim', ''),
-                              'bitrate': item.get('bitrate', ''),
-                              'created_at': item.get('created_at', ''),
-                              'duration': item.get('duration', '')
+                              'compression_ratio': f"{comparison.get('reduction_percent', 0):.1f}%",
+                              'quality_score': 'N/A',  # Not yet calculated
+                              'psnr': 'N/A',  # Not yet calculated
+                              'ssim': 'N/A',  # Not yet calculated
+                              'bitrate': f"{metrics.get('bitrate_mbps', 0):.2f} Mbps",
+                              'created_at': item.get('timestamp_iso', ''),
+                              'duration': f"{metrics.get('duration', 0):.1f}s"
                           })
                   except Exception as e:
                       print(f"Test results error: {str(e)}")
