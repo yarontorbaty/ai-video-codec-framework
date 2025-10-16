@@ -810,8 +810,8 @@ Resources:
           AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
           CachedMethods: [GET, HEAD]
           Compress: true
-          DefaultTTL: 60  # Cache for 60 seconds
-          MaxTTL: 300     # Max 5 minutes
+          DefaultTTL: 30  # Cache for 30 seconds (matches Lambda SSR cache)
+          MaxTTL: 60      # Max 1 minute
           MinTTL: 0
           ForwardedValues:
             QueryString: true

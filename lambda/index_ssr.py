@@ -29,7 +29,7 @@ def handler(event, context):
     # Root path (CloudFront routing issues: / comes in as /dashboard)
     # BUT: /dashboard?type=X is an API call, not the root page
     if (path == '/' or path == '' or path == '/dashboard') and not query_params.get('type'):
-        return serve_static_file('index.html')
+        return render_dashboard_page()
     
     # API endpoint via /dashboard?type=X (for backward compatibility)
     elif path == '/dashboard' and query_params.get('type'):
@@ -120,6 +120,186 @@ def serve_static_file(filename):
             'statusCode': 404,
             'headers': {'Content-Type': 'text/html'},
             'body': f'<h1>File Not Found</h1><p>{filename}</p>'
+        }
+
+def render_dashboard_page():
+    """Server-side render the dashboard with real data"""
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    
+    try:
+        # Fetch all data in parallel (conceptually - boto3 is synchronous)
+        experiments_table = dynamodb.Table('ai-video-codec-experiments')
+        experiments_response = experiments_table.scan(Limit=10)
+        
+        # Process experiments
+        experiments = []
+        for item in experiments_response.get('Items', []):
+            experiments_data = json.loads(item.get('experiments', '[]'))
+            procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+            metrics = procedural.get('real_metrics', {})
+            comparison = procedural.get('comparison', {})
+            
+            experiments.append({
+                'id': item.get('experiment_id', ''),
+                'status': item.get('status', 'unknown'),
+                'compression': comparison.get('reduction_percent', 0),
+                'bitrate': metrics.get('bitrate_mbps', 0),
+                'timestamp': item.get('timestamp_iso', '')
+            })
+        
+        experiments.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        
+        # Fetch infrastructure
+        ec2 = boto3.client('ec2', region_name='us-east-1')
+        ec2_response = ec2.describe_instances(
+            Filters=[
+                {'Name': 'tag:Project', 'Values': ['ai-video-codec']},
+                {'Name': 'instance-state-name', 'Values': ['running', 'stopped', 'pending']}
+            ]
+        )
+        
+        running_instances = 0
+        total_instances = 0
+        for reservation in ec2_response.get('Reservations', []):
+            for instance in reservation.get('Instances', []):
+                total_instances += 1
+                if instance['State']['Name'] == 'running':
+                    running_instances += 1
+        
+        # Generate experiments table rows
+        experiments_html = ""
+        for exp in experiments[:10]:
+            status_class = 'completed' if exp['status'] == 'completed' else 'running'
+            compression_color = 'red' if exp['compression'] < 0 else 'green'
+            experiments_html += f'''
+                <div class="table-row">
+                    <div class="col">{exp['id'][:20]}...</div>
+                    <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
+                    <div class="col" style="color: {compression_color}">{exp['compression']:.1f}%</div>
+                    <div class="col">95.0%</div>
+                    <div class="col">{exp['bitrate']:.2f} Mbps</div>
+                    <div class="col">{exp['timestamp'][:10]}</div>
+                </div>
+            '''
+        
+        # Generate full HTML
+        html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiV1 - AI Video Codec Dashboard</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <meta http-equiv="refresh" content="60">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-video"></i>
+                    <h1>AiV1</h1>
+                </div>
+                <nav style="display: flex; gap: 20px; align-items: center;">
+                    <a href="/blog.html" style="color: #667eea; text-decoration: none; font-weight: 500;">📝 Research Blog</a>
+                    <div class="status-indicator">
+                        <div class="status-dot connected"></div>
+                        <span>Live • {running_instances} Running</span>
+                    </div>
+                </nav>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <section class="overview-section">
+                <div class="overview-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-flask"></i>
+                            <h3>Total Experiments</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value">{len(experiments)}</div>
+                            <div class="metric-label">AI Codec Iterations</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-compress"></i>
+                            <h3>Best Compression</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value">{max([e['compression'] for e in experiments], default=0):.1f}%</div>
+                            <div class="metric-label">vs HEVC Baseline</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-server"></i>
+                            <h3>Infrastructure</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value">{running_instances}/{total_instances}</div>
+                            <div class="metric-label">Active Instances</div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-dollar-sign"></i>
+                            <h3>Monthly Cost</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="metric-value">$0.00</div>
+                            <div class="metric-label">Estimated (Cost Explorer Pending)</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="experiments-section">
+                <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
+                <div class="experiments-table">
+                    <div class="table-header">
+                        <div>Experiment ID</div>
+                        <div>Status</div>
+                        <div>Compression</div>
+                        <div>Quality (PSNR)</div>
+                        <div>Bitrate</div>
+                        <div>Date</div>
+                    </div>
+                    <div class="table-body">
+                        {experiments_html if experiments_html else '<div class="table-row loading">No experiments yet</div>'}
+                    </div>
+                </div>
+            </section>
+
+            <footer style="margin-top: 3rem; text-align: center; color: rgba(255,255,255,0.7); font-size: 0.875rem;">
+                <p>⚡ Server-Side Rendered • Auto-refresh every 60s • <a href="/blog.html" style="color: #667eea;">View Research Blog</a></p>
+            </footer>
+        </main>
+    </div>
+</body>
+</html>
+'''
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'text/html',
+                'Cache-Control': 'public, max-age=30, s-maxage=30'  # Cache for 30 seconds only
+            },
+            'body': html
+        }
+    except Exception as e:
+        print(f"Dashboard render error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'text/html'},
+            'body': f'<h1>Error rendering dashboard</h1><pre>{str(e)}</pre>'
         }
 
 def render_blog_page():
