@@ -673,6 +673,8 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:Query
                   - ce:GetCostAndUsage
+                  - s3:GetObject
+                  - s3:ListBucket
                 Resource: '*'
       Tags:
         - Key: Name

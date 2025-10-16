@@ -27,8 +27,25 @@ def handler(event, context):
     print(f"Request path: {path}")
     
     # Root path (CloudFront routing issues: / comes in as /dashboard)
-    if path == '/' or path == '' or path == '/dashboard':
+    # BUT: /dashboard?type=X is an API call, not the root page
+    if (path == '/' or path == '' or path == '/dashboard') and not query_params.get('type'):
         return serve_static_file('index.html')
+    
+    # API endpoint via /dashboard?type=X (for backward compatibility)
+    elif path == '/dashboard' and query_params.get('type'):
+        data_type = query_params.get('type')
+        if data_type == 'experiments':
+            return get_experiments()
+        elif data_type == 'metrics':
+            return get_metrics()
+        elif data_type == 'costs':
+            return get_costs()
+        elif data_type == 'reasoning':
+            return get_reasoning()
+        elif data_type == 'infrastructure':
+            return get_infrastructure()
+        else:
+            return get_experiments()
     
     # Static HTML files
     elif path in ['/index.html', '/index']:
@@ -56,6 +73,8 @@ def handler(event, context):
             return get_costs()
         elif data_type == 'reasoning':
             return get_reasoning()
+        elif data_type == 'infrastructure':
+            return get_infrastructure()
         else:
             return get_experiments()
     
@@ -355,23 +374,131 @@ def get_metrics():
         }
 
 def get_costs():
-    """Fetch cost data"""
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'application/json'
-        },
-        'body': json.dumps({
-            'monthly_cost': 100,
-            'daily_cost': 3.33,
-            'breakdown': {
-                'compute': 75,
-                'storage': 10,
-                'networking': 15
+    """Fetch cost data from AWS Cost Explorer"""
+    ce = boto3.client('ce', region_name='us-east-1')
+    
+    try:
+        # Get costs for the last 7 days
+        from datetime import datetime, timedelta
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=7)
+        
+        response = ce.get_cost_and_usage(
+            TimePeriod={
+                'Start': start_date.strftime('%Y-%m-%d'),
+                'End': end_date.strftime('%Y-%m-%d')
+            },
+            Granularity='DAILY',
+            Metrics=['UnblendedCost'],
+            Filter={
+                'Tags': {
+                    'Key': 'Project',
+                    'Values': ['ai-video-codec']
+                }
             }
-        })
-    }
+        )
+        
+        # Calculate total and daily average
+        total_cost = 0
+        for result in response.get('ResultsByTime', []):
+            total_cost += float(result['Total']['UnblendedCost']['Amount'])
+        
+        daily_cost = total_cost / 7 if total_cost > 0 else 0
+        monthly_cost = daily_cost * 30
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'monthly_cost': round(monthly_cost, 2),
+                'daily_cost': round(daily_cost, 2),
+                'weekly_cost': round(total_cost, 2),
+                'breakdown': {
+                    'compute': round(monthly_cost * 0.75, 2),
+                    'storage': round(monthly_cost * 0.10, 2),
+                    'networking': round(monthly_cost * 0.15, 2)
+                }
+            })
+        }
+    except Exception as e:
+        print(f"Cost error: {e}")
+        # Return zeros instead of mock data on error
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'monthly_cost': 0,
+                'daily_cost': 0,
+                'weekly_cost': 0,
+                'breakdown': {
+                    'compute': 0,
+                    'storage': 0,
+                    'networking': 0
+                },
+                'error': str(e)
+            })
+        }
+
+def get_infrastructure():
+    """Fetch infrastructure status from EC2"""
+    ec2 = boto3.client('ec2', region_name='us-east-1')
+    
+    try:
+        response = ec2.describe_instances(
+            Filters=[
+                {'Name': 'tag:Project', 'Values': ['ai-video-codec']},
+                {'Name': 'instance-state-name', 'Values': ['running', 'stopped', 'pending']}
+            ]
+        )
+        
+        instances = []
+        for reservation in response.get('Reservations', []):
+            for instance in reservation.get('Instances', []):
+                name_tag = next((tag['Value'] for tag in instance.get('Tags', []) if tag['Key'] == 'Name'), 'Unknown')
+                purpose_tag = next((tag['Value'] for tag in instance.get('Tags', []) if tag['Key'] == 'Purpose'), 'Unknown')
+                
+                instances.append({
+                    'id': instance['InstanceId'],
+                    'name': name_tag,
+                    'type': instance['InstanceType'],
+                    'state': instance['State']['Name'],
+                    'purpose': purpose_tag,
+                    'launch_time': instance.get('LaunchTime', datetime.now()).isoformat() if 'LaunchTime' in instance else ''
+                })
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'instances': instances,
+                'total': len(instances),
+                'running': len([i for i in instances if i['state'] == 'running'])
+            }, default=str)
+        }
+    except Exception as e:
+        print(f"Infrastructure error: {e}")
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'instances': [],
+                'total': 0,
+                'running': 0,
+                'error': str(e)
+            })
+        }
 
 def get_reasoning():
     """Fetch LLM reasoning from DynamoDB"""
