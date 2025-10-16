@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Codec Research Blog - Autonomous Learning Journey</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .blog-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .blog-header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .blog-header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .blog-header p {
+            font-size: 1.2em;
+            color: #666;
+        }
+
+        .blog-post {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .blog-post h2 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .blog-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .blog-meta span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-running {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .blog-section {
+            margin: 30px 0;
+        }
+
+        .blog-section h3 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #667eea;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .blog-section p {
+            line-height: 1.8;
+            color: #555;
+            margin-bottom: 15px;
+        }
+
+        .blog-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .blog-section li {
+            padding: 10px 0 10px 30px;
+            position: relative;
+            line-height: 1.6;
+            color: #555;
+        }
+
+        .blog-section li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .metric-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .code-block {
+            background: #f5f5f5;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .confidence-bar {
+            height: 10px;
+            background: #eee;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 30px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="blog-container">
+        <a href="index.html" class="back-link">← Back to Dashboard</a>
+        
+        <div class="blog-header">
+            <h1>🤖 Autonomous AI Research Blog</h1>
+            <p>Follow the journey of an AI that learns to compress video better than HEVC</p>
+        </div>
+
+        <div id="blog-posts">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>Loading AI research insights...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://pbv4wnw8zd.execute-api.us-east-1.amazonaws.com/production';
+
+        async function loadBlogPosts() {
+            try {
+                // Fetch experiments and reasoning data
+                const [experimentsRes, reasoningRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/dashboard?type=experiments`),
+                    fetch(`${API_BASE_URL}/dashboard?type=reasoning`)
+                ]);
+
+                const experimentsData = await experimentsRes.json();
+                const reasoningData = await reasoningRes.json();
+
+                const experiments = experimentsData.experiments || [];
+                const reasoning = reasoningData.reasoning || [];
+
+                // Match experiments with their reasoning
+                const blogPosts = experiments.map(exp => {
+                    const relatedReasoning = reasoning.find(r => 
+                        r.experiment_id === exp.id || 
+                        Math.abs(new Date(r.timestamp) - new Date(exp.created_at)) < 3600000
+                    );
+
+                    return {
+                        experiment: exp,
+                        reasoning: relatedReasoning
+                    };
+                });
+
+                renderBlogPosts(blogPosts);
+            } catch (error) {
+                console.error('Error loading blog posts:', error);
+                document.getElementById('blog-posts').innerHTML = `
+                    <div class="blog-post">
+                        <h2>⚠️ Unable to Load Blog Posts</h2>
+                        <p>Error: ${error.message}</p>
+                        <p>The AI is still learning. Check back soon!</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderBlogPosts(posts) {
+            const container = document.getElementById('blog-posts');
+
+            if (posts.length === 0) {
+                container.innerHTML = `
+                    <div class="blog-post">
+                        <h2>🚀 First Experiments Starting Soon</h2>
+                        <p>The autonomous AI system is initializing. The first experiment analysis will appear here within 6 hours.</p>
+                        <p>Each blog post will include:</p>
+                        <ul>
+                            <li>What the experiment tried</li>
+                            <li>Root cause analysis of failures</li>
+                            <li>LLM reasoning and insights</li>
+                            <li>Hypothesis for next experiment</li>
+                            <li>Expected improvements</li>
+                        </ul>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = posts.map((post, index) => 
+                renderBlogPost(post, index + 1, posts.length)
+            ).join('');
+        }
+
+        function renderBlogPost(post, iteration, total) {
+            const exp = post.experiment;
+            const reasoning = post.reasoning;
+
+            const statusClass = exp.status === 'completed' ? 'status-success' : 
+                               exp.status === 'failed' ? 'status-failed' : 'status-running';
+
+            const bitrateChange = exp.compression < 0 ? 
+                `<span style="color: #dc3545;">+${Math.abs(exp.compression).toFixed(1)}% (worse)</span>` :
+                `<span style="color: #28a745;">-${exp.compression.toFixed(1)}% (better)</span>`;
+
+            return `
+                <div class="blog-post">
+                    <h2>Iteration ${total - iteration + 1}: ${reasoning?.hypothesis || 'Baseline Measurement'}</h2>
+                    
+                    <div class="blog-meta">
+                        <span>📅 ${new Date(exp.created_at).toLocaleDateString()}</span>
+                        <span>🔬 Experiment ${exp.id}</span>
+                        <span class="status-badge ${statusClass}">${exp.status}</span>
+                    </div>
+
+                    ${reasoning ? `
+                        <div class="blog-section">
+                            <h3>🎯 What We Tried</h3>
+                            <p>${reasoning.hypothesis || 'Initial baseline measurement to establish performance metrics.'}</p>
+                        </div>
+
+                        <div class="blog-section">
+                            <h3>📊 Results</h3>
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-value">${exp.bitrate.toFixed(2)}</div>
+                                    <div class="metric-label">Mbps</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value">${bitrateChange}</div>
+                                    <div class="metric-label">vs HEVC Baseline</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value">${(reasoning.confidence_score * 100).toFixed(0)}%</div>
+                                    <div class="metric-label">Confidence</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="blog-section">
+                            <h3>🔍 Root Cause Analysis</h3>
+                            <p>${reasoning.root_cause || 'Analyzing results...'}</p>
+                        </div>
+
+                        ${reasoning.insights && reasoning.insights.length > 0 ? `
+                            <div class="blog-section">
+                                <h3>💡 Key Insights</h3>
+                                <ul>
+                                    ${reasoning.insights.map(insight => `<li>${insight}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+
+                        ${reasoning.next_experiment ? `
+                            <div class="blog-section">
+                                <h3>🚀 Next Steps</h3>
+                                <p><strong>Approach:</strong> ${reasoning.next_experiment.approach}</p>
+                                ${reasoning.next_experiment.changes ? `
+                                    <ul>
+                                        ${reasoning.next_experiment.changes.map(change => `<li>${change}</li>`).join('')}
+                                    </ul>
+                                ` : ''}
+                                <p><strong>Expected Bitrate:</strong> ${reasoning.expected_bitrate_mbps} Mbps</p>
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" style="width: ${reasoning.confidence_score * 100}%"></div>
+                                </div>
+                                <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                                    Confidence: ${(reasoning.confidence_score * 100).toFixed(0)}%
+                                </p>
+                            </div>
+                        ` : ''}
+
+                        ${reasoning.risks && reasoning.risks.length > 0 ? `
+                            <div class="blog-section">
+                                <h3>⚠️ Known Risks</h3>
+                                <ul>
+                                    ${reasoning.risks.map(risk => `<li>${risk}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    ` : `
+                        <div class="blog-section">
+                            <h3>📊 Baseline Results</h3>
+                            <div class="metrics-grid">
+                                <div class="metric-card">
+                                    <div class="metric-value">${exp.bitrate.toFixed(2)}</div>
+                                    <div class="metric-label">Mbps Achieved</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-value">${bitrateChange}</div>
+                                    <div class="metric-label">vs 10 Mbps HEVC</div>
+                                </div>
+                            </div>
+                            <p>This was a baseline measurement. LLM analysis will follow in the next iteration.</p>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        // Load blog posts on page load
+        loadBlogPosts();
+
+        // Refresh every 5 minutes
+        setInterval(loadBlogPosts, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
+

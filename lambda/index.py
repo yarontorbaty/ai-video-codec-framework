@@ -25,6 +25,8 @@ def handler(event, context):
             return get_metrics()
         elif data_type == 'costs':
             return get_costs()
+        elif data_type == 'reasoning':
+            return get_reasoning()
         else:
             return get_experiments()  # Default to experiments
     elif path == '/experiments' or path == '/api/experiments':
@@ -216,6 +218,64 @@ def get_costs():
                     'storage': 0,
                     'networking': 0
                 },
+                'error': str(e)
+            })
+        }
+
+def get_reasoning():
+    """Fetch LLM reasoning from DynamoDB"""
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    table = dynamodb.Table('ai-video-codec-reasoning')
+    
+    try:
+        response = table.scan(Limit=20)
+        reasoning_items = []
+        
+        for item in response.get('Items', []):
+            # Parse JSON fields
+            insights = json.loads(item.get('insights', '[]')) if isinstance(item.get('insights'), str) else item.get('insights', [])
+            next_experiment = json.loads(item.get('next_experiment', '{}')) if isinstance(item.get('next_experiment'), str) else item.get('next_experiment', {})
+            risks = json.loads(item.get('risks', '[]')) if isinstance(item.get('risks'), str) else item.get('risks', [])
+            
+            reasoning_items.append({
+                'reasoning_id': item.get('reasoning_id', ''),
+                'experiment_id': item.get('experiment_id', ''),
+                'timestamp': item.get('timestamp_iso', ''),
+                'model': item.get('model', ''),
+                'root_cause': item.get('root_cause', ''),
+                'insights': insights,
+                'hypothesis': item.get('hypothesis', ''),
+                'next_experiment': next_experiment,
+                'risks': risks,
+                'expected_bitrate_mbps': float(item.get('expected_bitrate_mbps', 0)),
+                'confidence_score': float(item.get('confidence_score', 0))
+            })
+        
+        # Sort by timestamp (most recent first)
+        reasoning_items.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'reasoning': reasoning_items,
+                'total': len(reasoning_items)
+            }, default=decimal_to_float)
+        }
+    except Exception as e:
+        print(f"Error fetching reasoning: {e}")
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({
+                'reasoning': [],
+                'total': 0,
                 'error': str(e)
             })
         }
