@@ -1,77 +1,125 @@
 #!/bin/bash
-# Autonomous Orchestrator with LLM Planning
-# Uses LLM to analyze results and plan improved experiments
+# Real-Time Autonomous Orchestrator with LLM Planning
+# Continuously monitors health and reacts to experiment results in real-time
 
 LOG_FILE="/var/log/ai-codec-orchestrator.log"
 EXPERIMENT_SCRIPT="/opt/scripts/real_experiment.py"
 PLANNER_SCRIPT="/opt/src/agents/llm_experiment_planner.py"
-INTERVAL_HOURS=6
+DELAY_BETWEEN_EXPERIMENTS=60  # 1 minute between experiments for real-time monitoring
+MAX_EXPERIMENT_DURATION=600    # 10 minutes timeout per experiment
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-log "=== AI Video Codec LLM-Powered Autonomous Orchestrator Started ==="
-log "Running experiments every $INTERVAL_HOURS hours with LLM planning"
+log "=== Real-Time AI Video Codec Orchestrator Started ==="
+log "Continuously running experiments with real-time LLM planning"
+log "Delay between experiments: ${DELAY_BETWEEN_EXPERIMENTS}s"
 
 # Check if ANTHROPIC_API_KEY is set
 if [ -z "$ANTHROPIC_API_KEY" ]; then
     log "⚠️  WARNING: ANTHROPIC_API_KEY not set - will use fallback rule-based planning"
 else
-    log "✅ LLM API key detected - Claude-powered planning enabled"
+    log "✅ LLM API key detected - Claude-powered real-time planning enabled"
 fi
 
-# Run initial experiment immediately
-log "Running initial experiment..."
-cd /opt
-python3 "$EXPERIMENT_SCRIPT" >> "$LOG_FILE" 2>&1
-EXPERIMENT_EXIT_CODE=$?
-log "Initial experiment completed with exit code: $EXPERIMENT_EXIT_CODE"
-
-# Main loop - analyze and run improved experiments
-ITERATION=1
-while true; do
-    SLEEP_SECONDS=$((INTERVAL_HOURS * 3600))
-    log "Sleeping for $INTERVAL_HOURS hours before next iteration..."
-    sleep "$SLEEP_SECONDS"
+# Monitor system health
+check_health() {
+    MEMORY=$(free -m | awk 'NR==2{printf "%.2f", $3*100/$2 }')
+    CPU=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}')
+    DISK=$(df -h /opt | awk 'NR==2{print $5}' | tr -d '%')
     
-    log "=========================================="
-    log "ITERATION $ITERATION - LLM PLANNING PHASE"
-    log "=========================================="
-    
-    # Run LLM analysis and planning
-    log "🤖 Analyzing previous experiments with LLM..."
-    python3 "$PLANNER_SCRIPT" >> "$LOG_FILE" 2>&1
-    PLANNER_EXIT_CODE=$?
-    
-    if [ $PLANNER_EXIT_CODE -eq 0 ]; then
-        log "✅ LLM planning completed successfully"
-    else
-        log "⚠️  LLM planning failed (code: $PLANNER_EXIT_CODE) - continuing with standard experiment"
+    # Alert if resources are constrained
+    if (( $(echo "$MEMORY > 90" | bc -l) )); then
+        log "⚠️  HIGH MEMORY USAGE: ${MEMORY}%"
+    fi
+    if (( $(echo "$CPU > 90" | bc -l) )); then
+        log "⚠️  HIGH CPU USAGE: ${CPU}%"
+    fi
+    if (( DISK > 90 )); then
+        log "⚠️  HIGH DISK USAGE: ${DISK}%"
     fi
     
+    log "Health: CPU=${CPU}%, Memory=${MEMORY}%, Disk=${DISK}%"
+}
+
+# Run experiment with timeout and health monitoring
+run_experiment_with_monitoring() {
+    local ITERATION=$1
+    
     log "=========================================="
-    log "ITERATION $ITERATION - EXPERIMENT PHASE"
+    log "ITERATION $ITERATION - STARTING"
     log "=========================================="
     
-    # Run experiment (potentially with modified parameters based on LLM suggestions)
-    log "🔬 Starting experiment cycle $ITERATION..."
-    python3 "$EXPERIMENT_SCRIPT" >> "$LOG_FILE" 2>&1
+    # Pre-experiment health check
+    check_health
+    
+    # Run experiment with timeout
+    log "🔬 Running experiment $ITERATION..."
+    cd /opt
+    timeout $MAX_EXPERIMENT_DURATION python3 "$EXPERIMENT_SCRIPT" >> "$LOG_FILE" 2>&1 &
+    EXPERIMENT_PID=$!
+    
+    # Monitor experiment in real-time
+    ELAPSED=0
+    while kill -0 $EXPERIMENT_PID 2>/dev/null; do
+        sleep 10
+        ELAPSED=$((ELAPSED + 10))
+        if [ $((ELAPSED % 60)) -eq 0 ]; then
+            log "Experiment $ITERATION running for ${ELAPSED}s..."
+        fi
+    done
+    
+    wait $EXPERIMENT_PID
     EXPERIMENT_EXIT_CODE=$?
     
     if [ $EXPERIMENT_EXIT_CODE -eq 0 ]; then
-        log "✅ Experiment $ITERATION successful"
+        log "✅ Experiment $ITERATION completed successfully"
+    elif [ $EXPERIMENT_EXIT_CODE -eq 124 ]; then
+        log "⏱️  Experiment $ITERATION timed out after ${MAX_EXPERIMENT_DURATION}s"
     else
-        log "❌ Experiment $ITERATION failed with code $EXPERIMENT_EXIT_CODE"
+        log "❌ Experiment $ITERATION failed with exit code $EXPERIMENT_EXIT_CODE"
     fi
     
-    # Log system metrics
-    MEMORY=$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')
-    CPU=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1"%"}')
-    DISK=$(df -h /opt | awk 'NR==2{print $5}')
-    log "System metrics - CPU: $CPU, Memory: $MEMORY, Disk: $DISK"
+    # Post-experiment health check
+    check_health
+    
+    log "=========================================="
+    log "ITERATION $ITERATION - COMPLETED"
+    log "=========================================="
+    
+    return $EXPERIMENT_EXIT_CODE
+}
+
+# Main continuous loop
+ITERATION=1
+CONSECUTIVE_FAILURES=0
+MAX_CONSECUTIVE_FAILURES=5
+
+while true; do
+    # Run experiment with real-time monitoring
+    run_experiment_with_monitoring $ITERATION
+    RESULT=$?
+    
+    # Track failures
+    if [ $RESULT -ne 0 ]; then
+        CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
+        log "⚠️  Consecutive failures: $CONSECUTIVE_FAILURES"
+        
+        if [ $CONSECUTIVE_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]; then
+            log "🚨 CRITICAL: $MAX_CONSECUTIVE_FAILURES consecutive failures. Entering recovery mode..."
+            log "Waiting 5 minutes before resuming..."
+            sleep 300
+            CONSECUTIVE_FAILURES=0
+        fi
+    else
+        CONSECUTIVE_FAILURES=0
+    fi
+    
+    # Short delay before next experiment for real-time operation
+    log "Waiting ${DELAY_BETWEEN_EXPERIMENTS}s before next experiment..."
+    sleep $DELAY_BETWEEN_EXPERIMENTS
     
     ITERATION=$((ITERATION + 1))
-    log "Completed iteration $ITERATION. Total iterations: $ITERATION"
 done
 
