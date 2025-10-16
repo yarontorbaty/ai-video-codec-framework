@@ -213,8 +213,18 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             return self._get_analysis_via_direct_api(experiments)
         
         if not self.client:
-            logger.warning("LLM client not available - returning fallback analysis")
-            return self._fallback_analysis(experiments)
+            logger.error("LLM client not available - cannot provide analysis")
+            return {
+                "error": "LLM_NOT_AVAILABLE",
+                "message": "Orchestrator LLM not available. Set ANTHROPIC_API_KEY to enable.",
+                "root_cause": "N/A - LLM unavailable",
+                "insights": ["LLM analysis requires ANTHROPIC_API_KEY environment variable"],
+                "hypothesis": "N/A - LLM unavailable",
+                "next_experiment": {"approach": "N/A - LLM unavailable"},
+                "risks": [],
+                "expected_bitrate_mbps": None,
+                "confidence_score": 0.0
+            }
         
         try:
             prompt = self.generate_analysis_prompt(experiments)
@@ -248,7 +258,7 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             
         except Exception as e:
             logger.error(f"Error getting LLM analysis: {e}")
-            return self._fallback_analysis(experiments)
+            return None
     
     def _get_analysis_via_direct_api(self, experiments: List[Dict]) -> Optional[Dict]:
         """Get LLM analysis using direct API call."""
@@ -257,8 +267,18 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             response_text = self._call_claude_direct(prompt)
             
             if not response_text:
-                logger.warning("Direct API call returned no response")
-                return self._fallback_analysis(experiments)
+                logger.error("Direct API call returned no response")
+                return {
+                    "error": "LLM_API_FAILED",
+                    "message": "LLM API call failed - no response received",
+                    "root_cause": "N/A - LLM API error",
+                    "insights": ["LLM API did not return a response"],
+                    "hypothesis": "N/A - LLM API error",
+                    "next_experiment": {"approach": "N/A - LLM API error"},
+                    "risks": [],
+                    "expected_bitrate_mbps": None,
+                    "confidence_score": 0.0
+                }
             
             # Try to parse JSON (handle markdown code blocks)
             if "```json" in response_text:
@@ -274,7 +294,17 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             
         except Exception as e:
             logger.error(f"Error in direct API analysis: {e}")
-            return self._fallback_analysis(experiments)
+            return {
+                "error": "LLM_API_ERROR",
+                "message": f"LLM API error: {str(e)}",
+                "root_cause": "N/A - LLM API error",
+                "insights": [f"Error calling LLM: {str(e)}"],
+                "hypothesis": "N/A - LLM API error",
+                "next_experiment": {"approach": "N/A - LLM API error"},
+                "risks": [],
+                "expected_bitrate_mbps": None,
+                "confidence_score": 0.0
+            }
     
     def _fallback_analysis(self, experiments: List[Dict]) -> Dict:
         """

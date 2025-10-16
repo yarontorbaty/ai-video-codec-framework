@@ -16,9 +16,22 @@ log "=== Real-Time AI Video Codec Orchestrator Started ==="
 log "Continuously running experiments with real-time LLM planning"
 log "Delay between experiments: ${DELAY_BETWEEN_EXPERIMENTS}s"
 
+# Fetch API key from AWS Secrets Manager
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    log "Fetching API key from AWS Secrets Manager..."
+    SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ai-video-codec/anthropic-api-key --query SecretString --output text 2>/dev/null)
+    
+    if [ $? -eq 0 ] && [ -n "$SECRET_JSON" ]; then
+        export ANTHROPIC_API_KEY=$(echo "$SECRET_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['ANTHROPIC_API_KEY'])")
+        log "✅ API key retrieved from Secrets Manager"
+    else
+        log "⚠️  WARNING: Could not retrieve API key from Secrets Manager"
+    fi
+fi
+
 # Check if ANTHROPIC_API_KEY is set
 if [ -z "$ANTHROPIC_API_KEY" ]; then
-    log "⚠️  WARNING: ANTHROPIC_API_KEY not set - will use fallback rule-based planning"
+    log "⚠️  WARNING: ANTHROPIC_API_KEY not set - LLM analysis will show 'not available'"
 else
     log "✅ LLM API key detected - Claude-powered real-time planning enabled"
 fi
