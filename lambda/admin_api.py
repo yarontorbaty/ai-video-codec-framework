@@ -118,25 +118,67 @@ def send_2fa_code(email, code):
             Destination={'ToAddresses': [email]},
             Message={
                 'Subject': {
-                    'Data': 'AiV1 Admin Login - 2FA Code',
+                    'Data': f'Your AiV1 verification code is {code}',
                     'Charset': 'UTF-8'
                 },
                 'Body': {
+                    'Text': {
+                        'Data': f'''
+AiV1 Admin Login Verification
+
+Your verification code is: {code}
+
+This code will expire in 10 minutes.
+
+If you didn't request this code, you can safely ignore this email.
+
+---
+AiV1 Autonomous Video Codec Project
+                        ''',
+                        'Charset': 'UTF-8'
+                    },
                     'Html': {
                         'Data': f'''
-                            <html>
-                            <body style="font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5;">
-                                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                                    <h1 style="color: #667eea; text-align: center;">🔐 AiV1 Admin Login</h1>
-                                    <p style="font-size: 16px; color: #333;">Your 2FA verification code is:</p>
-                                    <div style="background: #667eea; color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 8px; letter-spacing: 5px; margin: 20px 0;">
-                                        {code}
-                                    </div>
-                                    <p style="font-size: 14px; color: #666;">This code will expire in 10 minutes.</p>
-                                    <p style="font-size: 14px; color: #666;">If you didn't request this code, please ignore this email.</p>
-                                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-                                    <p style="font-size: 12px; color: #999; text-align: center;">AiV1 Autonomous Video Codec Project</p>
-                                </div>
+                            <!DOCTYPE html>
+                            <html lang="en">
+                            <head>
+                                <meta charset="UTF-8">
+                                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                                <title>Your Verification Code</title>
+                            </head>
+                            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f5;">
+                                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px;">
+                                    <tr>
+                                        <td align="center">
+                                            <table width="600" cellpadding="0" cellspacing="0" style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                                <tr>
+                                                    <td style="padding: 40px 30px; text-align: center;">
+                                                        <h1 style="margin: 0 0 20px 0; color: #667eea; font-size: 24px; font-weight: 600;">AiV1 Admin Login</h1>
+                                                        <p style="margin: 0 0 30px 0; color: #333; font-size: 16px; line-height: 1.5;">
+                                                            Your verification code is:
+                                                        </p>
+                                                        <div style="background-color: #667eea; color: white; font-size: 36px; font-weight: bold; padding: 20px; border-radius: 8px; letter-spacing: 8px; margin: 0 auto 30px auto; display: inline-block;">
+                                                            {code}
+                                                        </div>
+                                                        <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">
+                                                            This code will expire in 10 minutes.
+                                                        </p>
+                                                        <p style="margin: 0; color: #666; font-size: 14px;">
+                                                            If you didn't request this code, you can safely ignore this email.
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td style="padding: 20px 30px; background-color: #f8f9fa; text-align: center; border-top: 1px solid #e0e0e0;">
+                                                        <p style="margin: 0; color: #999; font-size: 12px;">
+                                                            AiV1 Autonomous Video Codec Project
+                                                        </p>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </table>
                             </body>
                             </html>
                         ''',
@@ -552,8 +594,8 @@ def lambda_handler(event, context):
         if event.get('body'):
             body = json.loads(event['body'])
         
-        # Authentication check (except for login endpoint)
-        if path != '/admin/login':
+        # Authentication check (except for login and 2FA verification endpoints)
+        if path not in ['/admin/login', '/admin/verify-2fa']:
             # Check for Authorization header
             auth_header = event.get('headers', {}).get('Authorization', '')
             if not auth_header.startswith('Bearer '):
