@@ -10,7 +10,13 @@ import boto3
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
-import anthropic
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("anthropic library not available - using fallback planning")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,12 +39,16 @@ class LLMExperimentPlanner:
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
         self.s3 = boto3.client('s3', region_name='us-east-1')
         
-        # Initialize Anthropic client (if API key available)
+        # Initialize Anthropic client (if library and API key available)
         api_key = os.environ.get('ANTHROPIC_API_KEY')
-        if api_key:
+        if ANTHROPIC_AVAILABLE and api_key:
             self.client = anthropic.Anthropic(api_key=api_key)
+            logger.info("LLM planning enabled with Claude API")
         else:
-            logger.warning("No ANTHROPIC_API_KEY found - LLM planning will be disabled")
+            if not ANTHROPIC_AVAILABLE:
+                logger.warning("anthropic library not installed - using fallback planning")
+            elif not api_key:
+                logger.warning("No ANTHROPIC_API_KEY found - using fallback planning")
             self.client = None
         
         self.experiments_table = self.dynamodb.Table('ai-video-codec-experiments')
