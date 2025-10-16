@@ -727,7 +727,19 @@ Resources:
         - Key: CostCenter
           Value: AI-Video-Codec
           
-  # API Gateway Root Resource
+  # API Gateway Root Resource Method (for /)
+  DashboardAPIRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ResourceId: !GetAtt DashboardAPI.RootResourceId
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardRendererFunction.Arn}/invocations'
+  
   # Proxy resource for all paths
   DashboardAPIProxyResource:
     Type: AWS::ApiGateway::Resource
@@ -742,19 +754,6 @@ Resources:
     Properties:
       RestApiId: !Ref DashboardAPI
       ResourceId: !Ref DashboardAPIProxyResource
-      HttpMethod: ANY
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardRendererFunction.Arn}/invocations'
-  
-  # Root method for / path
-  DashboardAPIRootMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref DashboardAPI
-      ResourceId: !GetAtt DashboardAPI.RootResourceId
       HttpMethod: ANY
       AuthorizationType: NONE
       Integration:
