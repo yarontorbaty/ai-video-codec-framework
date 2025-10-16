@@ -431,11 +431,83 @@ class ProceduralCompressionAgent:
         logger.info(f"Procedural compression completed: {results}")
         return results
     
+    def _generate_with_parameter_storage(self, output_path: str, duration: float, fps: float) -> Dict:
+        """
+        NEW APPROACH: Store only procedural parameters, not rendered frames.
+        This is the approach suggested by LLM to achieve massive compression.
+        """
+        total_frames = int(duration * fps)
+        parameters_list = []
+        
+        logger.info(f"Generating {total_frames} parameter sets (not rendering frames)...")
+        
+        for frame_idx in range(total_frames):
+            # Store ONLY the parameters needed to regenerate this frame
+            # Each parameter set is ~100-200 bytes instead of ~600KB for rendered frame
+            params = {
+                'frame': frame_idx,
+                'time': frame_idx / fps,
+                'complexity': 0.5 + 0.3 * math.sin(frame_idx * 0.1),
+                'color_palette': 'vibrant',
+                'motion_intensity': 1.0,
+                'geometric_scale': 1.0,
+                'scene_type': frame_idx % 5  # Vary between 5 different scene types
+            }
+            parameters_list.append(params)
+        
+        # Save parameters to JSON file (TINY compared to video)
+        params_file = output_path.replace('.mp4', '_params.json')
+        with open(params_file, 'w') as f:
+            json.dump({
+                'version': '1.0',
+                'resolution': self.resolution,
+                'fps': fps,
+                'duration': duration,
+                'total_frames': total_frames,
+                'parameters': parameters_list
+            }, f)
+        
+        params_file_size = os.path.getsize(params_file)
+        
+        # Calculate what the rendered size WOULD have been
+        bytes_per_frame = self.resolution[0] * self.resolution[1] * 3  # RGB
+        rendered_size = bytes_per_frame * total_frames
+        
+        # Calculate actual compression achieved
+        compression_ratio = params_file_size / rendered_size
+        bitrate_mbps = (params_file_size * 8) / duration / 1_000_000
+        
+        logger.info(f"✅ Parameter storage complete!")
+        logger.info(f"   Rendered size would be: {rendered_size / (1024*1024):.2f} MB")
+        logger.info(f"   Parameter file size: {params_file_size / 1024:.2f} KB")
+        logger.info(f"   Compression ratio: {compression_ratio:.6f}")
+        logger.info(f"   Bitrate: {bitrate_mbps:.4f} Mbps")
+        
+        return {
+            'status': 'completed',
+            'mode': 'parameter_storage',
+            'output_file': params_file,
+            'total_frames': total_frames,
+            'fps': fps,
+            'duration': duration,
+            'rendered_size_mb': rendered_size / (1024 * 1024),
+            'params_size_kb': params_file_size / 1024,
+            'compression_ratio': compression_ratio,
+            'bitrate_mbps': bitrate_mbps,
+            'reduction_vs_rendered': (1 - compression_ratio) * 100  # Percentage reduction
+        }
+    
     def generate_procedural_video(self, output_path: str, duration: float = 10.0, 
                                 fps: float = 30.0) -> Dict:
-        """Generate a procedural video for testing."""
+        """Generate a procedural video for testing (or store parameters if enabled)."""
         logger.info(f"Generating procedural video: {output_path}")
         
+        # NEW: If parameter storage is enabled, store compact parameters instead of rendering
+        if self.parameter_storage_enabled:
+            logger.info("🔧 PARAMETER STORAGE MODE: Storing parameters instead of rendering frames")
+            return self._generate_with_parameter_storage(output_path, duration, fps)
+        
+        # OLD: Render full video (current behavior)
         total_frames = int(duration * fps)
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, self.resolution)

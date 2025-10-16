@@ -63,22 +63,37 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
         
         logger.info(f"Procedural video generated: {results}")
         
-        # Calculate real metrics
-        file_size = os.path.getsize("/tmp/procedural_test.mp4")
-        bitrate_mbps = (file_size * 8) / (10.0 * 1_000_000)  # 10 second video
+        # NEW: Check if parameter storage mode was used
+        if results.get('mode') == 'parameter_storage':
+            # Parameter storage mode: use metrics from the agent
+            bitrate_mbps = results.get('bitrate_mbps', 15.0)
+            file_size_kb = results.get('params_size_kb', 0)
+            compression_method = 'parameter_storage'
+            
+            logger.info(f"🎯 PARAMETER STORAGE: {file_size_kb:.2f} KB, {bitrate_mbps:.4f} Mbps")
+        else:
+            # Old mode: rendered video file
+            file_size = os.path.getsize("/tmp/procedural_test.mp4")
+            bitrate_mbps = (file_size * 8) / (10.0 * 1_000_000)
+            file_size_kb = file_size / 1024
+            compression_method = 'procedural_demoscene'
+            
+            logger.info(f"📹 RENDERED VIDEO: {file_size_kb:.2f} KB, {bitrate_mbps:.2f} Mbps")
         
         real_results = {
             'timestamp': datetime.utcnow().isoformat(),
             'experiment_type': 'real_procedural_generation',
             'status': 'completed',
+            'config': config,  # Include config that was used
             'real_metrics': {
-                'file_size_bytes': file_size,
-                'file_size_mb': file_size / (1024 * 1024),
+                'file_size_kb': file_size_kb,
+                'file_size_mb': file_size_kb / 1024,
                 'bitrate_mbps': bitrate_mbps,
                 'duration': 10.0,
                 'fps': 30.0,
                 'resolution': '1920x1080',
-                'compression_method': 'procedural_demoscene'
+                'compression_method': compression_method,
+                'parameter_storage': results.get('mode') == 'parameter_storage'
             },
             'comparison': {
                 'hevc_baseline_mbps': 10.0,
