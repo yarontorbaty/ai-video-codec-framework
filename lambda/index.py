@@ -131,20 +131,32 @@ def render_dashboard_page():
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
         experiments_response = experiments_table.scan(Limit=10)
         
-        # Process experiments
+        # Process experiments with more details
         experiments = []
         for item in experiments_response.get('Items', []):
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+            ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
+            
             metrics = procedural.get('real_metrics', {})
             comparison = procedural.get('comparison', {})
+            
+            # Determine methods used
+            methods = []
+            if procedural:
+                methods.append('Procedural')
+            if ai_neural:
+                methods.append('Neural Network')
+            methods_str = ' + '.join(methods) if methods else 'Hybrid'
             
             experiments.append({
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
                 'compression': comparison.get('reduction_percent', 0),
                 'bitrate': metrics.get('bitrate_mbps', 0),
-                'timestamp': item.get('timestamp_iso', '')
+                'timestamp': item.get('timestamp_iso', ''),
+                'methods': methods_str,
+                'full_data': experiments_data  # Keep full data for blog linking
             })
         
         experiments.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
@@ -160,25 +172,95 @@ def render_dashboard_page():
         
         running_instances = 0
         total_instances = 0
+        instance_types = []
         for reservation in ec2_response.get('Reservations', []):
             for instance in reservation.get('Instances', []):
                 total_instances += 1
                 if instance['State']['Name'] == 'running':
                     running_instances += 1
+                    instance_types.append(instance['InstanceType'])
         
-        # Generate experiments table rows
+        # Fetch costs from Cost Explorer
+        ce = boto3.client('ce', region_name='us-east-1')
+        monthly_cost = 0
+        cost_breakdown = {'EC2': 0, 'S3': 0, 'Lambda': 0, 'Other': 0}
+        
+        try:
+            from datetime import timedelta
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=7)
+            
+            response = ce.get_cost_and_usage(
+                TimePeriod={
+                    'Start': start_date.strftime('%Y-%m-%d'),
+                    'End': end_date.strftime('%Y-%m-%d')
+                },
+                Granularity='DAILY',
+                Metrics=['UnblendedCost'],
+                GroupBy=[{'Type': 'SERVICE', 'Key': 'SERVICE'}],
+                Filter={
+                    'Tags': {
+                        'Key': 'Project',
+                        'Values': ['ai-video-codec']
+                    }
+                }
+            )
+            
+            # Calculate total and breakdown
+            total_cost = 0
+            for result in response.get('ResultsByTime', []):
+                for group in result.get('Groups', []):
+                    service = group['Keys'][0]
+                    cost = float(group['Metrics']['UnblendedCost']['Amount'])
+                    total_cost += cost
+                    
+                    if 'EC2' in service or 'Elastic Compute' in service:
+                        cost_breakdown['EC2'] += cost
+                    elif 'S3' in service or 'Simple Storage' in service:
+                        cost_breakdown['S3'] += cost
+                    elif 'Lambda' in service:
+                        cost_breakdown['Lambda'] += cost
+                    else:
+                        cost_breakdown['Other'] += cost
+            
+            monthly_cost = (total_cost / 7) * 30 if total_cost > 0 else 0
+            
+            # Scale breakdown to monthly
+            for key in cost_breakdown:
+                cost_breakdown[key] = round((cost_breakdown[key] / 7) * 30, 2)
+                
+        except Exception as e:
+            print(f"Cost fetch error: {e}")
+            # Use estimated costs based on instance types
+            ec2_hourly_rates = {
+                'c6i.xlarge': 0.17,
+                'g4dn.xlarge': 0.526,
+                't3.medium': 0.0416
+            }
+            for itype in instance_types:
+                monthly_cost += ec2_hourly_rates.get(itype, 0.1) * 730  # hours per month
+            cost_breakdown = {
+                'EC2': round(monthly_cost * 0.85, 2),
+                'S3': round(monthly_cost * 0.08, 2),
+                'Lambda': round(monthly_cost * 0.05, 2),
+                'Other': round(monthly_cost * 0.02, 2)
+            }
+        
+        # Generate experiments table rows with blog links
         experiments_html = ""
-        for exp in experiments[:10]:
+        for i, exp in enumerate(experiments[:10]):
             status_class = 'completed' if exp['status'] == 'completed' else 'running'
             compression_color = 'red' if exp['compression'] < 0 else 'green'
             experiments_html += f'''
-                <div class="table-row">
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:20]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
+                    <div class="col">{exp['methods']}</div>
                     <div class="col" style="color: {compression_color}">{exp['compression']:.1f}%</div>
                     <div class="col">95.0%</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
                     <div class="col">{exp['timestamp'][:10]}</div>
+                    <div class="col"><a href="/blog.html#exp-{i+1}" style="color: #667eea; text-decoration: none;"><i class="fas fa-arrow-right"></i></a></div>
                 </div>
             '''
         
@@ -203,7 +285,9 @@ def render_dashboard_page():
                     <h1>AiV1</h1>
                 </div>
                 <nav style="display: flex; gap: 20px; align-items: center;">
-                    <a href="/blog.html" style="color: #667eea; text-decoration: none; font-weight: 500;">📝 Research Blog</a>
+                    <a href="/blog.html" style="color: #667eea; text-decoration: none; font-weight: 500; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-book-open"></i> Research Blog
+                    </a>
                     <div class="status-indicator">
                         <div class="status-dot connected"></div>
                         <span>Live • {running_instances} Running</span>
@@ -251,8 +335,22 @@ def render_dashboard_page():
                             <h3>Monthly Cost</h3>
                         </div>
                         <div class="card-content">
-                            <div class="metric-value">$0.00</div>
-                            <div class="metric-label">Estimated (Cost Explorer Pending)</div>
+                            <div class="metric-value">${monthly_cost:.2f}</div>
+                            <div class="metric-label">Estimated Monthly</div>
+                            <div style="margin-top: 1rem; font-size: 0.85rem; color: #718096;">
+                                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                                    <span><i class="fas fa-server"></i> EC2:</span>
+                                    <strong>${cost_breakdown['EC2']:.2f}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                                    <span><i class="fas fa-database"></i> S3:</span>
+                                    <strong>${cost_breakdown['S3']:.2f}</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                                    <span><i class="fas fa-bolt"></i> Lambda:</span>
+                                    <strong>${cost_breakdown['Lambda']:.2f}</strong>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -261,13 +359,15 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header">
+                    <div class="table-header" style="grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
+                        <div>Methods</div>
                         <div>Compression</div>
-                        <div>Quality (PSNR)</div>
+                        <div>Quality</div>
                         <div>Bitrate</div>
                         <div>Date</div>
+                        <div>Details</div>
                     </div>
                     <div class="table-body">
                         {experiments_html if experiments_html else '<div class="table-row loading">No experiments yet</div>'}
@@ -276,7 +376,7 @@ def render_dashboard_page():
             </section>
 
             <footer style="margin-top: 3rem; text-align: center; color: rgba(255,255,255,0.7); font-size: 0.875rem;">
-                <p>⚡ Server-Side Rendered • Auto-refresh every 60s • <a href="/blog.html" style="color: #667eea;">View Research Blog</a></p>
+                <p><i class="fas fa-bolt"></i> Server-Side Rendered • Auto-refresh every 60s • <a href="/blog.html" style="color: #667eea;"><i class="fas fa-book-open"></i> View Research Blog</a></p>
             </footer>
         </main>
     </div>
@@ -394,6 +494,17 @@ def generate_blog_html(experiments, reasoning_items):
             metrics = post['metrics']
             comparison = post['comparison']
             
+            # Parse experiment data for methods
+            experiments_data = json.loads(exp.get('experiments', '[]'))
+            procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+            ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
+            
+            methods_used = []
+            if procedural:
+                methods_used.append('Procedural Generation (Demoscene-inspired)')
+            if ai_neural:
+                methods_used.append('Neural Network Compression')
+            
             bitrate = metrics.get('bitrate_mbps', 0)
             reduction = comparison.get('reduction_percent', 0)
             
@@ -401,18 +512,38 @@ def generate_blog_html(experiments, reasoning_items):
             
             hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else 'Baseline Measurement'
             root_cause = reasoning.get('root_cause', '') if reasoning else ''
+            insights = reasoning.get('insights', []) if reasoning else []
+            next_experiment = reasoning.get('next_experiment', {}) if reasoning else {}
+            
+            # Generate insights HTML
+            insights_html = ""
+            if isinstance(insights, str):
+                try:
+                    insights = json.loads(insights)
+                except:
+                    insights = []
+            for insight in insights:
+                insights_html += f"<li>{insight}</li>"
+            
+            # Generate methods HTML
+            methods_html = "<br>".join([f"<i class='fas fa-check-circle'></i> {m}" for m in methods_used])
             
             posts_html += f'''
-            <div class="blog-post">
-                <h2>Iteration {len(blog_posts) - i}: {hypothesis}</h2>
+            <div class="blog-post" id="exp-{i+1}">
+                <h2><i class="fas fa-flask"></i> Iteration {len(blog_posts) - i}: {hypothesis}</h2>
                 <div class="blog-meta">
-                    <span>📅 {exp.get('timestamp_iso', '')[:10]}</span>
-                    <span>🔬 {exp.get('experiment_id', '')}</span>
+                    <span><i class="fas fa-calendar"></i> {exp.get('timestamp_iso', '')[:10]}</span>
+                    <span><i class="fas fa-microscope"></i> {exp.get('experiment_id', '')}</span>
                     <span class="status-badge {status_class}">{exp.get('status', 'unknown')}</span>
                 </div>
                 
                 <div class="blog-section">
-                    <h3>📊 Results</h3>
+                    <h3><i class="fas fa-cogs"></i> Methods Used</h3>
+                    <p>{methods_html if methods_html else 'Hybrid Approach'}</p>
+                </div>
+                
+                <div class="blog-section">
+                    <h3><i class="fas fa-chart-bar"></i> Results</h3>
                     <div class="metrics-grid">
                         <div class="metric-card">
                             <div class="metric-value">{bitrate:.2f}</div>
@@ -427,7 +558,9 @@ def generate_blog_html(experiments, reasoning_items):
                     </div>
                 </div>
                 
-                {f'<div class="blog-section"><h3>🔍 Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
+                {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
+                
+                {f'<div class="blog-section"><h3><i class="fas fa-lightbulb"></i> Key Insights</h3><ul>{insights_html}</ul></div>' if insights_html else ''}
             </div>
             '''
     
