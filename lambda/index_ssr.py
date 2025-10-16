@@ -55,6 +55,50 @@ def handler(event, context):
     elif path in ['/admin', '/admin.html']:
         return serve_static_file('admin.html')
     
+    # Admin API proxy
+    elif path.startswith('/admin/'):
+        # Proxy to admin API Gateway
+        import urllib.request
+        import urllib.parse
+        
+        admin_api_endpoint = 'https://mrjjwxaxma.execute-api.us-east-1.amazonaws.com/production'
+        api_path = path.replace('/admin', '')
+        
+        try:
+            # Forward the request
+            if event.get('httpMethod') == 'POST':
+                body = event.get('body', '{}')
+                req = urllib.request.Request(
+                    f"{admin_api_endpoint}{api_path}",
+                    data=body.encode('utf-8'),
+                    headers={'Content-Type': 'application/json'}
+                )
+                with urllib.request.urlopen(req) as response:
+                    return {
+                        'statusCode': response.status,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': response.read().decode('utf-8')
+                    }
+            else:
+                with urllib.request.urlopen(f"{admin_api_endpoint}{api_path}") as response:
+                    return {
+                        'statusCode': response.status,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': response.read().decode('utf-8')
+                    }
+        except Exception as e:
+            return {
+                'statusCode': 500,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({'error': str(e)})
+            }
+    
     # Blog - server-side rendered
     elif path in ['/blog', '/blog.html']:
         return render_blog_page()
