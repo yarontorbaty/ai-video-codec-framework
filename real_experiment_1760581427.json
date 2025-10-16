@@ -1,0 +1,18 @@
+{
+  "experiment_id": "real_exp_1760581427",
+  "timestamp": "2025-10-16T02:23:47.251563",
+  "experiments": [
+    {
+      "timestamp": "2025-10-16T02:23:47.252202",
+      "experiment_type": "real_procedural_generation",
+      "status": "failed",
+      "error": "No module named 'torch'"
+    },
+    {
+      "timestamp": "2025-10-16T02:23:47.252409",
+      "experiment_type": "real_ai_neural_networks",
+      "status": "failed",
+      "error": "No module named 'torch'"
+    }
+  ]
+}
