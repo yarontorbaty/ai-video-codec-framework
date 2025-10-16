@@ -51,6 +51,10 @@ def handler(event, context):
     elif path in ['/index.html', '/index']:
         return serve_static_file('index.html')
     
+    # Admin interface
+    elif path in ['/admin', '/admin.html']:
+        return serve_static_file('admin.html')
+    
     # Blog - server-side rendered
     elif path in ['/blog', '/blog.html']:
         return render_blog_page()
