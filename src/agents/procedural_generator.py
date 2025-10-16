@@ -267,9 +267,19 @@ class ProceduralSceneGenerator:
 class ProceduralCompressionAgent:
     """AI agent that uses procedural generation for video compression."""
     
-    def __init__(self, resolution: Tuple[int, int] = (1920, 1080)):
+    def __init__(self, resolution: Tuple[int, int] = (1920, 1080), config: Optional[Dict] = None):
         self.resolution = resolution
         self.generator = ProceduralSceneGenerator(resolution)
+        
+        # LLM-suggested configuration (can override defaults)
+        self.config = config or {}
+        self.compression_strategy = self.config.get('compression_strategy', 'parameter_storage')
+        self.parameter_storage_enabled = self.config.get('parameter_storage', False)
+        self.complexity_level = self.config.get('complexity_level', 1.0)
+        self.bitrate_target = self.config.get('bitrate_target_mbps', 1.0)
+        
+        logger.info(f"Procedural agent initialized with strategy: {self.compression_strategy}")
+        logger.info(f"Parameter storage: {self.parameter_storage_enabled}, Target bitrate: {self.bitrate_target} Mbps")
         
         # Neural network for scene parameter prediction
         self.parameter_predictor = self._create_parameter_predictor()

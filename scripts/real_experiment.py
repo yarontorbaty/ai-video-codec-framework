@@ -12,6 +12,7 @@ import logging
 import boto3
 import numpy as np
 from datetime import datetime
+from typing import Optional, Dict
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -20,15 +21,32 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def run_real_procedural_experiment():
-    """Run actual procedural generation experiment."""
+def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
+    """Run actual procedural generation experiment with LLM-suggested configuration."""
     logger.info("Starting REAL procedural generation experiment...")
     
     try:
         from agents.procedural_generator import ProceduralCompressionAgent
         
-        # Create procedural agent
-        agent = ProceduralCompressionAgent(resolution=(1920, 1080))
+        # Extract configuration from LLM suggestions
+        config = {}
+        if llm_config:
+            # Parse LLM suggestions into actionable parameters
+            next_exp = llm_config.get('next_experiment', {})
+            approach = next_exp.get('approach', '')
+            
+            # Map LLM suggestions to agent configuration
+            if 'parameter' in approach.lower() or 'compact' in approach.lower():
+                config['parameter_storage'] = True
+                config['compression_strategy'] = 'parameter_storage'
+            
+            config['bitrate_target_mbps'] = llm_config.get('expected_bitrate_mbps', 1.0)
+            config['complexity_level'] = llm_config.get('complexity_level', 1.0)
+            
+            logger.info(f"📝 LLM Configuration applied: {config}")
+        
+        # Create procedural agent with LLM configuration
+        agent = ProceduralCompressionAgent(resolution=(1920, 1080), config=config)
         logger.info("Procedural agent created successfully")
         
         # Generate procedural video
@@ -204,16 +222,33 @@ def run_llm_pre_analysis(past_experiments):
         
         # Get hypothesis and plan for next experiment
         if past_experiments:
-            hypothesis = planner.generate_hypothesis(past_experiments)
-            logger.info(f"💡 LLM Hypothesis: {hypothesis.get('hypothesis', 'N/A')}")
-            logger.info(f"🎯 Expected improvement: {hypothesis.get('expected_bitrate_mbps', 'N/A')} Mbps")
-            return hypothesis
+            # Convert past experiments to format expected by LLM
+            formatted_experiments = []
+            for exp in past_experiments:
+                exp_copy = exp.copy()
+                # Ensure experiments field is a string
+                if not isinstance(exp_copy.get('experiments'), str):
+                    exp_copy['experiments'] = json.dumps(exp_copy.get('experiments', []))
+                formatted_experiments.append(exp_copy)
+            
+            # Get LLM analysis of past experiments
+            analysis = planner.get_llm_analysis(formatted_experiments)
+            
+            if analysis:
+                logger.info(f"💡 LLM Hypothesis: {analysis.get('hypothesis', 'N/A')[:100]}...")
+                logger.info(f"🎯 Expected improvement: {analysis.get('expected_bitrate_mbps', 'N/A')} Mbps")
+                return analysis
+            else:
+                logger.warning("No LLM analysis available")
+                return None
         else:
             logger.info("No past experiments to analyze (baseline run)")
             return None
             
     except Exception as e:
         logger.error(f"LLM pre-analysis failed: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def run_llm_post_analysis(experiment_result, past_experiments):
@@ -280,11 +315,11 @@ def main():
             all_results['pre_analysis'] = pre_analysis
         
         logger.info("=" * 50)
-        # Run procedural generation experiment
+        # Run procedural generation experiment WITH LLM CONFIG
         logger.info("=" * 50)
         logger.info("EXPERIMENT 1: Procedural Generation")
         logger.info("=" * 50)
-        procedural_results = run_real_procedural_experiment()
+        procedural_results = run_real_procedural_experiment(llm_config=pre_analysis)
         all_results['experiments'].append(procedural_results)
         
         # Run AI neural networks experiment
