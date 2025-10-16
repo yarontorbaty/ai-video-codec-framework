@@ -193,6 +193,63 @@ def upload_real_results(results):
         traceback.print_exc()
         return False
 
+def run_llm_pre_analysis(past_experiments):
+    """Run LLM analysis BEFORE starting experiment."""
+    logger.info("🤖 Running LLM pre-experiment analysis...")
+    
+    try:
+        from agents.llm_experiment_planner import LLMExperimentPlanner
+        
+        planner = LLMExperimentPlanner()
+        
+        # Get hypothesis and plan for next experiment
+        if past_experiments:
+            hypothesis = planner.generate_hypothesis(past_experiments)
+            logger.info(f"💡 LLM Hypothesis: {hypothesis.get('hypothesis', 'N/A')}")
+            logger.info(f"🎯 Expected improvement: {hypothesis.get('expected_bitrate_mbps', 'N/A')} Mbps")
+            return hypothesis
+        else:
+            logger.info("No past experiments to analyze (baseline run)")
+            return None
+            
+    except Exception as e:
+        logger.error(f"LLM pre-analysis failed: {e}")
+        return None
+
+def run_llm_post_analysis(experiment_result, past_experiments):
+    """Run LLM analysis AFTER experiment completes."""
+    logger.info("🤖 Running LLM post-experiment analysis...")
+    
+    try:
+        from agents.llm_experiment_planner import LLMExperimentPlanner
+        
+        planner = LLMExperimentPlanner()
+        
+        # Analyze what happened
+        reasoning = planner.analyze_experiment(experiment_result, past_experiments)
+        
+        if reasoning:
+            logger.info(f"📊 LLM Analysis complete")
+            logger.info(f"   Root cause: {reasoning.get('root_cause', 'N/A')[:100]}...")
+            logger.info(f"   Next hypothesis: {reasoning.get('hypothesis', 'N/A')[:100]}...")
+            
+            # Store reasoning in DynamoDB
+            dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+            reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
+            reasoning_table.put_item(Item=reasoning)
+            logger.info(f"   ✅ Reasoning stored in DynamoDB")
+            
+            return reasoning
+        else:
+            logger.warning("No reasoning generated")
+            return None
+            
+    except Exception as e:
+        logger.error(f"LLM post-analysis failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 def main():
     """Run real AI codec experiments."""
     logger.info("🎬 REAL AI Video Codec Experiment Starting...")
@@ -204,6 +261,25 @@ def main():
     }
     
     try:
+        # Fetch past experiments for LLM context
+        logger.info("📚 Fetching past experiments for LLM context...")
+        dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+        experiments_table = dynamodb.Table('ai-video-codec-experiments')
+        past_response = experiments_table.scan(Limit=20)
+        past_experiments = past_response.get('Items', [])
+        past_experiments.sort(key=lambda x: x.get('timestamp', 0))
+        logger.info(f"Found {len(past_experiments)} past experiments")
+        
+        # LLM PRE-ANALYSIS: Generate hypothesis before starting
+        logger.info("=" * 50)
+        logger.info("LLM PRE-EXPERIMENT ANALYSIS")
+        logger.info("=" * 50)
+        pre_analysis = run_llm_pre_analysis(past_experiments)
+        
+        if pre_analysis:
+            all_results['pre_analysis'] = pre_analysis
+        
+        logger.info("=" * 50)
         # Run procedural generation experiment
         logger.info("=" * 50)
         logger.info("EXPERIMENT 1: Procedural Generation")
@@ -218,19 +294,30 @@ def main():
         ai_results = run_real_ai_experiment()
         all_results['experiments'].append(ai_results)
         
-        # Upload results
+        # Upload results FIRST
         logger.info("=" * 50)
         logger.info("UPLOADING RESULTS")
         logger.info("=" * 50)
         upload_success = upload_real_results(all_results)
         
-        if upload_success:
-            logger.info("🎉 REAL AI Codec Experiment completed successfully!")
-            logger.info(f"Results: {json.dumps(all_results, indent=2)}")
-            return 0
-        else:
+        if not upload_success:
             logger.error("❌ Failed to upload results")
             return 1
+        
+        # LLM POST-ANALYSIS: Analyze what happened
+        logger.info("=" * 50)
+        logger.info("LLM POST-EXPERIMENT ANALYSIS")
+        logger.info("=" * 50)
+        post_analysis = run_llm_post_analysis(all_results, past_experiments)
+        
+        if post_analysis:
+            logger.info("✅ Post-experiment analysis complete and stored")
+        else:
+            logger.warning("⚠️  Post-experiment analysis skipped")
+        
+        logger.info("🎉 REAL AI Codec Experiment completed successfully!")
+        logger.info(f"Results: {json.dumps(all_results, indent=2)}")
+        return 0
             
     except Exception as e:
         logger.error(f"❌ Real experiment failed: {e}")
