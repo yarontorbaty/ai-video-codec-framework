@@ -62,14 +62,14 @@ def handler(event, context):
         import urllib.parse
         
         admin_api_endpoint = 'https://mrjjwxaxma.execute-api.us-east-1.amazonaws.com/production'
-        api_path = path.replace('/admin', '')
+        # Keep the full path including /admin
         
         try:
             # Forward the request
             if event.get('httpMethod') == 'POST':
                 body = event.get('body', '{}')
                 req = urllib.request.Request(
-                    f"{admin_api_endpoint}{api_path}",
+                    f"{admin_api_endpoint}{path}",
                     data=body.encode('utf-8'),
                     headers={'Content-Type': 'application/json'}
                 )
@@ -83,7 +83,7 @@ def handler(event, context):
                         'body': response.read().decode('utf-8')
                     }
             else:
-                with urllib.request.urlopen(f"{admin_api_endpoint}{api_path}") as response:
+                with urllib.request.urlopen(f"{admin_api_endpoint}{path}") as response:
                     return {
                         'statusCode': response.status,
                         'headers': {
