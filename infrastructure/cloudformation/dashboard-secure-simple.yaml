@@ -24,11 +24,6 @@ Parameters:
     Type: String
     Default: ''
     Description: SSL certificate ARN for custom domain (optional)
-  
-  DashboardBucketName:
-    Type: String
-    Default: 'ai-video-codec-dashboard-580473065386'
-    Description: 'Name of the S3 bucket containing dashboard static files'
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
@@ -769,21 +764,13 @@ Resources:
       RestApiId: !Ref DashboardAPI
       StageName: !Ref Environment
       
-  # CloudFront Distribution (Serves S3 static files + API Gateway for data)
+  # CloudFront Distribution (Server-side rendering via Lambda only)
   DashboardDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Origins:
-          # S3 Origin for static files (HTML, CSS, JS)
-          - Id: S3Origin
-            DomainName: !Sub '${DashboardBucket}.s3-website-${AWS::Region}.amazonaws.com'
-            CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginProtocolPolicy: http-only
-          # API Gateway Origin for data endpoints
-          - Id: APIOrigin
+          - Id: LambdaOrigin
             DomainName: !Sub '${DashboardAPI}.execute-api.${AWS::Region}.amazonaws.com'
             OriginPath: !Sub '/${Environment}'
             CustomOriginConfig:
@@ -793,32 +780,21 @@ Resources:
             OriginCustomHeaders:
               - HeaderName: User-Agent
                 HeaderValue: !Sub 'CloudFront-${ProjectName}-dashboard'
+              - HeaderName: X-Origin-Verify
+                HeaderValue: !Sub '${ProjectName}-secure-origin'
         Enabled: true
-        DefaultRootObject: 'index.html'
-        Comment: !Sub '${ProjectName} Secure Dashboard Distribution'
-        # Default behavior - serve from S3
+        DefaultRootObject: ''
+        Comment: !Sub '${ProjectName} Server-Side Rendered Dashboard'
         DefaultCacheBehavior:
-          TargetOriginId: S3Origin
+          TargetOriginId: LambdaOrigin
           ViewerProtocolPolicy: redirect-to-https
-          AllowedMethods: [GET, HEAD, OPTIONS]
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
           CachedMethods: [GET, HEAD]
           Compress: true
           ForwardedValues:
-            QueryString: false
+            QueryString: true
             Cookies:
               Forward: none
-        # API behavior - route /dashboard to API Gateway
-        CacheBehaviors:
-          - PathPattern: '/dashboard*'
-            TargetOriginId: APIOrigin
-            ViewerProtocolPolicy: redirect-to-https
-            AllowedMethods: [GET, HEAD, OPTIONS]
-            CachedMethods: [GET, HEAD]
-            Compress: true
-            ForwardedValues:
-              QueryString: true
-              Cookies:
-                Forward: none
         Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref AWS::NoValue]
         ViewerCertificate: !If 
           - HasCustomDomain
