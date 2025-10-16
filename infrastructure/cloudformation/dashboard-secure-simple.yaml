@@ -161,30 +161,50 @@ Resources:
                       print(f"Test results error: {str(e)}")
                       # No mock data - will show "No data" in UI
                   
-                  # Get cost data
+                  # Get cost data using Cost Allocation Tags
                   costs = {'monthly': 0, 'breakdown': {'training': 0, 'inference': 0, 'storage': 0, 'orchestrator': 0}}
                   try:
                       start_date = datetime.now().replace(day=1).strftime('%Y-%m-%d')
                       end_date = datetime.now().strftime('%Y-%m-%d')
                       
+                      # Get total cost
                       response = ce.get_cost_and_usage(
                           TimePeriod={'Start': start_date, 'End': end_date},
                           Granularity='MONTHLY',
                           Metrics=['UnblendedCost']
                       )
                       
+                      total_cost = 0
                       if response['ResultsByTime'] and len(response['ResultsByTime']) > 0:
                           total_cost = float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
-                          # More realistic cost breakdown based on typical AI/ML workloads
-                          costs = {
-                              'monthly': total_cost,
-                              'breakdown': {
-                                  'training': total_cost * 0.65,  # GPU instances for training
-                                  'inference': total_cost * 0.15,  # CPU instances for inference
-                                  'storage': total_cost * 0.05,   # S3, EBS storage
-                                  'orchestrator': total_cost * 0.15  # EC2 orchestrator + other services
-                              }
-                          }
+                      
+                      # Get cost breakdown by CostCategory tag
+                      breakdown = {'training': 0, 'inference': 0, 'storage': 0, 'orchestrator': 0}
+                      
+                      for category in ['Training', 'Inference', 'Storage', 'Orchestrator']:
+                          try:
+                              response = ce.get_cost_and_usage(
+                                  TimePeriod={'Start': start_date, 'End': end_date},
+                                  Granularity='MONTHLY',
+                                  Metrics=['UnblendedCost'],
+                                  Filter={
+                                      'Tags': {
+                                          'Key': 'CostCategory',
+                                          'Values': [category]
+                                      }
+                                  }
+                              )
+                              
+                              if response['ResultsByTime'] and len(response['ResultsByTime']) > 0:
+                                  category_cost = float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
+                                  breakdown[category.lower()] = category_cost
+                          except Exception as tag_error:
+                              print(f"Error getting cost for {category}: {str(tag_error)}")
+                      
+                      costs = {
+                          'monthly': total_cost,
+                          'breakdown': breakdown
+                      }
                   except Exception as e:
                       print(f"Cost Explorer error: {str(e)}")
                       pass
@@ -565,9 +585,26 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: !Sub '${ProjectName}-dashboard-api'
-      Description: 'Secure API for AiV1 Dashboard'
+      Description: 'Secure API for AiV1 Dashboard - CloudFront Only'
       EndpointConfiguration:
         Types: [REGIONAL]
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*'
+            Condition:
+              StringEquals:
+                'aws:UserAgent': !Sub 'CloudFront-${ProjectName}-dashboard'
+          - Effect: Deny
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/*'
+            Condition:
+              StringNotEquals:
+                'aws:UserAgent': !Sub 'CloudFront-${ProjectName}-dashboard'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-dashboard-api'
@@ -634,6 +671,11 @@ Resources:
               HTTPPort: 443
               HTTPSPort: 443
               OriginProtocolPolicy: https-only
+            OriginCustomHeaders:
+              - HeaderName: User-Agent
+                HeaderValue: !Sub 'CloudFront-${ProjectName}-dashboard'
+              - HeaderName: X-Origin-Verify
+                HeaderValue: !Sub '${ProjectName}-secure-origin'
         Enabled: true
         DefaultRootObject: ''
         Comment: !Sub '${ProjectName} Secure Dashboard Distribution'

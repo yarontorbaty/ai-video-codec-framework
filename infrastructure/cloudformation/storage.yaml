@@ -46,6 +46,10 @@ Resources:
           Value: !Sub '${ProjectName}-artifacts'
         - Key: Environment
           Value: !Ref Environment
+        - Key: CostCategory
+          Value: Storage
+        - Key: Project
+          Value: !Ref ProjectName
           
   VideosBucket:
     Type: AWS::S3::Bucket
@@ -75,6 +79,10 @@ Resources:
           Value: !Sub '${ProjectName}-videos'
         - Key: Environment
           Value: !Ref Environment
+        - Key: CostCategory
+          Value: Storage
+        - Key: Project
+          Value: !Ref ProjectName
           
   ModelsBucket:
     Type: AWS::S3::Bucket
@@ -97,6 +105,10 @@ Resources:
           Value: !Sub '${ProjectName}-models'
         - Key: Environment
           Value: !Ref Environment
+        - Key: CostCategory
+          Value: Storage
+        - Key: Project
+          Value: !Ref ProjectName
           
   ReportsBucket:
     Type: AWS::S3::Bucket
@@ -114,6 +126,10 @@ Resources:
           Value: !Sub '${ProjectName}-reports'
         - Key: Environment
           Value: !Ref Environment
+        - Key: CostCategory
+          Value: Storage
+        - Key: Project
+          Value: !Ref ProjectName
           
   # EFS File System
   EFSFileSystem:

@@ -411,6 +411,10 @@ Resources:
           Value: !Sub '${ProjectName}-orchestrator'
         - Key: Environment
           Value: !Ref Environment
+        - Key: CostCategory
+          Value: Orchestrator
+        - Key: Project
+          Value: !Ref ProjectName
           
   # Training Worker Launch Template
   TrainingWorkerLaunchTemplate:
@@ -482,6 +486,10 @@ Resources:
                 Value: !Sub '${ProjectName}-training-worker'
               - Key: Environment
                 Value: !Ref Environment
+              - Key: CostCategory
+                Value: Training
+              - Key: Project
+                Value: !Ref ProjectName
                 
   # Training Worker Auto Scaling Group
   TrainingWorkerASG:
@@ -503,6 +511,12 @@ Resources:
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: CostCategory
+          Value: Training
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
           PropagateAtLaunch: true
           
   # Inference Worker Launch Template
@@ -571,6 +585,10 @@ Resources:
                 Value: !Sub '${ProjectName}-inference-worker'
               - Key: Environment
                 Value: !Ref Environment
+              - Key: CostCategory
+                Value: Inference
+              - Key: Project
+                Value: !Ref ProjectName
                 
   # Inference Worker Auto Scaling Group
   InferenceWorkerASG:
@@ -592,6 +610,12 @@ Resources:
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: CostCategory
+          Value: Inference
+          PropagateAtLaunch: true
+        - Key: Project
+          Value: !Ref ProjectName
           PropagateAtLaunch: true
 
 Outputs:
