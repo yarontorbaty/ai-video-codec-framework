@@ -202,7 +202,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSNSFullAccess
         - arn:aws:iam::aws:policy/CloudWatchFullAccess
         - arn:aws:iam::aws:policy/AmazonEC2FullAccess
-        - arn:aws:iam::aws:policy/AmazonEFSFullAccess
+        - arn:aws:iam::aws:policy/AmazonElasticFileSystemFullAccess
       Policies:
         - PolicyName: CostExplorerAccess
           PolicyDocument:
@@ -636,3 +636,27 @@ Outputs:
     Value: !Ref MetricsTable
     Export:
       Name: !Sub '${ProjectName}-metrics-table'
+      
+  PrivateSubnet1:
+    Description: Private subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${ProjectName}-private-subnet-1'
+      
+  PrivateSubnet2:
+    Description: Private subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${ProjectName}-private-subnet-2'
+      
+  OrchestratorSecurityGroup:
+    Description: Orchestrator security group ID
+    Value: !Ref OrchestratorSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-orchestrator-sg'
+      
+  WorkersSecurityGroup:
+    Description: Workers security group ID
+    Value: !Ref WorkerSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-workers-sg'

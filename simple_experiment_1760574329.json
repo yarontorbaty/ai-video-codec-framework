@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-10-16T00:25:09.210793",
+  "test_type": "procedural_generation",
+  "status": "completed",
+  "progress": 100,
+  "results": {
+    "compression_ratio": 0.05,
+    "bitrate_mbps": 0.5,
+    "psnr_db": 32.0,
+    "method": "procedural_demoscene"
+  }
+}

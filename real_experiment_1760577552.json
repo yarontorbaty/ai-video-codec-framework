@@ -1,0 +1,37 @@
+{
+  "experiment_id": "real_exp_1760577415",
+  "timestamp": "2025-10-16T01:16:55.525533",
+  "experiments": [
+    {
+      "timestamp": "2025-10-16T01:19:11.772925",
+      "experiment_type": "real_procedural_generation",
+      "status": "completed",
+      "real_metrics": {
+        "file_size_bytes": 18797730,
+        "file_size_mb": 17.926912307739258,
+        "bitrate_mbps": 15.038184,
+        "duration": 10.0,
+        "fps": 30.0,
+        "resolution": "1920x1080",
+        "compression_method": "procedural_demoscene"
+      },
+      "comparison": {
+        "hevc_baseline_mbps": 10.0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      }
+    },
+    {
+      "timestamp": "2025-10-16T01:19:11.947069",
+      "experiment_type": "real_ai_neural_networks",
+      "status": "completed",
+      "neural_networks": {
+        "semantic_encoder": "working",
+        "motion_predictor": "working",
+        "generative_refiner": "working",
+        "pytorch_version": "1.13.1+cpu",
+        "cuda_available": false
+      }
+    }
+  ]
+}

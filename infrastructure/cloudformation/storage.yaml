@@ -247,7 +247,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${ArtifactsBucket}/*'
+              - !Sub '${ArtifactsBucket.Arn}/*'
               - !GetAtt ArtifactsBucket.Arn
             Condition:
               Bool:
@@ -265,7 +265,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${VideosBucket}/*'
+              - !Sub '${VideosBucket.Arn}/*'
               - !GetAtt VideosBucket.Arn
             Condition:
               Bool:
@@ -283,7 +283,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${ModelsBucket}/*'
+              - !Sub '${ModelsBucket.Arn}/*'
               - !GetAtt ModelsBucket.Arn
             Condition:
               Bool:
@@ -301,7 +301,7 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${ReportsBucket}/*'
+              - !Sub '${ReportsBucket.Arn}/*'
               - !GetAtt ReportsBucket.Arn
             Condition:
               Bool:

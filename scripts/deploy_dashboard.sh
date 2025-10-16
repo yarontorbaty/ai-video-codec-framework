@@ -16,9 +16,10 @@ PROJECT_NAME="ai-video-codec"
 ENVIRONMENT="production"
 REGION="us-east-1"
 STACK_NAME="${PROJECT_NAME}-${ENVIRONMENT}"
+DOMAIN_NAME="aiv1codec.com"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}AI Video Codec Framework - Dashboard Deployment${NC}"
+echo -e "${BLUE}AiV1 - Dashboard Deployment${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -47,11 +48,43 @@ aws cloudformation deploy \
     --parameter-overrides \
         ProjectName=${PROJECT_NAME} \
         Environment=${ENVIRONMENT} \
-    --capabilities CAPABILITY_IAM \
+        DomainName=${DOMAIN_NAME} \
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
     --region ${REGION} \
     --no-fail-on-empty-changeset
 
 echo -e "${GREEN}✓ Dashboard infrastructure deployed${NC}"
+
+# Check if SSL certificate exists for the domain
+echo -e "${BLUE}Checking SSL certificate for ${DOMAIN_NAME}...${NC}"
+CERTIFICATE_ARN=$(aws acm list-certificates \
+    --query "CertificateSummaryList[?DomainName=='${DOMAIN_NAME}'].CertificateArn" \
+    --output text \
+    --region us-east-1)
+
+if [ "$CERTIFICATE_ARN" != "None" ] && [ -n "$CERTIFICATE_ARN" ]; then
+    echo -e "${GREEN}✓ SSL certificate found: ${CERTIFICATE_ARN}${NC}"
+    
+    # Update the stack with the certificate
+    echo -e "${BLUE}Updating stack with SSL certificate...${NC}"
+    aws cloudformation deploy \
+        --template-file infrastructure/cloudformation/dashboard.yaml \
+        --stack-name ${STACK_NAME}-dashboard \
+        --parameter-overrides \
+            ProjectName=${PROJECT_NAME} \
+            Environment=${ENVIRONMENT} \
+            DomainName=${DOMAIN_NAME} \
+            CertificateArn=${CERTIFICATE_ARN} \
+        --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+        --region ${REGION} \
+        --no-fail-on-empty-changeset
+    
+    echo -e "${GREEN}✓ Stack updated with SSL certificate${NC}"
+else
+    echo -e "${YELLOW}⚠ No SSL certificate found for ${DOMAIN_NAME}${NC}"
+    echo -e "${YELLOW}  Please create an SSL certificate in AWS Certificate Manager${NC}"
+    echo -e "${YELLOW}  and update the stack manually with the certificate ARN${NC}"
+fi
 
 # Get S3 bucket name
 BUCKET_NAME=$(aws cloudformation describe-stacks \
@@ -127,6 +160,9 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "${BLUE}Dashboard URL:${NC}"
 echo -e "${GREEN}${DASHBOARD_URL}${NC}"
+echo ""
+echo -e "${BLUE}Custom Domain:${NC}"
+echo -e "${GREEN}https://${DOMAIN_NAME}${NC}"
 echo ""
 echo -e "${BLUE}API Endpoints:${NC}"
 echo -e "${GREEN}${API_URL}/metrics${NC}"

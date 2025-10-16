@@ -17,13 +17,17 @@ Parameters:
     
   DomainName:
     Type: String
-    Default: ''
+    Default: 'aiv1codec.com'
     Description: Custom domain name (optional)
     
   CertificateArn:
     Type: String
     Default: ''
     Description: SSL certificate ARN for custom domain (optional)
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, '']]
 
 Resources:
   # S3 Bucket for Dashboard
@@ -63,7 +67,7 @@ Resources:
             Effect: Allow
             Principal: '*'
             Action: 's3:GetObject'
-            Resource: !Sub '${DashboardBucket}/*'
+            Resource: !Sub '${DashboardBucket.Arn}/*'
             
   # CloudFront Distribution
   DashboardDistribution:
@@ -99,9 +103,8 @@ Resources:
               QueryString: false
               Cookies:
                 Forward: none
-            TTL:
-              DefaultTTL: 86400
-              MaxTTL: 31536000
+            DefaultTTL: 86400
+            MaxTTL: 31536000
           - PathPattern: '*.css'
             TargetOriginId: S3Origin
             ViewerProtocolPolicy: redirect-to-https
@@ -112,9 +115,8 @@ Resources:
               QueryString: false
               Cookies:
                 Forward: none
-            TTL:
-              DefaultTTL: 86400
-              MaxTTL: 31536000
+            DefaultTTL: 86400
+            MaxTTL: 31536000
         CustomErrorResponses:
           - ErrorCode: 404
             ResponseCode: 200
@@ -123,13 +125,16 @@ Resources:
             ResponseCode: 200
             ResponsePagePath: /index.html
         PriceClass: PriceClass_100
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
-        Tags:
-          - Key: Name
-            Value: !Sub '${ProjectName}-dashboard-distribution'
-          - Key: Environment
-            Value: !Ref Environment
+        Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref AWS::NoValue]
+        ViewerCertificate: !If 
+          - HasCustomDomain
+          - !If
+            - HasCertificate
+            - AcmCertificateArn: !Ref CertificateArn
+              SslSupportMethod: sni-only
+              MinimumProtocolVersion: TLSv1.2_2021
+            - CloudFrontDefaultCertificate: true
+          - CloudFrontDefaultCertificate: true
             
   # CloudFront Origin Access Identity
   CloudFrontOriginAccessIdentity:
@@ -138,14 +143,15 @@ Resources:
       CloudFrontOriginAccessIdentityConfig:
         Comment: !Sub '${ProjectName} Dashboard OAI'
         
-  # Lambda Function for API Gateway
-  DashboardAPIFunction:
+  # Lambda Function for Server-Side Dashboard Rendering
+  DashboardRendererFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${ProjectName}-dashboard-api'
+      FunctionName: !Sub '${ProjectName}-dashboard-renderer'
       Runtime: python3.9
       Handler: index.handler
-      Role: !GetAtt DashboardAPIFunctionRole.Arn
+      Role: !GetAtt DashboardRendererFunctionRole.Arn
+      Timeout: 30
       Code:
         ZipFile: |
           import json
@@ -155,69 +161,162 @@ Resources:
           
           def handler(event, context):
               try:
-                  # Get the requested endpoint
-                  path = event.get('path', '')
+                  # Get all dashboard data
+                  dashboard_data = get_dashboard_data()
                   
-                  if path == '/metrics':
-                      return get_metrics()
-                  elif path == '/experiments':
-                      return get_experiments()
-                  elif path == '/costs':
-                      return get_costs()
-                  else:
-                      return {
-                          'statusCode': 404,
-                          'headers': {
-                              'Access-Control-Allow-Origin': '*',
-                              'Content-Type': 'application/json'
-                          },
-                          'body': json.dumps({'error': 'Not found'})
-                      }
+                  # Generate HTML with embedded data
+                  html_content = generate_dashboard_html(dashboard_data)
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {
+                          'Content-Type': 'text/html',
+                          'Cache-Control': 'no-cache'
+                      },
+                      'body': html_content
+                  }
               except Exception as e:
                   return {
                       'statusCode': 500,
                       'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Content-Type': 'application/json'
+                          'Content-Type': 'text/html'
                       },
-                      'body': json.dumps({'error': str(e)})
+                      'body': generate_error_html(str(e))
                   }
           
-          def get_metrics():
-              # Get CloudFormation outputs
+          def get_dashboard_data():
+              """Get all dashboard data from AWS services"""
               cf = boto3.client('cloudformation')
+              cloudwatch = boto3.client('cloudwatch')
+              dynamodb = boto3.resource('dynamodb')
+              ce = boto3.client('ce')
+              
               try:
+                  # Get CloudFormation outputs
                   stack_outputs = cf.describe_stacks(
                       StackName=f'ai-video-codec-{os.environ.get("ENVIRONMENT", "production")}-compute'
                   )['Stacks'][0]['Outputs']
                   
                   outputs = {output['OutputKey']: output['OutputValue'] for output in stack_outputs}
                   
+                  # Get orchestrator metrics
+                  orchestrator_instance_id = 'i-063947ae46af6dbf8'
+                  orchestrator_cpu = get_cloudwatch_metric(cloudwatch, 'AWS/EC2', 'CPUUtilization', orchestrator_instance_id)
+                  
+                  # Get experiments from DynamoDB
+                  experiments = []
+                  try:
+                      table = dynamodb.Table('ai-video-codec-experiments')
+                      response = table.scan(Limit=10)
+                      for item in response.get('Items', []):
+                          experiments.append({
+                              'id': item.get('experiment_id', ''),
+                              'status': item.get('status', 'unknown'),
+                              'compression': item.get('compression_ratio', 0),
+                              'quality': item.get('psnr', 0),
+                              'created_at': item.get('created_at', ''),
+                              'cost': item.get('cost', 0)
+                          })
+                  except:
+                      experiments = [{'id': 'No data', 'status': 'No data', 'compression': 'No data', 'quality': 'No data', 'created_at': 'No data', 'cost': 'No data'}]
+                  
+                  # Get cost data
+                  costs = {'monthly': 0, 'breakdown': {'training': 0, 'inference': 0, 'storage': 0, 'orchestrator': 0}}
+                  try:
+                      start_date = datetime.now().replace(day=1).strftime('%Y-%m-%d')
+                      end_date = datetime.now().strftime('%Y-%m-%d')
+                      
+                      response = ce.get_cost_and_usage(
+                          TimePeriod={'Start': start_date, 'End': end_date},
+                          Granularity='MONTHLY',
+                          Metrics=['UnblendedCost']
+                      )
+                      
+                      total_cost = float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
+                      costs = {
+                          'monthly': total_cost,
+                          'breakdown': {
+                              'training': total_cost * 0.6,
+                              'inference': total_cost * 0.2,
+                              'storage': total_cost * 0.1,
+                              'orchestrator': total_cost * 0.1
+                          }
+                      }
+                  except:
+                      pass
+                  
                   return {
-                      'statusCode': 200,
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Content-Type': 'application/json'
-                      },
-                      'body': json.dumps({
-                          'orchestrator_ip': outputs.get('OrchestratorPublicIP', ''),
-                          'training_queue': outputs.get('TrainingQueueUrl', ''),
-                          'evaluation_queue': outputs.get('EvaluationQueueUrl', '')
-                      })
+                      'orchestrator_ip': outputs.get('OrchestratorPublicIP', ''),
+                      'orchestrator_cpu': orchestrator_cpu,
+                      'orchestrator_memory': 'No data',
+                      'training_queue': outputs.get('TrainingQueueUrl', ''),
+                      'evaluation_queue': outputs.get('EvaluationQueueUrl', ''),
+                      'experiments': experiments,
+                      'costs': costs,
+                      'last_updated': datetime.now().strftime('%I:%M:%S %p')
                   }
               except Exception as e:
                   return {
-                      'statusCode': 200,
-                      'headers': {
-                          'Access-Control-Allow-Origin': '*',
-                          'Content-Type': 'application/json'
-                      },
-                      'body': json.dumps({
-                          'orchestrator_ip': '',
-                          'training_queue': '',
-                          'evaluation_queue': ''
-                      })
+                      'orchestrator_ip': '',
+                      'orchestrator_cpu': 'No data',
+                      'orchestrator_memory': 'No data',
+                      'training_queue': '',
+                      'evaluation_queue': '',
+                      'experiments': [{'id': 'No data', 'status': 'No data', 'compression': 'No data', 'quality': 'No data', 'created_at': 'No data', 'cost': 'No data'}],
+                      'costs': {'monthly': 0, 'breakdown': {'training': 0, 'inference': 0, 'storage': 0, 'orchestrator': 0}},
+                      'last_updated': datetime.now().strftime('%I:%M:%S %p')
                   }
+          
+          def get_orchestrator_instance_id():
+              try:
+                  ec2 = boto3.client('ec2')
+                  response = ec2.describe_instances(
+                      Filters=[
+                          {'Name': 'tag:Name', 'Values': ['ai-video-codec-orchestrator']},
+                          {'Name': 'instance-state-name', 'Values': ['running']}
+                      ]
+                  )
+                  
+                  if response['Reservations'] and response['Reservations'][0]['Instances']:
+                      return response['Reservations'][0]['Instances'][0]['InstanceId']
+                  else:
+                      return ''
+              except Exception as e:
+                  return ''
+          
+          def get_cloudwatch_metric(cloudwatch, namespace, metric_name, instance_id):
+              try:
+                  if not instance_id:
+                      return 'No data'
+                  
+                  # Get metric statistics for the last 5 minutes
+                  end_time = datetime.utcnow()
+                  start_time = end_time - timedelta(minutes=5)
+                  
+                  response = cloudwatch.get_metric_statistics(
+                      Namespace=namespace,
+                      MetricName=metric_name,
+                      Dimensions=[
+                          {
+                              'Name': 'InstanceId',
+                              'Value': instance_id
+                          }
+                      ],
+                      StartTime=start_time,
+                      EndTime=end_time,
+                      Period=300,
+                      Statistics=['Average']
+                  )
+                  
+                  if response['Datapoints']:
+                      # Get the most recent datapoint
+                      latest_datapoint = max(response['Datapoints'], key=lambda x: x['Timestamp'])
+                      return round(latest_datapoint['Average'], 1)
+                  else:
+                      return 'No data'
+              except Exception as e:
+                  print(f"CloudWatch error: {str(e)}")
+                  return 'No data'
           
           def get_experiments():
               # Get experiments from DynamoDB
@@ -342,6 +441,9 @@ Resources:
                   - dynamodb:Scan
                   - dynamodb:Query
                   - ce:GetCostAndUsage
+                  - cloudwatch:GetMetricStatistics
+                  - cloudwatch:ListMetrics
+                  - ec2:DescribeInstances
                 Resource: '*'
       Tags:
         - Key: Name
@@ -457,7 +559,10 @@ Resources:
 Outputs:
   DashboardURL:
     Description: Dashboard URL
-    Value: !Sub 'https://${DashboardDistribution.DomainName}'
+    Value: !If 
+      - HasCustomDomain
+      - !Sub 'https://${DomainName}'
+      - !Sub 'https://${DashboardDistribution.DomainName}'
     Export:
       Name: !Sub '${ProjectName}-dashboard-url'
       

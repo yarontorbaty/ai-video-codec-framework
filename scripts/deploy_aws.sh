@@ -57,7 +57,28 @@ aws cloudformation validate-template --template-body file://infrastructure/cloud
 echo -e "${GREEN}✓ Templates validated${NC}"
 echo ""
 
-# Deploy storage stack first
+# Deploy compute stack first (storage depends on it)
+echo -e "${BLUE}Deploying compute infrastructure...${NC}"
+aws cloudformation deploy \
+    --template-file infrastructure/cloudformation/compute.yaml \
+    --stack-name ${STACK_NAME}-compute \
+    --parameter-overrides \
+        ProjectName=${PROJECT_NAME} \
+        Environment=${ENVIRONMENT} \
+        KeyPairName="bobov" \
+        OrchestratorInstanceType="c6i.xlarge" \
+        TrainingWorkerInstanceType="g5.4xlarge" \
+        InferenceWorkerInstanceType="g4dn.xlarge" \
+        MaxTrainingWorkers=4 \
+        MaxInferenceWorkers=4 \
+    --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+    --region ${REGION} \
+    --no-fail-on-empty-changeset
+
+echo -e "${GREEN}✓ Compute stack deployed${NC}"
+echo ""
+
+# Deploy storage stack (depends on compute)
 echo -e "${BLUE}Deploying storage infrastructure...${NC}"
 aws cloudformation deploy \
     --template-file infrastructure/cloudformation/storage.yaml \
@@ -71,27 +92,6 @@ aws cloudformation deploy \
     --no-fail-on-empty-changeset
 
 echo -e "${GREEN}✓ Storage stack deployed${NC}"
-echo ""
-
-# Deploy compute stack
-echo -e "${BLUE}Deploying compute infrastructure...${NC}"
-aws cloudformation deploy \
-    --template-file infrastructure/cloudformation/compute.yaml \
-    --stack-name ${STACK_NAME}-compute \
-    --parameter-overrides \
-        ProjectName=${PROJECT_NAME} \
-        Environment=${ENVIRONMENT} \
-        KeyPairName="YOUR_KEY_PAIR_NAME" \
-        OrchestratorInstanceType="c6i.xlarge" \
-        TrainingWorkerInstanceType="g5.4xlarge" \
-        InferenceWorkerInstanceType="g4dn.xlarge" \
-        MaxTrainingWorkers=4 \
-        MaxInferenceWorkers=4 \
-    --capabilities CAPABILITY_IAM \
-    --region ${REGION} \
-    --no-fail-on-empty-changeset
-
-echo -e "${GREEN}✓ Compute stack deployed${NC}"
 echo ""
 
 # Get outputs

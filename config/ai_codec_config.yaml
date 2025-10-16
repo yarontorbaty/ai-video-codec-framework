@@ -1,0 +1,158 @@
+# AI Video Codec Configuration
+# Configuration for the AI codec agent with procedural generation
+
+# Training Configuration
+training:
+  batch_size: 4
+  epochs: 100
+  learning_rate: 1e-4
+  target_bitrate_mbps: 1.0  # Target < 1 Mbps (90% reduction from 10 Mbps HEVC)
+  target_psnr_db: 35.0      # Target PSNR > 35 dB (95%+ quality)
+  
+  # Hybrid approach weights
+  procedural_weight: 0.3    # Weight for procedural generation
+  ai_weight: 0.7            # Weight for traditional AI compression
+  
+  # Early stopping
+  patience: 10              # Epochs to wait before stopping
+  min_delta: 0.001          # Minimum change to qualify as improvement
+
+# Model Configuration
+model:
+  latent_dim: 512           # Latent space dimension
+  hidden_dim: 256           # Hidden layer dimension
+  compression_ratio: 0.1    # Target 90% reduction from HEVC
+  
+  # Neural network architecture
+  semantic_encoder:
+    input_channels: 3
+    backbone_layers: 4
+    feature_dim: 512
+    
+  motion_predictor:
+    input_channels: 6       # 2 frames * 3 channels
+    hidden_dim: 256
+    output_dim: 2            # 2D motion vectors
+    
+  generative_refiner:
+    input_channels: 3
+    latent_dim: 512
+    output_channels: 3
+
+# Procedural Generation Configuration (Demoscene-inspired)
+procedural:
+  # Scene generation parameters
+  complexity_range: [0.1, 1.0]    # Scene complexity range
+  color_palettes: ['vibrant', 'pastel', 'monochrome']
+  motion_intensity_range: [0.5, 2.0]
+  
+  # Mathematical functions
+  noise_octaves: 6                 # Fractal noise octaves
+  plasma_frequency: 10.0          # Plasma effect frequency
+  mandelbrot_iterations: 100       # Mandelbrot max iterations
+  
+  # Compression parameters
+  parameter_precision: 4          # Decimal places for parameters
+  max_parameters_per_frame: 8     # Maximum parameters per frame
+
+# AWS Configuration
+aws:
+  s3_bucket: 'ai-video-codec-videos-580473065386'
+  region: 'us-east-1'
+  
+  # DynamoDB tables
+  experiments_table: 'ai-video-codec-experiments'
+  metrics_table: 'ai-video-codec-metrics'
+  
+  # CloudWatch
+  namespace: 'AI-Video-Codec'
+  log_level: 'INFO'
+
+# Experiment Configuration
+experiment:
+  # Test data
+  source_video: 'source/SOURCE_HD_RAW.mp4'
+  hevc_reference: 'hevc/HEVC_HD_10Mbps.mp4'
+  
+  # Output paths
+  compressed_output: 'data/compressed/ai_codec_hybrid_output.mp4'
+  metrics_output: 'experiment_results.json'
+  
+  # Evaluation metrics
+  metrics:
+    - psnr
+    - ssim
+    - vmaf
+    - bitrate
+    - compression_ratio
+    
+  # Performance targets
+  targets:
+    bitrate_reduction_percent: 90    # 90% reduction from HEVC
+    psnr_threshold_db: 35.0         # PSNR > 35 dB
+    ssim_threshold: 0.95            # SSIM > 0.95
+    vmaf_threshold: 90.0            # VMAF > 90
+
+# Hybrid Approach Configuration
+hybrid:
+  # Decision criteria for choosing compression method
+  decision_criteria:
+    bitrate_weight: 0.4             # Weight for bitrate comparison
+    quality_weight: 0.3             # Weight for quality comparison
+    speed_weight: 0.3               # Weight for speed comparison
+    
+  # Fallback strategy
+  fallback_to_ai: true              # Fall back to AI if procedural fails
+  fallback_to_hevc: false           # Fall back to HEVC if both fail
+  
+  # Quality thresholds
+  min_psnr_db: 30.0                 # Minimum PSNR to accept
+  max_bitrate_mbps: 2.0             # Maximum acceptable bitrate
+
+# Logging Configuration
+logging:
+  level: 'INFO'
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  
+  # File logging
+  log_file: 'logs/ai_codec.log'
+  max_file_size: '10MB'
+  backup_count: 5
+  
+  # Console logging
+  console: true
+  colored: true
+
+# Performance Configuration
+performance:
+  # GPU settings
+  use_gpu: true
+  gpu_memory_fraction: 0.8
+  
+  # CPU settings
+  num_workers: 4
+  pin_memory: true
+  
+  # Batch processing
+  max_batch_size: 8
+  prefetch_factor: 2
+  
+  # Timeout settings
+  compression_timeout: 3600         # 1 hour max per video
+  training_timeout: 7200           # 2 hours max training
+  evaluation_timeout: 1800         # 30 minutes max evaluation
+
+# Cost Management
+cost_management:
+  # Resource limits
+  max_training_hours: 2             # Maximum training time
+  max_inference_hours: 1           # Maximum inference time
+  
+  # Cost thresholds
+  max_cost_per_experiment: 50.0    # USD
+  max_daily_cost: 200.0            # USD
+  
+  # Optimization
+  use_spot_instances: true
+  auto_scale_down: true
+  early_termination: true

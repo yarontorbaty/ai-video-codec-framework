@@ -184,75 +184,146 @@ class Dashboard {
     }
 
     async fetchDashboardData() {
-        // Simulate API response (replace with actual AWS API calls)
-        return {
-            experiments: {
-                total: Math.floor(Math.random() * 50) + 10,
-                recent: Math.floor(Math.random() * 5),
-                bestCompression: Math.floor(Math.random() * 20) + 80,
-                bestQuality: Math.floor(Math.random() * 10) + 40
-            },
-            infrastructure: {
-                orchestrator: {
-                    status: 'healthy',
-                    cpu: Math.floor(Math.random() * 40) + 20,
-                    memory: Math.floor(Math.random() * 30) + 40
+        try {
+            // Get API base URL from the current domain
+            const apiBaseUrl = window.location.hostname === 'aiv1codec.com' 
+                ? 'https://mmporbtvj7.execute-api.us-east-1.amazonaws.com/production'
+                : 'https://mmporbtvj7.execute-api.us-east-1.amazonaws.com/production';
+
+            // Fetch real data from API endpoints
+            const [metricsResponse, experimentsResponse, costsResponse] = await Promise.allSettled([
+                fetch(`${apiBaseUrl}/metrics`),
+                fetch(`${apiBaseUrl}/experiments`),
+                fetch(`${apiBaseUrl}/costs`)
+            ]);
+
+            // Process metrics data
+            let metrics = {};
+            if (metricsResponse.status === 'fulfilled' && metricsResponse.value.ok) {
+                metrics = await metricsResponse.value.json();
+            }
+
+            // Process experiments data
+            let experiments = [];
+            if (experimentsResponse.status === 'fulfilled' && experimentsResponse.value.ok) {
+                experiments = await experimentsResponse.value.json();
+            }
+
+            // Process costs data
+            let costs = {};
+            if (costsResponse.status === 'fulfilled' && costsResponse.value.ok) {
+                costs = await costsResponse.value.json();
+            }
+
+            // Return structured data with fallbacks for missing data
+            return {
+                experiments: {
+                    total: experiments.length || 0,
+                    recent: experiments.filter(exp => exp.status === 'running').length || 0,
+                    bestCompression: experiments.length > 0 ? Math.max(...experiments.map(exp => exp.compression || 0)) : 0,
+                    bestQuality: experiments.length > 0 ? Math.max(...experiments.map(exp => exp.quality || 0)) : 0
                 },
-                training: {
-                    status: 'healthy',
-                    active: Math.floor(Math.random() * 3) + 1,
-                    queue: Math.floor(Math.random() * 10),
-                    spot: true
+                infrastructure: {
+                    orchestrator: {
+                        status: metrics.orchestrator_ip ? 'healthy' : 'unknown',
+                        cpu: metrics.orchestrator_cpu || 'No data',
+                        memory: metrics.orchestrator_memory || 'No data'
+                    },
+                    training: {
+                        status: metrics.training_queue ? 'healthy' : 'unknown',
+                        active: 'No data',
+                        queue: 'No data',
+                        spot: 'No data'
+                    },
+                    inference: {
+                        status: metrics.evaluation_queue ? 'healthy' : 'unknown',
+                        active: 'No data',
+                        queue: 'No data',
+                        fps: 'No data'
+                    },
+                    storage: {
+                        status: 'unknown',
+                        s3Objects: 'No data',
+                        efsUsage: 'No data',
+                        dynamodbItems: 'No data'
+                    }
                 },
-                inference: {
-                    status: 'healthy',
-                    active: Math.floor(Math.random() * 2) + 1,
-                    queue: Math.floor(Math.random() * 5),
-                    fps: Math.floor(Math.random() * 20) + 30
+                costs: {
+                    monthly: costs.monthly_cost || 0,
+                    breakdown: {
+                        training: costs.breakdown?.training || 0,
+                        inference: costs.breakdown?.inference || 0,
+                        storage: costs.breakdown?.storage || 0,
+                        orchestrator: costs.breakdown?.orchestrator || 0
+                    }
                 },
-                storage: {
-                    status: 'healthy',
-                    s3Objects: Math.floor(Math.random() * 1000) + 100,
-                    efsUsage: Math.floor(Math.random() * 50) + 10,
-                    dynamodbItems: Math.floor(Math.random() * 500) + 50
-                }
-            },
-            costs: {
-                monthly: Math.floor(Math.random() * 2000) + 1000,
-                breakdown: {
-                    training: Math.floor(Math.random() * 1000) + 500,
-                    inference: Math.floor(Math.random() * 500) + 200,
-                    storage: Math.floor(Math.random() * 200) + 100,
-                    orchestrator: Math.floor(Math.random() * 200) + 100
-                }
-            },
-            experiments: [
-                {
-                    id: 'exp_001',
-                    status: 'completed',
-                    compression: 85,
-                    quality: 42,
-                    duration: '2h 15m',
-                    cost: '$12.50'
+                experiments: experiments.length > 0 ? experiments : [
+                    {
+                        id: 'No data',
+                        status: 'No data',
+                        compression: 'No data',
+                        quality: 'No data',
+                        duration: 'No data',
+                        cost: 'No data'
+                    }
+                ]
+            };
+        } catch (error) {
+            console.error('Failed to fetch dashboard data:', error);
+            // Return empty data structure with "No data" indicators
+            return {
+                experiments: {
+                    total: 0,
+                    recent: 0,
+                    bestCompression: 0,
+                    bestQuality: 0
                 },
-                {
-                    id: 'exp_002',
-                    status: 'running',
-                    compression: 78,
-                    quality: 38,
-                    duration: '1h 30m',
-                    cost: '$8.75'
+                infrastructure: {
+                    orchestrator: {
+                        status: 'unknown',
+                        cpu: 'No data',
+                        memory: 'No data'
+                    },
+                    training: {
+                        status: 'unknown',
+                        active: 'No data',
+                        queue: 'No data',
+                        spot: 'No data'
+                    },
+                    inference: {
+                        status: 'unknown',
+                        active: 'No data',
+                        queue: 'No data',
+                        fps: 'No data'
+                    },
+                    storage: {
+                        status: 'unknown',
+                        s3Objects: 'No data',
+                        efsUsage: 'No data',
+                        dynamodbItems: 'No data'
+                    }
                 },
-                {
-                    id: 'exp_003',
-                    status: 'failed',
-                    compression: 45,
-                    quality: 25,
-                    duration: '45m',
-                    cost: '$5.20'
-                }
-            ]
-        };
+                costs: {
+                    monthly: 0,
+                    breakdown: {
+                        training: 0,
+                        inference: 0,
+                        storage: 0,
+                        orchestrator: 0
+                    }
+                },
+                experiments: [
+                    {
+                        id: 'No data',
+                        status: 'No data',
+                        compression: 'No data',
+                        quality: 'No data',
+                        duration: 'No data',
+                        cost: 'No data'
+                    }
+                ]
+            };
+        }
     }
 
     updateDashboard(data) {
@@ -279,51 +350,51 @@ class Dashboard {
         // Total experiments
         const totalExperiments = document.getElementById('total-experiments');
         if (totalExperiments) {
-            totalExperiments.textContent = experiments.total;
+            totalExperiments.textContent = experiments.total || 'No data';
         }
 
         // Best compression
         const bestCompression = document.getElementById('best-compression');
         if (bestCompression) {
-            bestCompression.textContent = experiments.bestCompression + '%';
+            bestCompression.textContent = experiments.bestCompression > 0 ? experiments.bestCompression + '%' : 'No data';
         }
 
         // Best quality
         const bestQuality = document.getElementById('best-quality');
         if (bestQuality) {
-            bestQuality.textContent = experiments.bestQuality;
+            bestQuality.textContent = experiments.bestQuality > 0 ? experiments.bestQuality : 'No data';
         }
 
         // Monthly cost
         const monthlyCost = document.getElementById('monthly-cost');
         if (monthlyCost) {
-            monthlyCost.textContent = '$' + costs.monthly.toLocaleString();
+            monthlyCost.textContent = costs.monthly > 0 ? '$' + costs.monthly.toLocaleString() : 'No data';
         }
     }
 
     updateInfrastructure(infrastructure) {
         // Orchestrator status
         this.updateInfraStatus('orchestrator', infrastructure.orchestrator);
-        this.updateInfraDetail('orchestrator-cpu', infrastructure.orchestrator.cpu + '%');
-        this.updateInfraDetail('orchestrator-memory', infrastructure.orchestrator.memory + '%');
+        this.updateInfraDetail('orchestrator-cpu', infrastructure.orchestrator.cpu + (typeof infrastructure.orchestrator.cpu === 'number' ? '%' : ''));
+        this.updateInfraDetail('orchestrator-memory', infrastructure.orchestrator.memory + (typeof infrastructure.orchestrator.memory === 'number' ? '%' : ''));
 
         // Training workers status
         this.updateInfraStatus('training', infrastructure.training);
         this.updateInfraDetail('training-active', infrastructure.training.active);
         this.updateInfraDetail('training-queue', infrastructure.training.queue);
-        this.updateInfraDetail('training-spot', infrastructure.training.spot ? 'Yes' : 'No');
+        this.updateInfraDetail('training-spot', infrastructure.training.spot);
 
         // Inference workers status
         this.updateInfraStatus('inference', infrastructure.inference);
         this.updateInfraDetail('inference-active', infrastructure.inference.active);
         this.updateInfraDetail('inference-queue', infrastructure.inference.queue);
-        this.updateInfraDetail('inference-fps', infrastructure.inference.fps + ' fps');
+        this.updateInfraDetail('inference-fps', infrastructure.inference.fps);
 
         // Storage status
         this.updateInfraStatus('storage', infrastructure.storage);
-        this.updateInfraDetail('s3-objects', infrastructure.storage.s3Objects.toLocaleString());
-        this.updateInfraDetail('efs-usage', infrastructure.storage.efsUsage + ' GB');
-        this.updateInfraDetail('dynamodb-items', infrastructure.storage.dynamodbItems.toLocaleString());
+        this.updateInfraDetail('s3-objects', infrastructure.storage.s3Objects);
+        this.updateInfraDetail('efs-usage', infrastructure.storage.efsUsage);
+        this.updateInfraDetail('dynamodb-items', infrastructure.storage.dynamodbItems);
     }
 
     updateInfraStatus(component, data) {
@@ -384,10 +455,17 @@ class Dashboard {
         this.updateCostItem('cost-orchestrator', breakdown.orchestrator);
         
         // Update cost percentages
-        this.updateCostPercentage('cost-training-pct', (breakdown.training / total * 100).toFixed(1));
-        this.updateCostPercentage('cost-inference-pct', (breakdown.inference / total * 100).toFixed(1));
-        this.updateCostPercentage('cost-storage-pct', (breakdown.storage / total * 100).toFixed(1));
-        this.updateCostPercentage('cost-orchestrator-pct', (breakdown.orchestrator / total * 100).toFixed(1));
+        if (total > 0) {
+            this.updateCostPercentage('cost-training-pct', (breakdown.training / total * 100).toFixed(1));
+            this.updateCostPercentage('cost-inference-pct', (breakdown.inference / total * 100).toFixed(1));
+            this.updateCostPercentage('cost-storage-pct', (breakdown.storage / total * 100).toFixed(1));
+            this.updateCostPercentage('cost-orchestrator-pct', (breakdown.orchestrator / total * 100).toFixed(1));
+        } else {
+            this.updateCostPercentage('cost-training-pct', 'No data');
+            this.updateCostPercentage('cost-inference-pct', 'No data');
+            this.updateCostPercentage('cost-storage-pct', 'No data');
+            this.updateCostPercentage('cost-orchestrator-pct', 'No data');
+        }
         
         // Update cost chart
         if (this.charts.cost) {
@@ -404,14 +482,14 @@ class Dashboard {
     updateCostItem(id, value) {
         const element = document.getElementById(id);
         if (element) {
-            element.textContent = '$' + value.toLocaleString();
+            element.textContent = value > 0 ? '$' + value.toLocaleString() : 'No data';
         }
     }
 
     updateCostPercentage(id, percentage) {
         const element = document.getElementById(id);
         if (element) {
-            element.textContent = percentage + '%';
+            element.textContent = percentage === 'No data' ? 'No data' : percentage + '%';
         }
     }
 
