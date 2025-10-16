@@ -515,7 +515,9 @@ def render_blog_page():
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'text/html',
-                'Cache-Control': 'public, max-age=60, s-maxage=60'  # Cache for 1 minute
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             },
             'body': html
         }
@@ -541,7 +543,6 @@ def generate_blog_html(experiments, reasoning_items):
         for reasoning in reasoning_items:
             if reasoning.get('experiment_id') == exp_id:
                 matching_reasoning = reasoning
-                print(f"Matched reasoning for {exp_id} by experiment_id")
                 break
         
         # Fallback: find by timestamp if experiment_id doesn't match (within 60 seconds)
@@ -549,11 +550,7 @@ def generate_blog_html(experiments, reasoning_items):
             for reasoning in reasoning_items:
                 if abs(int(reasoning.get('timestamp', 0)) - int(exp_timestamp)) < 60:
                     matching_reasoning = reasoning
-                    print(f"Matched reasoning for {exp_id} by timestamp fallback")
                     break
-        
-        if not matching_reasoning:
-            print(f"WARNING: No reasoning found for experiment {exp_id} (timestamp: {exp_timestamp})")
         
         # Parse experiment data
         experiments_data = json.loads(exp.get('experiments', '[]'))
