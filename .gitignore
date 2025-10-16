@@ -1,5 +1,12 @@
 # AI Video Codec Framework - Git Ignore
 
+# Security - API Keys and Secrets
+scripts/set_api_key.sh
+**/api_key*.sh
+**/*secret*.sh
+.env.local
+.env.production
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
