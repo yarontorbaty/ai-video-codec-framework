@@ -137,6 +137,7 @@ def render_dashboard_page():
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
+            llm_code = next((e for e in experiments_data if e.get('experiment_type') in ['llm_generated_code', 'llm_generated_code_evolution']), {})
             
             metrics = procedural.get('real_metrics', {})
             comparison = procedural.get('comparison', {})
@@ -149,13 +150,39 @@ def render_dashboard_page():
                 methods.append('Neural Network')
             methods_str = ' + '.join(methods) if methods else 'Hybrid'
             
+            # Extract LLM evolution info
+            evolution_info = None
+            if llm_code:
+                evolution = llm_code.get('evolution', {})
+                if evolution:
+                    evolution_info = {
+                        'status': evolution.get('status', 'unknown'),
+                        'adopted': evolution.get('adopted', False),
+                        'version': evolution.get('version', 0),
+                        'metrics': evolution.get('metrics', {}),
+                        'reason': evolution.get('reason', '')
+                    }
+            
+            # Parse timestamp for time of day
+            timestamp_str = item.get('timestamp_iso', '')
+            time_of_day = ''
+            if timestamp_str:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    time_of_day = dt.strftime('%I:%M %p')
+                except:
+                    time_of_day = timestamp_str[11:16] if len(timestamp_str) > 16 else ''
+            
             experiments.append({
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
                 'compression': comparison.get('reduction_percent', 0),
                 'bitrate': metrics.get('bitrate_mbps', 0),
                 'timestamp': item.get('timestamp_iso', ''),
+                'time_of_day': time_of_day,
                 'methods': methods_str,
+                'evolution': evolution_info,
                 'full_data': experiments_data  # Keep full data for blog linking
             })
         
@@ -260,11 +287,21 @@ def render_dashboard_page():
             else:
                 compression_display = f'{compression:.1f}%'
             
+            # Evolution badge
+            evolution_badge = ''
+            if exp.get('evolution'):
+                evo = exp['evolution']
+                if evo.get('adopted'):
+                    evolution_badge = f'<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="Code v{evo.get(\'version\')} adopted">🎉 v{evo.get("version")}</span>'
+                elif evo.get('status') == 'rejected':
+                    evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{evo.get(\'reason\', \'Not better\')}">⏭️</span>'
+            
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
-                    <div class="col">{exp['id'][:20]}...</div>
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                    <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
-                    <div class="col">{exp['methods']}</div>
+                    <div class="col">{exp.get('time_of_day', 'N/A')}</div>
+                    <div class="col">{exp['methods']}{evolution_badge}</div>
                     <div class="col">{compression_display}</div>
                     <div class="col">95.0%</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
@@ -368,10 +405,11 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;">
+                    <div class="table-header" style="grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
-                        <div>Methods</div>
+                        <div>Time</div>
+                        <div>Methods / Evolution</div>
                         <div>Compression</div>
                         <div>Quality</div>
                         <div>Bitrate</div>
