@@ -19,6 +19,7 @@ logger.setLevel(logging.INFO)
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 ssm = boto3.client('ssm', region_name='us-east-1')
 s3 = boto3.client('s3', region_name='us-east-1')
+secretsmanager = boto3.client('secretsmanager', region_name='us-east-1')
 
 # Tables
 experiments_table = dynamodb.Table('ai-video-codec-experiments')
@@ -29,6 +30,16 @@ ORCHESTRATOR_INSTANCE_ID = 'i-063947ae46af6dbf8'
 
 # Admin password hash (set via environment variable)
 ADMIN_PASSWORD_HASH = os.environ.get('ADMIN_PASSWORD_HASH', '')
+
+# Fetch API key from Secrets Manager
+ANTHROPIC_API_KEY = None
+try:
+    secret_response = secretsmanager.get_secret_value(SecretId='ai-video-codec/anthropic-api-key')
+    secret_data = json.loads(secret_response['SecretString'])
+    ANTHROPIC_API_KEY = secret_data.get('ANTHROPIC_API_KEY')
+    logger.info("✅ API key retrieved from Secrets Manager")
+except Exception as e:
+    logger.error(f"Failed to retrieve API key from Secrets Manager: {e}")
 
 
 def verify_admin(password):
@@ -50,9 +61,8 @@ def call_llm_chat(message, history):
         import urllib.request
         import urllib.error
         
-        api_key = os.environ.get('ANTHROPIC_API_KEY')
-        if not api_key:
-            return {"error": "LLM API key not configured"}
+        if not ANTHROPIC_API_KEY:
+            return {"error": "LLM API key not configured - check Secrets Manager"}
         
         # Build conversation with system prompt
         messages = []
@@ -88,7 +98,7 @@ LLM code generation active. Latest insight: codec architecture is inverted."""
 
         url = "https://api.anthropic.com/v1/messages"
         headers = {
-            "x-api-key": api_key,
+            "x-api-key": ANTHROPIC_API_KEY,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json"
         }
