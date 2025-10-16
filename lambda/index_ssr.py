@@ -667,6 +667,7 @@ def generate_blog_html(experiments, reasoning_items):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="60">
     <title>AI Codec Research Blog - Server-Side Rendered</title>
     <link rel="stylesheet" href="/styles.css">
     <style>
