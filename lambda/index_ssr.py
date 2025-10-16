@@ -129,7 +129,7 @@ def render_dashboard_page():
     try:
         # Fetch all data in parallel (conceptually - boto3 is synchronous)
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
-        experiments_response = experiments_table.scan(Limit=10)
+        experiments_response = experiments_table.scan(Limit=50)  # Show more experiments
         
         # Process experiments with more details
         experiments = []
@@ -420,8 +420,8 @@ def render_blog_page():
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
         reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
         
-        experiments_res = experiments_table.scan(Limit=10)
-        reasoning_res = reasoning_table.scan(Limit=10)
+        experiments_res = experiments_table.scan(Limit=50)
+        reasoning_res = reasoning_table.scan(Limit=50)
         
         experiments = experiments_res.get('Items', [])
         reasoning_items = reasoning_res.get('Items', [])
@@ -623,7 +623,7 @@ def get_experiments():
     table = dynamodb.Table('ai-video-codec-experiments')
     
     try:
-        response = table.scan(Limit=10)
+        response = table.scan(Limit=50)
         experiments = []
         
         for item in response.get('Items', []):

@@ -129,7 +129,7 @@ def render_dashboard_page():
     try:
         # Fetch all data in parallel (conceptually - boto3 is synchronous)
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
-        experiments_response = experiments_table.scan(Limit=10)
+        experiments_response = experiments_table.scan(Limit=50)  # Show more experiments
         
         # Process experiments with more details
         experiments = []
@@ -250,13 +250,22 @@ def render_dashboard_page():
         experiments_html = ""
         for i, exp in enumerate(experiments[:10]):
             status_class = 'completed' if exp['status'] == 'completed' else 'running'
-            compression_color = 'red' if exp['compression'] < 0 else 'green'
+            
+            # Positive reduction = good (smaller file), negative = bad (larger file)
+            compression = exp['compression']
+            if compression > 0:
+                compression_display = f'<span style="color: green;">↓ {compression:.1f}%</span>'
+            elif compression < 0:
+                compression_display = f'<span style="color: red;">↑ {abs(compression):.1f}%</span>'
+            else:
+                compression_display = f'{compression:.1f}%'
+            
             experiments_html += f'''
                 <div class="table-row" style="cursor: pointer; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:20]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
                     <div class="col">{exp['methods']}</div>
-                    <div class="col" style="color: {compression_color}">{exp['compression']:.1f}%</div>
+                    <div class="col">{compression_display}</div>
                     <div class="col">95.0%</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
                     <div class="col">{exp['timestamp'][:10]}</div>
@@ -411,8 +420,8 @@ def render_blog_page():
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
         reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
         
-        experiments_res = experiments_table.scan(Limit=10)
-        reasoning_res = reasoning_table.scan(Limit=10)
+        experiments_res = experiments_table.scan(Limit=50)
+        reasoning_res = reasoning_table.scan(Limit=50)
         
         experiments = experiments_res.get('Items', [])
         reasoning_items = reasoning_res.get('Items', [])
@@ -614,7 +623,7 @@ def get_experiments():
     table = dynamodb.Table('ai-video-codec-experiments')
     
     try:
-        response = table.scan(Limit=10)
+        response = table.scan(Limit=50)
         experiments = []
         
         for item in response.get('Items', []):
