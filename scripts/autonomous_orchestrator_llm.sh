@@ -19,7 +19,7 @@ log "Delay between experiments: ${DELAY_BETWEEN_EXPERIMENTS}s"
 # Fetch API key from AWS Secrets Manager
 if [ -z "$ANTHROPIC_API_KEY" ]; then
     log "Fetching API key from AWS Secrets Manager..."
-    SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ai-video-codec/anthropic-api-key --query SecretString --output text 2>/dev/null)
+    SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ai-video-codec/anthropic-api-key --region us-east-1 --query SecretString --output text 2>/dev/null)
     
     if [ $? -eq 0 ] && [ -n "$SECRET_JSON" ]; then
         export ANTHROPIC_API_KEY=$(echo "$SECRET_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['ANTHROPIC_API_KEY'])")
