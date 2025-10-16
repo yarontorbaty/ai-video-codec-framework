@@ -28,12 +28,12 @@ class LLMExperimentPlanner:
     Analyzes past experiments and plans improved approaches.
     """
     
-    def __init__(self, model: str = "claude-3-5-sonnet-20241022"):
+    def __init__(self, model: str = "claude-sonnet-4-20250514"):
         """
         Initialize LLM planner.
         
         Args:
-            model: LLM model to use (default: Claude 3.5 Sonnet)
+            model: LLM model to use (default: Claude Sonnet 4)
         """
         self.model = model
         self.dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
