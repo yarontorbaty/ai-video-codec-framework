@@ -1,6 +1,7 @@
-// Admin Interface with Authentication
+// Admin Interface with 2FA Authentication
 const API_BASE = 'https://aiv1codec.com';
 let sessionToken = null;
+let pendingUsername = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -23,12 +24,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function showLoginScreen() {
     document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('adminInterface').style.display = 'none';
+    if (document.getElementById('adminInterface')) {
+        document.getElementById('adminInterface').style.display = 'none';
+    }
+}
+
+function show2FAScreen() {
+    const loginBox = document.querySelector('.login-box');
+    loginBox.innerHTML = `
+        <h1><i class="fas fa-shield-alt"></i> Enter 2FA Code</h1>
+        <p style="text-align: center; color: #666; margin-bottom: 20px;">
+            A 6-digit code has been sent to your email
+        </p>
+        <form id="twoFAForm">
+            <div class="form-group">
+                <label>Verification Code</label>
+                <input type="text" id="twoFACode" required placeholder="000000" maxlength="6" 
+                       pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
+            </div>
+            <button type="submit" class="login-btn">
+                <i class="fas fa-check"></i> Verify
+            </button>
+            <button type="button" onclick="showLoginScreen(); location.reload();" 
+                    style="width: 100%; margin-top: 10px; padding: 12px; background: #6c757d; border: none; border-radius: 8px; color: white; cursor: pointer;">
+                <i class="fas fa-arrow-left"></i> Back to Login
+            </button>
+            <div id="twoFAError" class="error-message"></div>
+        </form>
+    `;
+    
+    document.getElementById('twoFAForm').addEventListener('submit', handle2FAVerify);
+    document.getElementById('twoFACode').focus();
 }
 
 function showAdminInterface() {
     document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('adminInterface').style.display = 'block';
+    if (document.getElementById('adminInterface')) {
+        document.getElementById('adminInterface').style.display = 'block';
+    }
 }
 
 async function handleLogin(event) {
@@ -49,12 +82,15 @@ async function handleLogin(event) {
         
         const data = await response.json();
         
-        if (data.success && data.token) {
+        if (data.success && data.requires_2fa) {
+            // 2FA required - show verification screen
+            pendingUsername = username;
+            show2FAScreen();
+        } else if (data.success && data.token) {
+            // Direct login (2FA not configured)
             sessionToken = data.token;
             localStorage.setItem('adminToken', sessionToken);
             localStorage.setItem('adminUsername', data.username);
-            
-            // Load admin interface
             loadAdminInterface();
         } else {
             errorDiv.textContent = data.error || 'Login failed';
@@ -62,6 +98,40 @@ async function handleLogin(event) {
     } catch (error) {
         errorDiv.textContent = 'Connection error. Please try again.';
         console.error('Login error:', error);
+    }
+}
+
+async function handle2FAVerify(event) {
+    event.preventDefault();
+    
+    const code = document.getElementById('twoFACode').value;
+    const errorDiv = document.getElementById('twoFAError');
+    
+    errorDiv.textContent = '';
+    
+    try {
+        const response = await fetch(`${API_BASE}/admin/verify-2fa`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                username: pendingUsername, 
+                code: code 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.token) {
+            sessionToken = data.token;
+            localStorage.setItem('adminToken', sessionToken);
+            localStorage.setItem('adminUsername', data.username);
+            loadAdminInterface();
+        } else {
+            errorDiv.textContent = data.error || '2FA verification failed';
+        }
+    } catch (error) {
+        errorDiv.textContent = 'Connection error. Please try again.';
+        console.error('2FA verification error:', error);
     }
 }
 
@@ -88,14 +158,22 @@ async function verifySession() {
 
 function logout() {
     sessionToken = null;
+    pendingUsername = null;
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminUsername');
     showLoginScreen();
+    location.reload();
 }
 
 function loadAdminInterface() {
     // Build the admin interface dynamically
-    const container = document.getElementById('adminInterface') || document.body;
+    let container = document.getElementById('adminInterface');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'adminInterface';
+        container.style.display = 'none';
+        document.body.appendChild(container);
+    }
     
     container.innerHTML = `
         <nav style="background: rgba(0,0,0,0.3); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center;">
@@ -167,9 +245,11 @@ async function loadSystemStatus() {
         
         const data = await response.json();
         
-        document.getElementById('totalExperiments').textContent = data.total_experiments || 0;
-        document.getElementById('runningNow').textContent = data.running_now || 0;
-        document.getElementById('bestBitrate').textContent = data.best_bitrate ? `${data.best_bitrate.toFixed(2)} Mbps` : 'N/A';
+        if (document.getElementById('totalExperiments')) {
+            document.getElementById('totalExperiments').textContent = data.total_experiments || 0;
+            document.getElementById('runningNow').textContent = data.running_now || 0;
+            document.getElementById('bestBitrate').textContent = data.best_bitrate ? `${data.best_bitrate.toFixed(2)} Mbps` : 'N/A';
+        }
     } catch (error) {
         console.error('Error loading status:', error);
     }

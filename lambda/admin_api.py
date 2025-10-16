@@ -48,15 +48,18 @@ def verify_admin(username, password):
     try:
         secret_response = secretsmanager.get_secret_value(SecretId='ai-video-codec/admin-credentials')
         secret_data = json.loads(secret_response['SecretString'])
-        stored_username = secret_data.get('username', 'admin')
-        stored_password = secret_data.get('password', '')
+        stored_username = secret_data.get('username')
+        stored_password = secret_data.get('password')
         
-        # Simple comparison for now
+        if not stored_username or not stored_password:
+            logger.error("Admin credentials not configured in Secrets Manager")
+            return False
+        
+        # Verify credentials
         return username == stored_username and password == stored_password
     except Exception as e:
         logger.error(f"Failed to verify credentials: {e}")
-        # Fallback for development - accept admin/admin
-        return username == 'admin' and password == 'admin'
+        return False
 
 
 def create_session_token(username):
@@ -105,9 +108,136 @@ def verify_session_token(token):
         return False
 
 
+def send_2fa_code(email, code):
+    """Send 2FA code via email using AWS SES."""
+    try:
+        ses = boto3.client('ses', region_name='us-east-1')
+        
+        response = ses.send_email(
+            Source=email,  # Must be verified in SES
+            Destination={'ToAddresses': [email]},
+            Message={
+                'Subject': {
+                    'Data': 'AiV1 Admin Login - 2FA Code',
+                    'Charset': 'UTF-8'
+                },
+                'Body': {
+                    'Html': {
+                        'Data': f'''
+                            <html>
+                            <body style="font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5;">
+                                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                                    <h1 style="color: #667eea; text-align: center;">🔐 AiV1 Admin Login</h1>
+                                    <p style="font-size: 16px; color: #333;">Your 2FA verification code is:</p>
+                                    <div style="background: #667eea; color: white; font-size: 32px; font-weight: bold; text-align: center; padding: 20px; border-radius: 8px; letter-spacing: 5px; margin: 20px 0;">
+                                        {code}
+                                    </div>
+                                    <p style="font-size: 14px; color: #666;">This code will expire in 10 minutes.</p>
+                                    <p style="font-size: 14px; color: #666;">If you didn't request this code, please ignore this email.</p>
+                                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+                                    <p style="font-size: 12px; color: #999; text-align: center;">AiV1 Autonomous Video Codec Project</p>
+                                </div>
+                            </body>
+                            </html>
+                        ''',
+                        'Charset': 'UTF-8'
+                    }
+                }
+            }
+        )
+        logger.info(f"2FA code sent to {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send 2FA email: {e}")
+        return False
+
+
+def generate_2fa_code():
+    """Generate a 6-digit 2FA code."""
+    import random
+    return str(random.randint(100000, 999999))
+
+
 def handle_login(username, password):
-    """Handle login request."""
+    """Handle login request - send 2FA code."""
     if verify_admin(username, password):
+        # Generate and store 2FA code
+        code = generate_2fa_code()
+        expiry = int(datetime.utcnow().timestamp()) + (10 * 60)  # 10 minutes
+        
+        # Get email from secrets
+        try:
+            secret_response = secretsmanager.get_secret_value(SecretId='ai-video-codec/admin-credentials')
+            secret_data = json.loads(secret_response['SecretString'])
+            email = secret_data.get('email')
+            twofa_enabled = secret_data.get('2fa_enabled', False)
+            
+            if not twofa_enabled or not email:
+                # 2FA not configured - skip and login directly
+                token = create_session_token(username)
+                if token:
+                    return {
+                        "success": True,
+                        "token": token,
+                        "username": username,
+                        "requires_2fa": False,
+                        "message": "Login successful"
+                    }
+                else:
+                    return {"success": False, "error": "Failed to create session"}
+            
+            # Store 2FA code
+            control_table.put_item(Item={
+                'control_id': f'2fa_{username}',
+                'code': code,
+                'expiry': expiry,
+                'created_at': datetime.utcnow().isoformat()
+            })
+            
+            # Send email
+            if send_2fa_code(email, code):
+                return {
+                    "success": True,
+                    "requires_2fa": True,
+                    "message": "2FA code sent to your email",
+                    "username": username
+                }
+            else:
+                return {"success": False, "error": "Failed to send 2FA code"}
+                
+        except Exception as e:
+            logger.error(f"Error handling 2FA: {e}")
+            return {"success": False, "error": "Authentication error"}
+    else:
+        return {"success": False, "error": "Invalid credentials"}
+
+
+def verify_2fa_and_login(username, code):
+    """Verify 2FA code and create session."""
+    try:
+        # Get stored code
+        response = control_table.get_item(Key={'control_id': f'2fa_{username}'})
+        item = response.get('Item')
+        
+        if not item:
+            return {"success": False, "error": "2FA code expired or not found"}
+        
+        # Check expiry
+        expiry = int(item.get('expiry', 0))
+        if datetime.utcnow().timestamp() > expiry:
+            # Delete expired code
+            control_table.delete_item(Key={'control_id': f'2fa_{username}'})
+            return {"success": False, "error": "2FA code expired"}
+        
+        # Verify code
+        stored_code = item.get('code')
+        if code != stored_code:
+            return {"success": False, "error": "Invalid 2FA code"}
+        
+        # Delete used code
+        control_table.delete_item(Key={'control_id': f'2fa_{username}'})
+        
+        # Create session
         token = create_session_token(username)
         if token:
             return {
@@ -118,8 +248,10 @@ def handle_login(username, password):
             }
         else:
             return {"success": False, "error": "Failed to create session"}
-    else:
-        return {"success": False, "error": "Invalid credentials"}
+            
+    except Exception as e:
+        logger.error(f"Error verifying 2FA: {e}")
+        return {"success": False, "error": "Verification failed"}
 
 
 def call_llm_chat(message, history):
@@ -445,6 +577,11 @@ def lambda_handler(event, context):
             username = body.get('username', '')
             password = body.get('password', '')
             response_body = handle_login(username, password)
+        
+        elif path == '/admin/verify-2fa' and method == 'POST':
+            username = body.get('username', '')
+            code = body.get('code', '')
+            response_body = verify_2fa_and_login(username, code)
         
         elif path == '/admin/status':
             response_body = get_system_status()
