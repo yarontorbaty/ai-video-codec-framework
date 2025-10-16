@@ -259,12 +259,16 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             experiment_id: ID of the experiment being analyzed
         """
         try:
-            reasoning_id = f"reasoning_{int(datetime.utcnow().timestamp())}"
+            from decimal import Decimal
+            import uuid
+            # Use experiment_id + random UUID to ensure uniqueness
+            reasoning_id = f"reasoning_{experiment_id}_{uuid.uuid4().hex[:8]}"
+            current_time = int(datetime.utcnow().timestamp())
             
             self.reasoning_table.put_item(Item={
                 'reasoning_id': reasoning_id,
                 'experiment_id': experiment_id,
-                'timestamp': int(datetime.utcnow().timestamp()),
+                'timestamp': current_time,
                 'timestamp_iso': datetime.utcnow().isoformat(),
                 'model': self.model,
                 'root_cause': analysis.get('root_cause', ''),
@@ -272,8 +276,8 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
                 'hypothesis': analysis.get('hypothesis', ''),
                 'next_experiment': json.dumps(analysis.get('next_experiment', {})),
                 'risks': json.dumps(analysis.get('risks', [])),
-                'expected_bitrate_mbps': float(analysis.get('expected_bitrate_mbps', 0)),
-                'confidence_score': float(analysis.get('confidence_score', 0))
+                'expected_bitrate_mbps': Decimal(str(analysis.get('expected_bitrate_mbps', 0))),
+                'confidence_score': Decimal(str(analysis.get('confidence_score', 0)))
             })
             
             logger.info(f"Reasoning logged: {reasoning_id}")

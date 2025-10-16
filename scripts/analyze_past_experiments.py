@@ -51,26 +51,36 @@ def main():
         print(f"  🤖 Analyzing {exp_id}...")
         
         try:
-            # Parse experiment data
-            experiments_data = json.loads(exp.get('experiments', '[]'))
+            # Ensure experiments field is a STRING (as expected by LLM planner)
+            experiments_data = exp.get('experiments', '[]')
+            if not isinstance(experiments_data, str):
+                experiments_data = json.dumps(experiments_data)
             
-            # Create experiment summary for LLM
+            # Create experiment summary for LLM (with experiments as STRING)
             summary = {
                 'experiment_id': exp_id,
                 'timestamp': exp.get('timestamp', 0),
                 'status': exp.get('status', 'unknown'),
-                'experiments': experiments_data
+                'experiments': experiments_data  # Keep as string
             }
             
             # Get past experiments (all experiments before this one)
-            past_experiments = [e for e in experiments if e.get('timestamp', 0) < exp.get('timestamp', 0)]
+            # Also ensure their experiments field is a string
+            past_experiments = []
+            for e in experiments:
+                if e.get('timestamp', 0) < exp.get('timestamp', 0):
+                    e_copy = e.copy()
+                    exp_data = e_copy.get('experiments', '[]')
+                    if not isinstance(exp_data, str):
+                        e_copy['experiments'] = json.dumps(exp_data)
+                    past_experiments.append(e_copy)
             
             # Analyze with LLM
-            reasoning = planner.analyze_experiment(summary, past_experiments)
+            analysis = planner.get_llm_analysis([summary] + past_experiments)
             
             # Store reasoning in DynamoDB
-            if reasoning:
-                reasoning_table.put_item(Item=reasoning)
+            if analysis:
+                planner.log_reasoning(analysis, exp_id)
                 print(f"     ✅ Analysis stored")
                 analyzed_count += 1
             else:
