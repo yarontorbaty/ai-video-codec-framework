@@ -190,6 +190,14 @@ Analyze these results and provide:
    - Success metrics
 5. **Risk Assessment**: What could go wrong with this approach?
 
+# CRITICAL VALIDATION CHECKS
+
+⚠️ **IMPORTANT**: If you see multiple experiments with IDENTICAL metrics (same bitrate, file size, reduction %), this indicates a CODE BUG where experiments are measuring the same file instead of generating unique outputs. In this case:
+- Flag this as a critical bug in your root cause analysis
+- Recommend checking that output filenames are unique per experiment
+- Recommend verifying file paths are using variables, not hardcoded values
+- Do NOT proceed with codec improvements until this instrumentation bug is fixed
+
 Be direct, technical, and actionable. Focus on the fundamental problem that procedural generation is creating NEW video (18MB) instead of COMPRESSING existing video.
 
 Format your response as JSON with these keys: root_cause, insights, hypothesis, next_experiment, risks, expected_bitrate_mbps, confidence_score
