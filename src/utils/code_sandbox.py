@@ -37,6 +37,7 @@ class CodeSandbox:
         'base64',
         'io',
         'collections',
+        'typing',
     }
     
     FORBIDDEN_ATTRIBUTES = {
