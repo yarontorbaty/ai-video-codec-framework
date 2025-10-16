@@ -16,7 +16,7 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
     logger_temp = logging.getLogger(__name__)
-    logger_temp.warning("anthropic library not available - using fallback planning")
+    logger_temp.warning("anthropic library not available - will try direct API calls")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,6 +53,44 @@ class LLMExperimentPlanner:
         
         self.experiments_table = self.dynamodb.Table('ai-video-codec-experiments')
         self.reasoning_table = self.dynamodb.Table('ai-video-codec-reasoning')
+        
+        # Enable direct API calls as fallback
+        self.api_key = api_key
+        self.use_direct_api = (not ANTHROPIC_AVAILABLE and api_key)
+    
+    def _call_claude_direct(self, prompt: str) -> Optional[str]:
+        """
+        Call Claude API directly using requests (Python 3.7 compatible).
+        Fallback when anthropic library not available.
+        """
+        if not self.api_key:
+            return None
+        
+        try:
+            import urllib.request
+            import urllib.error
+            
+            url = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            }
+            data = json.dumps({
+                "model": self.model,
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "messages": [{"role": "user", "content": prompt}]
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=30) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                return result['content'][0]['text']
+                
+        except Exception as e:
+            logger.error(f"Direct API call failed: {e}")
+            return None
     
     def analyze_recent_experiments(self, limit: int = 5) -> List[Dict]:
         """
@@ -169,6 +207,11 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
         Returns:
             Dict with LLM analysis and recommendations, or None if LLM unavailable
         """
+        # Try direct API call if anthropic library not available
+        if not self.client and self.use_direct_api:
+            logger.info("Using direct API call (Python 3.7 compatible)...")
+            return self._get_analysis_via_direct_api(experiments)
+        
         if not self.client:
             logger.warning("LLM client not available - returning fallback analysis")
             return self._fallback_analysis(experiments)
@@ -176,7 +219,7 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
         try:
             prompt = self.generate_analysis_prompt(experiments)
             
-            logger.info("Requesting LLM analysis...")
+            logger.info("Requesting LLM analysis via anthropic library...")
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=4096,
@@ -205,6 +248,32 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             
         except Exception as e:
             logger.error(f"Error getting LLM analysis: {e}")
+            return self._fallback_analysis(experiments)
+    
+    def _get_analysis_via_direct_api(self, experiments: List[Dict]) -> Optional[Dict]:
+        """Get LLM analysis using direct API call."""
+        try:
+            prompt = self.generate_analysis_prompt(experiments)
+            response_text = self._call_claude_direct(prompt)
+            
+            if not response_text:
+                logger.warning("Direct API call returned no response")
+                return self._fallback_analysis(experiments)
+            
+            # Try to parse JSON (handle markdown code blocks)
+            if "```json" in response_text:
+                json_str = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                json_str = response_text.split("```")[1].split("```")[0].strip()
+            else:
+                json_str = response_text.strip()
+            
+            analysis = json.loads(json_str)
+            logger.info("✅ LLM analysis received via direct API")
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Error in direct API analysis: {e}")
             return self._fallback_analysis(experiments)
     
     def _fallback_analysis(self, experiments: List[Dict]) -> Dict:
