@@ -24,6 +24,11 @@ Parameters:
     Type: String
     Default: ''
     Description: SSL certificate ARN for custom domain (optional)
+  
+  DashboardBucketName:
+    Type: String
+    Default: 'ai-video-codec-dashboard-580473065386'
+    Description: 'Name of the S3 bucket containing dashboard static files'
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
@@ -711,20 +716,34 @@ Resources:
           Value: AI-Video-Codec
           
   # API Gateway Root Resource
-  DashboardAPIRootResource:
+  # Proxy resource for all paths
+  DashboardAPIProxyResource:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref DashboardAPI
       ParentId: !GetAtt DashboardAPI.RootResourceId
-      PathPart: dashboard
+      PathPart: '{proxy+}'
       
-  # API Gateway Method (Single secure endpoint)
-  DashboardAPIMethod:
+  # Proxy method for all paths
+  DashboardAPIProxyMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref DashboardAPI
-      ResourceId: !Ref DashboardAPIRootResource
-      HttpMethod: GET
+      ResourceId: !Ref DashboardAPIProxyResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DashboardRendererFunction.Arn}/invocations'
+  
+  # Root method for / path
+  DashboardAPIRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DashboardAPI
+      ResourceId: !GetAtt DashboardAPI.RootResourceId
+      HttpMethod: ANY
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
@@ -744,7 +763,8 @@ Resources:
   DashboardAPIDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-      - DashboardAPIMethod
+      - DashboardAPIProxyMethod
+      - DashboardAPIRootMethod
     Properties:
       RestApiId: !Ref DashboardAPI
       StageName: !Ref Environment
