@@ -53,10 +53,15 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
         agent = ProceduralCompressionAgent(resolution=(1920, 1080), config=config)
         logger.info("Procedural agent created successfully")
         
+        # Generate unique output filename using timestamp
+        import time
+        timestamp = int(time.time())
+        output_path = f"/tmp/procedural_{timestamp}.mp4"
+        
         # Generate procedural video
-        logger.info("Generating procedural video...")
+        logger.info(f"Generating procedural video: {output_path}")
         results = agent.generate_procedural_video(
-            "/tmp/procedural_test.mp4", 
+            output_path, 
             duration=10.0, 
             fps=30.0
         )
@@ -72,8 +77,8 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
             
             logger.info(f"🎯 PARAMETER STORAGE: {file_size_kb:.2f} KB, {bitrate_mbps:.4f} Mbps")
         else:
-            # Old mode: rendered video file
-            file_size = os.path.getsize("/tmp/procedural_test.mp4")
+            # Old mode: rendered video file - use the actual output path
+            file_size = os.path.getsize(output_path)
             bitrate_mbps = (file_size * 8) / (10.0 * 1_000_000)
             file_size_kb = file_size / 1024
             compression_method = 'procedural_demoscene'
