@@ -411,6 +411,44 @@ def render_dashboard_page():
             'body': f'<h1>Error rendering dashboard</h1><pre>{str(e)}</pre>'
         }
 
+def generate_next_steps_html(next_experiment):
+    """Generate HTML for next steps section."""
+    if not next_experiment or not isinstance(next_experiment, dict):
+        return ""
+    
+    approach = next_experiment.get('approach', '')
+    changes = next_experiment.get('changes', [])
+    expected_improvement = next_experiment.get('expected_improvement', '')
+    
+    if not approach and not changes:
+        return ""
+    
+    # Parse changes if it's a string
+    if isinstance(changes, str):
+        try:
+            changes = json.loads(changes)
+        except:
+            changes = [changes] if changes else []
+    
+    changes_html = ""
+    for change in changes:
+        changes_html += f"<li><i class='fas fa-arrow-right'></i> {change}</li>"
+    
+    html = '<div class="blog-section next-steps">'
+    html += '<h3><i class="fas fa-arrow-circle-right"></i> Next Steps</h3>'
+    
+    if approach:
+        html += f'<p><strong>Approach:</strong> {approach}</p>'
+    
+    if changes_html:
+        html += f'<p><strong>Planned Changes:</strong></p><ul>{changes_html}</ul>'
+    
+    if expected_improvement:
+        html += f'<p><strong>Expected Improvement:</strong> {expected_improvement}</p>'
+    
+    html += '</div>'
+    return html
+
 def render_blog_page():
     """Server-side render the blog page with data from DynamoDB"""
     try:
@@ -570,6 +608,8 @@ def generate_blog_html(experiments, reasoning_items):
                 {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
                 
                 {f'<div class="blog-section"><h3><i class="fas fa-lightbulb"></i> Key Insights</h3><ul>{insights_html}</ul></div>' if insights_html else ''}
+                
+                {generate_next_steps_html(next_experiment) if next_experiment else ''}
             </div>
             '''
     
@@ -598,6 +638,11 @@ def generate_blog_html(experiments, reasoning_items):
         .metric-value {{ font-size: 2em; font-weight: bold; color: #667eea; }}
         .metric-label {{ font-size: 0.9em; color: #666; margin-top: 5px; }}
         .back-link {{ display: inline-block; margin-bottom: 30px; color: #667eea; text-decoration: none; font-weight: 600; }}
+        .next-steps {{ background: #f0f7ff; border-left: 4px solid #4CAF50; padding: 20px; border-radius: 8px; }}
+        .next-steps h3 {{ color: #4CAF50; }}
+        .next-steps ul {{ list-style: none; padding-left: 0; }}
+        .next-steps li {{ padding: 8px 0; }}
+        .next-steps .fa-arrow-right {{ color: #4CAF50; margin-right: 10px; }}
     </style>
 </head>
 <body>
