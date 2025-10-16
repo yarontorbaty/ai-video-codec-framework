@@ -33,12 +33,16 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
         if llm_config:
             # Parse LLM suggestions into actionable parameters
             next_exp = llm_config.get('next_experiment', {})
-            approach = next_exp.get('approach', '')
+            approach = next_exp.get('approach', '').lower()
+            hypothesis = llm_config.get('hypothesis', '').lower()
+            changes = str(next_exp.get('changes', [])).lower()
             
             # Map LLM suggestions to agent configuration
-            if 'parameter' in approach.lower() or 'compact' in approach.lower():
+            # Check if LLM suggests parameter/compact storage approach
+            if any(keyword in approach + hypothesis + changes for keyword in ['parameter', 'compact', 'procedural command', 'generation parameter']):
                 config['parameter_storage'] = True
                 config['compression_strategy'] = 'parameter_storage'
+                logger.info("🔧 Enabling parameter storage based on LLM suggestion")
             
             config['bitrate_target_mbps'] = llm_config.get('expected_bitrate_mbps', 1.0)
             config['complexity_level'] = llm_config.get('complexity_level', 1.0)
@@ -260,21 +264,34 @@ def run_llm_post_analysis(experiment_result, past_experiments):
         
         planner = LLMExperimentPlanner()
         
-        # Analyze what happened
-        reasoning = planner.analyze_experiment(experiment_result, past_experiments)
+        # Prepare experiment data for analysis
+        # Ensure experiments field is a string
+        exp_data = experiment_result.copy()
+        if not isinstance(exp_data.get('experiments'), str):
+            exp_data['experiments'] = json.dumps(exp_data.get('experiments', []))
         
-        if reasoning:
+        # Format past experiments similarly
+        formatted_past = []
+        for exp in past_experiments:
+            exp_copy = exp.copy()
+            if not isinstance(exp_copy.get('experiments'), str):
+                exp_copy['experiments'] = json.dumps(exp_copy.get('experiments', []))
+            formatted_past.append(exp_copy)
+        
+        # Analyze the just-completed experiment with all past ones
+        all_experiments = [exp_data] + formatted_past
+        analysis = planner.get_llm_analysis(all_experiments)
+        
+        if analysis:
             logger.info(f"📊 LLM Analysis complete")
-            logger.info(f"   Root cause: {reasoning.get('root_cause', 'N/A')[:100]}...")
-            logger.info(f"   Next hypothesis: {reasoning.get('hypothesis', 'N/A')[:100]}...")
+            logger.info(f"   Root cause: {analysis.get('root_cause', 'N/A')[:100]}...")
+            logger.info(f"   Next hypothesis: {analysis.get('hypothesis', 'N/A')[:100]}...")
             
-            # Store reasoning in DynamoDB
-            dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-            reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
-            reasoning_table.put_item(Item=reasoning)
+            # Store reasoning in DynamoDB using planner's method
+            planner.log_reasoning(analysis, exp_data.get('experiment_id', 'unknown'))
             logger.info(f"   ✅ Reasoning stored in DynamoDB")
             
-            return reasoning
+            return analysis
         else:
             logger.warning("No reasoning generated")
             return None
