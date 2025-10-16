@@ -779,6 +779,7 @@ Resources:
     Properties:
       RestApiId: !Ref DashboardAPI
       StageName: !Ref Environment
+      Description: !Sub 'Deployment at ${AWS::StackName}-20251016-v2'
       
   # CloudFront Distribution (Server-side rendering via Lambda only)
   DashboardDistribution:

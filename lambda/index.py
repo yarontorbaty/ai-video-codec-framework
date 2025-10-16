@@ -26,8 +26,8 @@ def handler(event, context):
     
     print(f"Request path: {path}")
     
-    # Root path
-    if path == '/' or path == '':
+    # Root path (CloudFront routing issues: / comes in as /dashboard)
+    if path == '/' or path == '' or path == '/dashboard':
         return serve_static_file('index.html')
     
     # Static HTML files
@@ -43,9 +43,11 @@ def handler(event, context):
         filename = path.lstrip('/')
         return serve_static_file(filename)
     
-    # API endpoints (for dynamic data fetching)
-    elif path == '/dashboard' or path.startswith('/api'):
-        data_type = query_params.get('type', 'experiments')
+    # API endpoints (for dynamic data fetching) - requires ?type= parameter
+    elif path.startswith('/api'):
+        data_type = query_params.get('type')
+        if not data_type:
+            return {'statusCode': 400, 'body': 'Missing type parameter'}
         if data_type == 'experiments':
             return get_experiments()
         elif data_type == 'metrics':
