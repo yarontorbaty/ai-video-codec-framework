@@ -496,13 +496,19 @@ def generate_blog_html(experiments, reasoning_items):
         exp_id = exp.get('experiment_id', '')
         exp_timestamp = exp.get('timestamp', 0)
         
-        # Find matching reasoning
+        # Find matching reasoning by experiment_id (most reliable)
         matching_reasoning = None
         for reasoning in reasoning_items:
-            if (reasoning.get('experiment_id') == exp_id or 
-                abs(int(reasoning.get('timestamp', 0)) - int(exp_timestamp)) < 3600):
+            if reasoning.get('experiment_id') == exp_id:
                 matching_reasoning = reasoning
                 break
+        
+        # Fallback: find by timestamp if experiment_id doesn't match (within 60 seconds)
+        if not matching_reasoning:
+            for reasoning in reasoning_items:
+                if abs(int(reasoning.get('timestamp', 0)) - int(exp_timestamp)) < 60:
+                    matching_reasoning = reasoning
+                    break
         
         # Parse experiment data
         experiments_data = json.loads(exp.get('experiments', '[]'))
