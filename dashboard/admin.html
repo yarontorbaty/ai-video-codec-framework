@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AiV1 - Admin Control</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+            height: calc(100vh - 100px);
+        }
+        
+        .chat-section {
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+        }
+        
+        .message.user {
+            background: rgba(59, 130, 246, 0.2);
+            align-self: flex-end;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
+        .message.llm {
+            background: rgba(16, 185, 129, 0.2);
+            align-self: flex-start;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .message.system {
+            background: rgba(251, 191, 36, 0.2);
+            align-self: center;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            max-width: 90%;
+            text-align: center;
+        }
+        
+        .message-header {
+            font-size: 0.85em;
+            opacity: 0.7;
+            margin-bottom: 5px;
+        }
+        
+        .message-content {
+            line-height: 1.6;
+        }
+        
+        .message-content code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .chat-input-area {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            resize: none;
+            min-height: 60px;
+            max-height: 120px;
+        }
+        
+        .send-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .send-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .control-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .control-card h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.running {
+            background: #10b981;
+        }
+        
+        .status-indicator.stopped {
+            background: #ef4444;
+        }
+        
+        .status-indicator.idle {
+            background: #f59e0b;
+        }
+        
+        .control-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .control-btn.danger {
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+        
+        .control-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+        
+        .control-btn.success {
+            border-color: rgba(16, 185, 129, 0.5);
+        }
+        
+        .control-btn.success:hover {
+            background: rgba(16, 185, 129, 0.2);
+        }
+        
+        .quick-commands {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        
+        .quick-cmd {
+            padding: 6px 12px;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .quick-cmd:hover {
+            background: rgba(99, 102, 241, 0.4);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .stat-item {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #3b82f6;
+        }
+        
+        .stat-label {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+        
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% {
+                content: '';
+            }
+            40% {
+                content: '.';
+            }
+            60% {
+                content: '..';
+            }
+            80%, 100% {
+                content: '...';
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-brand">
+            <i class="fas fa-robot"></i>
+            AiV1 Codec - Admin Control
+        </div>
+        <div class="nav-links">
+            <a href="index.html"><i class="fas fa-chart-line"></i> Dashboard</a>
+            <a href="blog.html"><i class="fas fa-blog"></i> Blog</a>
+            <a href="admin.html" class="active"><i class="fas fa-user-shield"></i> Admin</a>
+        </div>
+    </nav>
+
+    <div class="admin-container">
+        <div class="chat-section">
+            <div class="chat-header">
+                <h2><i class="fas fa-comments"></i> Governing LLM Chat</h2>
+                <button onclick="clearChat()" class="control-btn" style="width: auto; padding: 8px 16px; margin: 0;">
+                    <i class="fas fa-trash"></i> Clear
+                </button>
+            </div>
+            
+            <div class="chat-messages" id="chatMessages">
+                <div class="message system">
+                    <div class="message-content">
+                        <strong>System Ready</strong><br>
+                        You can now interact with the governing LLM.<br>
+                        Ask questions, suggest experiments, or use quick commands below.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="quick-commands">
+                <span class="quick-cmd" onclick="sendQuickCommand('What is the current status?')">Status</span>
+                <span class="quick-cmd" onclick="sendQuickCommand('What should we try next?')">Next Strategy</span>
+                <span class="quick-cmd" onclick="sendQuickCommand('Analyze the last 3 experiments')">Analyze Recent</span>
+                <span class="quick-cmd" onclick="sendQuickCommand('Try a hybrid approach with 70% procedural and 30% neural compression')">Hybrid Approach</span>
+                <span class="quick-cmd" onclick="sendQuickCommand('Focus on residual encoding')">Residual Encoding</span>
+            </div>
+            
+            <div class="chat-input-area">
+                <textarea 
+                    id="chatInput" 
+                    class="chat-input" 
+                    placeholder="Type your message to the LLM... (Shift+Enter for new line, Enter to send)"
+                    onkeypress="handleKeyPress(event)"></textarea>
+                <button onclick="sendMessage()" id="sendBtn" class="send-btn">
+                    <i class="fas fa-paper-plane"></i> Send
+                </button>
+            </div>
+        </div>
+        
+        <div class="control-panel">
+            <div class="control-card">
+                <h3>
+                    <i class="fas fa-server"></i> System Status
+                    <span id="statusIndicator" class="status-indicator idle"></span>
+                </h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalExperiments">--</div>
+                        <div class="stat-label">Total Experiments</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="runningNow">--</div>
+                        <div class="stat-label">Running Now</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="bestBitrate">--</div>
+                        <div class="stat-label">Best Bitrate</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="successRate">--</div>
+                        <div class="stat-label">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-card">
+                <h3><i class="fas fa-cogs"></i> Experiment Control</h3>
+                <button onclick="startExperiment()" class="control-btn success">
+                    <i class="fas fa-play"></i> Start New Experiment
+                </button>
+                <button onclick="stopExperiments()" class="control-btn danger">
+                    <i class="fas fa-stop"></i> Stop All Experiments
+                </button>
+                <button onclick="pauseAutonomous()" class="control-btn">
+                    <i class="fas fa-pause"></i> Pause Autonomous Mode
+                </button>
+                <button onclick="resumeAutonomous()" class="control-btn">
+                    <i class="fas fa-play-circle"></i> Resume Autonomous
+                </button>
+            </div>
+            
+            <div class="control-card">
+                <h3><i class="fas fa-sliders-h"></i> LLM Settings</h3>
+                <label style="display: block; margin-bottom: 10px; font-size: 14px;">
+                    <input type="checkbox" id="autoExecution" checked> Auto-execute LLM suggestions
+                </label>
+                <label style="display: block; margin-bottom: 10px; font-size: 14px;">
+                    <input type="checkbox" id="requireApproval"> Require approval for new code
+                </label>
+                <label style="display: block; font-size: 14px;">
+                    <input type="checkbox" id="verboseLogging"> Verbose logging
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
+
