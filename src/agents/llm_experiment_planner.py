@@ -28,7 +28,7 @@ class LLMExperimentPlanner:
     Analyzes past experiments and plans improved approaches.
     """
     
-    def __init__(self, model: str = "claude-sonnet-4-5-20250514"):
+    def __init__(self, model: str = "claude-sonnet-4-5"):
         """
         Initialize LLM planner.
         
@@ -84,7 +84,7 @@ class LLMExperimentPlanner:
             }).encode('utf-8')
             
             req = urllib.request.Request(url, data=data, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as response:
+            with urllib.request.urlopen(req, timeout=120) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 return result['content'][0]['text']
                 
