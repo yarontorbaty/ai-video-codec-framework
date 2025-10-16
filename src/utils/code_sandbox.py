@@ -9,7 +9,7 @@ import io
 import ast
 import logging
 import traceback
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, Tuple
 import multiprocessing
 import signal
 
@@ -70,7 +70,7 @@ class CodeSandbox:
         self.timeout = timeout
         self.max_memory_mb = max_memory_mb
     
-    def validate_code(self, code: str) -> tuple[bool, Optional[str]]:
+    def validate_code(self, code: str) -> Tuple[bool, Optional[str]]:
         """
         Validate code for safety using AST analysis.
         
@@ -114,7 +114,7 @@ class CodeSandbox:
         return True, None
     
     def execute_function(self, code: str, function_name: str, 
-                        args: tuple = (), kwargs: dict = None) -> tuple[bool, Any, Optional[str]]:
+                        args: tuple = (), kwargs: dict = None) -> Tuple[bool, Any, Optional[str]]:
         """
         Execute LLM-generated function with safety constraints.
         
@@ -138,6 +138,12 @@ class CodeSandbox:
         logger.info(f"Executing LLM-generated function: {function_name}")
         
         try:
+            # Create restricted import function
+            def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+                if name.split('.')[0] not in self.ALLOWED_MODULES:
+                    raise ImportError(f"Import of '{name}' is not allowed")
+                return __import__(name, globals, locals, fromlist, level)
+            
             # Create restricted globals
             restricted_globals = {
                 '__builtins__': {
@@ -166,6 +172,7 @@ class CodeSandbox:
                     'isinstance': isinstance,
                     'type': type,
                     'print': print,  # For debugging
+                    '__import__': safe_import,  # Allow controlled imports
                 },
             }
             
