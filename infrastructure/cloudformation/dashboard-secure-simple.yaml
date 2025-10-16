@@ -696,6 +696,23 @@ Resources:
       Description: 'Secure API for AiV1 Dashboard - CloudFront Only'
       EndpointConfiguration:
         Types: [REGIONAL]
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: 'execute-api:/*'
+            Condition:
+              StringEquals:
+                'aws:UserAgent': !Sub 'CloudFront-${ProjectName}-dashboard'
+          - Effect: Deny
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: 'execute-api:/*'
+            Condition:
+              StringNotEquals:
+                'aws:UserAgent': !Sub 'CloudFront-${ProjectName}-dashboard'
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-dashboard-api'
@@ -791,10 +808,16 @@ Resources:
           AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
           CachedMethods: [GET, HEAD]
           Compress: true
+          DefaultTTL: 60  # Cache for 60 seconds
+          MaxTTL: 300     # Max 5 minutes
+          MinTTL: 0
           ForwardedValues:
             QueryString: true
             Cookies:
               Forward: none
+            Headers:
+              - User-Agent
+              - CloudFront-Viewer-Country
         Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref AWS::NoValue]
         ViewerCertificate: !If 
           - HasCustomDomain

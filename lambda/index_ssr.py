@@ -89,7 +89,7 @@ def serve_static_file(filename):
             'statusCode': 200,
             'headers': {
                 'Content-Type': content_type,
-                'Cache-Control': 'public, max-age=300'
+                'Cache-Control': 'public, max-age=300, s-maxage=300'  # Cache for 5 minutes
             },
             'body': content
         }
@@ -127,7 +127,7 @@ def render_blog_page():
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'text/html',
-                'Cache-Control': 'public, max-age=60'  # Cache for 1 minute
+                'Cache-Control': 'public, max-age=60, s-maxage=60'  # Cache for 1 minute
             },
             'body': html
         }
