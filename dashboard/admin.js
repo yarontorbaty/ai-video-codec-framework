@@ -1,280 +1,216 @@
-// Admin Chat Interface
+// Admin Interface with Authentication
 const API_BASE = 'https://aiv1codec.com';
-let conversationHistory = [];
+let sessionToken = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    loadSystemStatus();
-    setInterval(loadSystemStatus, 30000); // Update every 30 seconds
+    // Check for existing session
+    sessionToken = localStorage.getItem('adminToken');
     
-    // Load chat history from localStorage
-    const saved = localStorage.getItem('adminChatHistory');
-    if (saved) {
-        conversationHistory = JSON.parse(saved);
-        conversationHistory.forEach(msg => {
-            addMessageToUI(msg.role, msg.content, false);
-        });
+    if (sessionToken) {
+        // Verify token is still valid
+        verifySession();
+    } else {
+        showLoginScreen();
+    }
+    
+    // Setup login form
+    const loginForm = document.getElementById('loginForm');
+    if (loginForm) {
+        loginForm.addEventListener('submit', handleLogin);
     }
 });
 
-// Send message to LLM
-async function sendMessage() {
-    const input = document.getElementById('chatInput');
-    const message = input.value.trim();
+function showLoginScreen() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('adminInterface').style.display = 'none';
+}
+
+function showAdminInterface() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('adminInterface').style.display = 'block';
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
     
-    if (!message) return;
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const errorDiv = document.getElementById('loginError');
     
-    // Add user message to UI
-    addMessageToUI('user', message);
-    conversationHistory.push({ role: 'user', content: message });
-    
-    // Clear input
-    input.value = '';
-    
-    // Disable send button
-    const sendBtn = document.getElementById('sendBtn');
-    sendBtn.disabled = true;
-    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Thinking<span class="loading-dots"></span>';
+    errorDiv.textContent = '';
     
     try {
-        // Send to backend
-        const response = await fetch(`${API_BASE}/admin/chat`, {
+        const response = await fetch(`${API_BASE}/admin/login`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: message,
-                history: conversationHistory.slice(-10) // Last 10 messages for context
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
         });
         
-        if (!response.ok) {
-            throw new Error('Failed to get response from LLM');
-        }
-        
         const data = await response.json();
         
-        // Add LLM response to UI
-        addMessageToUI('llm', data.response);
-        conversationHistory.push({ role: 'llm', content: data.response });
-        
-        // Execute any commands if present
-        if (data.commands && data.commands.length > 0) {
-            for (const cmd of data.commands) {
-                await executeCommand(cmd);
-            }
+        if (data.success && data.token) {
+            sessionToken = data.token;
+            localStorage.setItem('adminToken', sessionToken);
+            localStorage.setItem('adminUsername', data.username);
+            
+            // Load admin interface
+            loadAdminInterface();
+        } else {
+            errorDiv.textContent = data.error || 'Login failed';
         }
-        
-        // Save history
-        localStorage.setItem('adminChatHistory', JSON.stringify(conversationHistory));
-        
     } catch (error) {
-        console.error('Error:', error);
-        addMessageToUI('system', `Error: ${error.message}`);
-    } finally {
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send';
+        errorDiv.textContent = 'Connection error. Please try again.';
+        console.error('Login error:', error);
     }
 }
 
-// Add message to UI
-function addMessageToUI(role, content, save = true) {
-    const messagesDiv = document.getElementById('chatMessages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
-    
-    const icon = role === 'user' ? 'fa-user' : 
-                 role === 'llm' ? 'fa-robot' : 
-                 'fa-info-circle';
-    
-    const roleLabel = role === 'user' ? 'You' : 
-                     role === 'llm' ? 'Governing LLM' : 
-                     'System';
-    
-    messageDiv.innerHTML = `
-        <div class="message-header">
-            <i class="fas ${icon}"></i> ${roleLabel} - ${new Date().toLocaleTimeString()}
-        </div>
-        <div class="message-content">${formatMessage(content)}</div>
-    `;
-    
-    messagesDiv.appendChild(messageDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    
-    if (save && role !== 'system') {
-        conversationHistory.push({ role, content });
+async function verifySession() {
+    try {
+        const response = await fetch(`${API_BASE}/admin/status`, {
+            headers: {
+                'Authorization': `Bearer ${sessionToken}`
+            }
+        });
+        
+        if (response.status === 401) {
+            // Session expired
+            logout();
+        } else if (response.ok) {
+            // Session valid - load interface
+            loadAdminInterface();
+        }
+    } catch (error) {
+        console.error('Session verification error:', error);
+        logout();
     }
 }
 
-// Format message with markdown-like syntax
-function formatMessage(text) {
-    // Code blocks
-    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
-    // Line breaks
-    text = text.replace(/\n/g, '<br>');
-    // Bold
-    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    return text;
+function logout() {
+    sessionToken = null;
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminUsername');
+    showLoginScreen();
 }
 
-// Quick commands
-function sendQuickCommand(command) {
-    document.getElementById('chatInput').value = command;
-    sendMessage();
-}
-
-// Handle Enter key
-function handleKeyPress(event) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
-    }
-}
-
-// Clear chat
-function clearChat() {
-    if (confirm('Clear all chat history?')) {
-        conversationHistory = [];
-        localStorage.removeItem('adminChatHistory');
-        document.getElementById('chatMessages').innerHTML = `
-            <div class="message system">
-                <div class="message-content">
-                    <strong>Chat Cleared</strong><br>
-                    Ready for new conversation.
+function loadAdminInterface() {
+    // Build the admin interface dynamically
+    const container = document.getElementById('adminInterface') || document.body;
+    
+    container.innerHTML = `
+        <nav style="background: rgba(0,0,0,0.3); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-robot"></i>
+                <strong>AiV1 Codec - Admin Control</strong>
+            </div>
+            <div>
+                <span style="margin-right: 20px;">
+                    <i class="fas fa-user"></i> ${localStorage.getItem('adminUsername')}
+                </span>
+                <button onclick="logout()" style="padding: 8px 16px; background: #dc2626; border: none; border-radius: 6px; color: white; cursor: pointer;">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </nav>
+        
+        <div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
+            <h1 style="text-align: center; margin: 40px 0;">
+                <i class="fas fa-shield-alt"></i> Admin Dashboard
+            </h1>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin: 30px 0;">
+                <div style="background: rgba(59, 130, 246, 0.2); padding: 20px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <h3><i class="fas fa-flask"></i> Total Experiments</h3>
+                    <div id="totalExperiments" style="font-size: 2em; font-weight: bold;">-</div>
+                </div>
+                <div style="background: rgba(16, 185, 129, 0.2); padding: 20px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <h3><i class="fas fa-play"></i> Running Now</h3>
+                    <div id="runningNow" style="font-size: 2em; font-weight: bold;">-</div>
+                </div>
+                <div style="background: rgba(251, 191, 36, 0.2); padding: 20px; border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.3);">
+                    <h3><i class="fas fa-chart-line"></i> Best Bitrate</h3>
+                    <div id="bestBitrate" style="font-size: 2em; font-weight: bold;">-</div>
                 </div>
             </div>
-        `;
-    }
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 30px 0;">
+                <button onclick="executeCommand('start_experiment')" style="padding: 15px; background: #10b981; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-play"></i> Start Experiment
+                </button>
+                <button onclick="executeCommand('stop_experiments')" style="padding: 15px; background: #dc2626; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-stop"></i> Stop All
+                </button>
+                <button onclick="executeCommand('pause_autonomous')" style="padding: 15px; background: #f59e0b; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+                    <i class="fas fa-pause"></i> Pause Autonomous
+                </button>
+            </div>
+            
+            <div id="commandStatus" style="margin: 20px 0; padding: 15px; border-radius: 8px; display: none;"></div>
+        </div>
+    `;
+    
+    showAdminInterface();
+    loadSystemStatus();
+    setInterval(loadSystemStatus, 30000); // Update every 30 seconds
 }
 
-// Load system status
 async function loadSystemStatus() {
     try {
-        const response = await fetch(`${API_BASE}/admin/status`);
-        if (!response.ok) throw new Error('Failed to load status');
+        const response = await fetch(`${API_BASE}/admin/status`, {
+            headers: { 'Authorization': `Bearer ${sessionToken}` }
+        });
+        
+        if (response.status === 401) {
+            logout();
+            return;
+        }
         
         const data = await response.json();
         
-        // Update stats
-        document.getElementById('totalExperiments').textContent = data.total_experiments || '--';
-        document.getElementById('runningNow').textContent = data.running_now || '0';
-        document.getElementById('bestBitrate').textContent = data.best_bitrate ? 
-            `${data.best_bitrate.toFixed(2)} Mbps` : '--';
-        document.getElementById('successRate').textContent = data.success_rate ? 
-            `${Math.round(data.success_rate)}%` : '--';
-        
-        // Update status indicator
-        const indicator = document.getElementById('statusIndicator');
-        if (data.running_now > 0) {
-            indicator.className = 'status-indicator running';
-        } else if (data.autonomous_enabled) {
-            indicator.className = 'status-indicator idle';
-        } else {
-            indicator.className = 'status-indicator stopped';
-        }
-        
+        document.getElementById('totalExperiments').textContent = data.total_experiments || 0;
+        document.getElementById('runningNow').textContent = data.running_now || 0;
+        document.getElementById('bestBitrate').textContent = data.best_bitrate ? `${data.best_bitrate.toFixed(2)} Mbps` : 'N/A';
     } catch (error) {
         console.error('Error loading status:', error);
     }
 }
 
-// Control functions
-async function startExperiment() {
-    if (!confirm('Start a new experiment now?')) return;
-    
-    addMessageToUI('system', 'Starting new experiment...');
-    
-    try {
-        const response = await fetch(`${API_BASE}/admin/command`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ command: 'start_experiment' })
-        });
-        
-        const data = await response.json();
-        addMessageToUI('system', data.message || 'Experiment started');
-        loadSystemStatus();
-    } catch (error) {
-        addMessageToUI('system', `Error: ${error.message}`);
-    }
-}
-
-async function stopExperiments() {
-    if (!confirm('Stop all running experiments?')) return;
-    
-    addMessageToUI('system', 'Stopping all experiments...');
-    
-    try {
-        const response = await fetch(`${API_BASE}/admin/command`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ command: 'stop_experiments' })
-        });
-        
-        const data = await response.json();
-        addMessageToUI('system', data.message || 'Experiments stopped');
-        loadSystemStatus();
-    } catch (error) {
-        addMessageToUI('system', `Error: ${error.message}`);
-    }
-}
-
-async function pauseAutonomous() {
-    addMessageToUI('system', 'Pausing autonomous mode...');
-    
-    try {
-        const response = await fetch(`${API_BASE}/admin/command`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ command: 'pause_autonomous' })
-        });
-        
-        const data = await response.json();
-        addMessageToUI('system', data.message || 'Autonomous mode paused');
-        loadSystemStatus();
-    } catch (error) {
-        addMessageToUI('system', `Error: ${error.message}`);
-    }
-}
-
-async function resumeAutonomous() {
-    addMessageToUI('system', 'Resuming autonomous mode...');
-    
-    try {
-        const response = await fetch(`${API_BASE}/admin/command`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ command: 'resume_autonomous' })
-        });
-        
-        const data = await response.json();
-        addMessageToUI('system', data.message || 'Autonomous mode resumed');
-        loadSystemStatus();
-    } catch (error) {
-        addMessageToUI('system', `Error: ${error.message}`);
-    }
-}
-
-// Execute command from LLM
-async function executeCommand(cmd) {
-    addMessageToUI('system', `Executing: ${cmd.description}`);
+async function executeCommand(command) {
+    const statusDiv = document.getElementById('commandStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = 'rgba(59, 130, 246, 0.2)';
+    statusDiv.textContent = `Executing: ${command}...`;
     
     try {
         const response = await fetch(`${API_BASE}/admin/execute`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(cmd)
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionToken}`
+            },
+            body: JSON.stringify({ command })
         });
         
-        const data = await response.json();
-        if (data.success) {
-            addMessageToUI('system', `✅ ${data.message}`);
-        } else {
-            addMessageToUI('system', `❌ ${data.message}`);
+        if (response.status === 401) {
+            logout();
+            return;
         }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            statusDiv.style.background = 'rgba(16, 185, 129, 0.2)';
+            statusDiv.textContent = `✓ ${data.message}`;
+        } else {
+            statusDiv.style.background = 'rgba(220, 38, 38, 0.2)';
+            statusDiv.textContent = `✗ ${data.message}`;
+        }
+        
+        // Refresh status
+        setTimeout(loadSystemStatus, 2000);
+        
     } catch (error) {
-        addMessageToUI('system', `Error executing command: ${error.message}`);
+        statusDiv.style.background = 'rgba(220, 38, 38, 0.2)';
+        statusDiv.textContent = `✗ Error: ${error.message}`;
     }
 }
-

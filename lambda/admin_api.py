@@ -42,15 +42,84 @@ except Exception as e:
     logger.error(f"Failed to retrieve API key from Secrets Manager: {e}")
 
 
-def verify_admin(password):
-    """Verify admin password."""
-    if not ADMIN_PASSWORD_HASH:
-        # No password set - accept all (dev mode)
-        logger.warning("No admin password configured - authentication disabled!")
-        return True
+def verify_admin(username, password):
+    """Verify admin credentials."""
+    # Fetch credentials from Secrets Manager
+    try:
+        secret_response = secretsmanager.get_secret_value(SecretId='ai-video-codec/admin-credentials')
+        secret_data = json.loads(secret_response['SecretString'])
+        stored_username = secret_data.get('username', 'admin')
+        stored_password = secret_data.get('password', '')
+        
+        # Simple comparison for now
+        return username == stored_username and password == stored_password
+    except Exception as e:
+        logger.error(f"Failed to verify credentials: {e}")
+        # Fallback for development - accept admin/admin
+        return username == 'admin' and password == 'admin'
+
+
+def create_session_token(username):
+    """Create a session token."""
+    import secrets
+    import time
     
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
-    return hmac.compare_digest(password_hash, ADMIN_PASSWORD_HASH)
+    token = secrets.token_urlsafe(32)
+    expiry = int(time.time()) + (24 * 60 * 60)  # 24 hours
+    
+    # Store in DynamoDB
+    try:
+        control_table.put_item(Item={
+            'control_id': f'session_{token}',
+            'username': username,
+            'expiry': expiry,
+            'created_at': datetime.utcnow().isoformat()
+        })
+        return token
+    except Exception as e:
+        logger.error(f"Failed to create session: {e}")
+        return None
+
+
+def verify_session_token(token):
+    """Verify a session token."""
+    import time
+    
+    try:
+        response = control_table.get_item(Key={'control_id': f'session_{token}'})
+        item = response.get('Item')
+        
+        if not item:
+            return False
+        
+        # Check expiry
+        expiry = int(item.get('expiry', 0))
+        if time.time() > expiry:
+            # Delete expired session
+            control_table.delete_item(Key={'control_id': f'session_{token}'})
+            return False
+        
+        return True
+    except Exception as e:
+        logger.error(f"Failed to verify session: {e}")
+        return False
+
+
+def handle_login(username, password):
+    """Handle login request."""
+    if verify_admin(username, password):
+        token = create_session_token(username)
+        if token:
+            return {
+                "success": True,
+                "token": token,
+                "username": username,
+                "message": "Login successful"
+            }
+        else:
+            return {"success": False, "error": "Failed to create session"}
+    else:
+        return {"success": False, "error": "Invalid credentials"}
 
 
 def call_llm_chat(message, history):
@@ -338,7 +407,7 @@ def lambda_handler(event, context):
         headers = {
             'Content-Type': 'application/json',
             'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type,Authorization',
             'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
         }
         
@@ -351,8 +420,33 @@ def lambda_handler(event, context):
         if event.get('body'):
             body = json.loads(event['body'])
         
+        # Authentication check (except for login endpoint)
+        if path != '/admin/login':
+            # Check for Authorization header
+            auth_header = event.get('headers', {}).get('Authorization', '')
+            if not auth_header.startswith('Bearer '):
+                return {
+                    'statusCode': 401,
+                    'headers': headers,
+                    'body': json.dumps({"error": "Unauthorized - missing or invalid token"})
+                }
+            
+            # Verify token
+            token = auth_header.replace('Bearer ', '')
+            if not verify_session_token(token):
+                return {
+                    'statusCode': 401,
+                    'headers': headers,
+                    'body': json.dumps({"error": "Unauthorized - invalid or expired token"})
+                }
+        
         # Route requests
-        if path == '/admin/status':
+        if path == '/admin/login' and method == 'POST':
+            username = body.get('username', '')
+            password = body.get('password', '')
+            response_body = handle_login(username, password)
+        
+        elif path == '/admin/status':
             response_body = get_system_status()
         
         elif path == '/admin/chat' and method == 'POST':
