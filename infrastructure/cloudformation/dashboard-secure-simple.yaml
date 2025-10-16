@@ -816,7 +816,6 @@ Resources:
             Cookies:
               Forward: none
             Headers:
-              - User-Agent
               - CloudFront-Viewer-Country
         Aliases: !If [HasCustomDomain, [!Ref DomainName], !Ref AWS::NoValue]
         ViewerCertificate: !If 
