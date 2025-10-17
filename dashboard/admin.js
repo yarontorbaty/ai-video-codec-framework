@@ -494,6 +494,8 @@ function renderExperimentsTable(experiments) {
                     <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-code"></i> Code</th>
                     <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-code-branch"></i> Ver</th>
                     <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fab fa-github"></i> Git</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-video"></i> Media</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-file-code"></i> Decoder</th>
                     <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-bug"></i> Analyze</th>
                     <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-user-cog"></i> Human</th>
                     <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Actions</th>
@@ -652,6 +654,31 @@ function renderExperimentsTable(experiments) {
         }
         phaseBadge += `</div>`;
         
+        // Media (reconstructed video) badge
+        let mediaBadge = '<span style="color: #666;">—</span>';
+        if (exp.video_url) {
+            mediaBadge = `<a href="${exp.video_url}" target="_blank" 
+                style="padding: 6px 10px; background: #10b98122; border: 1px solid #10b981; border-radius: 6px; color: #10b981; text-decoration: none; font-size: 0.85em; font-weight: 600; transition: all 0.2s; display: inline-block;"
+                onmouseover="this.style.background='#10b98144'"
+                onmouseout="this.style.background='#10b98122'"
+                title="Download reconstructed video">
+                <i class="fas fa-video"></i> Video
+            </a>`;
+        }
+        
+        // Decoder code badge
+        let decoderBadge = '<span style="color: #666;">—</span>';
+        if (exp.decoder_s3_key) {
+            const decoderUrl = `https://ai-video-codec-storage-580473065386.s3.amazonaws.com/${exp.decoder_s3_key}`;
+            decoderBadge = `<a href="${decoderUrl}" target="_blank" 
+                style="padding: 6px 10px; background: #3b82f622; border: 1px solid #3b82f6; border-radius: 6px; color: #3b82f6; text-decoration: none; font-size: 0.85em; font-weight: 600; transition: all 0.2s; display: inline-block;"
+                onmouseover="this.style.background='#3b82f644'"
+                onmouseout="this.style.background='#3b82f622'"
+                title="Download decoder code">
+                <i class="fas fa-file-code"></i> Code
+            </a>`;
+        }
+        
         // Failure analysis badge
         let analysisBadge = '<span style="color: #666;">—</span>';
         if (exp.failure_analysis) {
@@ -706,6 +733,8 @@ function renderExperimentsTable(experiments) {
                 <td style="padding: 8px; text-align: center;">${codeBadge}</td>
                 <td style="padding: 8px; text-align: center;">${versionDisplay}</td>
                 <td style="padding: 8px; text-align: center;">${githubBadge}</td>
+                <td style="padding: 8px; text-align: center;">${mediaBadge}</td>
+                <td style="padding: 8px; text-align: center;">${decoderBadge}</td>
                 <td style="padding: 8px; text-align: center;">${analysisBadge}</td>
                 <td style="padding: 8px; text-align: center;">${humanBadge}</td>
                 <td style="padding: 8px; text-align: center;">

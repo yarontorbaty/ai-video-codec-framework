@@ -940,6 +940,8 @@ def get_experiments_list():
                 'psnr_db': None,
                 'ssim': None,
                 'quality': None,
+                'video_url': None,
+                'decoder_s3_key': None,
                 'experiments_run': 0,
                 # Phase tracking
                 'current_phase': exp.get('current_phase', 'unknown'),
@@ -1010,6 +1012,9 @@ def get_experiments_list():
                             exp_data['psnr_db'] = float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None
                             exp_data['ssim'] = float(metrics.get('ssim')) if metrics.get('ssim') else None
                             exp_data['quality'] = metrics.get('quality')
+                            # Extract media artifacts (video and decoder code)
+                            exp_data['video_url'] = e.get('video_url')
+                            exp_data['decoder_s3_key'] = e.get('decoder_s3_key')
             except Exception as e:
                 logger.error(f"Error parsing experiment {exp_data['id']}: {e}")
             
