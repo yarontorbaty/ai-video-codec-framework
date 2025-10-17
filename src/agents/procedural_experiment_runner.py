@@ -820,7 +820,32 @@ This decoder can reconstruct video frames from compressed data.
         hevc_baseline_mbps = 10.0
         bitrate_mbps = real_metrics.get('bitrate_mbps', 0)
         reduction_percent = ((hevc_baseline_mbps - bitrate_mbps) / hevc_baseline_mbps) * 100 if bitrate_mbps else -50.0
-        target_achieved = bitrate_mbps < 1.0 if bitrate_mbps else False
+        
+        # Tiered achievement goals (incremental improvement)
+        tier_50_target = hevc_baseline_mbps * 0.5  # 50% reduction = 5.0 Mbps
+        tier_70_target = hevc_baseline_mbps * 0.3  # 70% reduction = 3.0 Mbps
+        tier_90_target = hevc_baseline_mbps * 0.1  # 90% reduction = 1.0 Mbps
+        
+        # Determine achievement tier
+        achievement_tier = None
+        target_achieved = False
+        
+        if bitrate_mbps and bitrate_mbps > 0:
+            if bitrate_mbps <= tier_90_target:
+                achievement_tier = '🏆 90% Reduction'
+                target_achieved = True
+                logger.info(f"  🏆 BREAKTHROUGH! Achieved 90% reduction target (< {tier_90_target} Mbps)")
+            elif bitrate_mbps <= tier_70_target:
+                achievement_tier = '🥇 70% Reduction'
+                target_achieved = True
+                logger.info(f"  🥇 EXCELLENT! Achieved 70% reduction target (< {tier_70_target} Mbps)")
+            elif bitrate_mbps <= tier_50_target:
+                achievement_tier = '🥈 50% Reduction'
+                target_achieved = True
+                logger.info(f"  🥈 GOOD! Achieved 50% reduction target (< {tier_50_target} Mbps)")
+            else:
+                achievement_tier = '🎯 In Progress'
+                logger.info(f"  🎯 Progress made ({reduction_percent:.1f}% reduction)")
         
         # Format experiment data in the structure the blog expects
         # The blog looks for experiments[].experiment_type == 'real_procedural_generation'
@@ -840,18 +865,21 @@ This decoder can reconstruct video frames from compressed data.
         except Exception as e:
             logger.debug(f"Could not fetch existing approach: {e}")
         
-        # Upload reconstructed video if available
+        # Upload reconstructed video if available and quality verified
+        # Save ALL quality-verified experiments (not just those meeting strictest target)
         video_url = None
         reconstructed_path = results.get('reconstructed_video_path')
-        if reconstructed_path and target_achieved:  # Only upload for successful experiments
-            logger.info(f"  🎬 Uploading reconstructed video for successful experiment...")
+        quality_verified = real_metrics.get('quality_verified', False)
+        
+        if reconstructed_path and quality_verified:
+            logger.info(f"  🎬 Uploading reconstructed video for quality-verified experiment...")
             video_url = self._upload_reconstructed_video(reconstructed_path, experiment_id)
         
-        # Save decoder code for successful experiments
+        # Save decoder code for quality-verified experiments
         decoder_s3_key = None
         decoder_code = results.get('decoder_code')
-        if decoder_code and target_achieved:
-            logger.info(f"  💾 Saving decoder code for successful experiment...")
+        if decoder_code and quality_verified:
+            logger.info(f"  💾 Saving decoder code for quality-verified experiment...")
             decoder_s3_key = self._save_decoder_code(decoder_code, experiment_id)
         
         experiments_array = [{
@@ -862,7 +890,11 @@ This decoder can reconstruct video frames from compressed data.
             'comparison': {
                 'hevc_baseline_mbps': hevc_baseline_mbps,
                 'reduction_percent': reduction_percent,
-                'target_achieved': target_achieved
+                'target_achieved': target_achieved,
+                'achievement_tier': achievement_tier,
+                'tier_50_target': tier_50_target,
+                'tier_70_target': tier_70_target,
+                'tier_90_target': tier_90_target
             },
             'video_url': video_url if video_url else None,
             'decoder_s3_key': decoder_s3_key if decoder_s3_key else None

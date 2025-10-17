@@ -269,8 +269,9 @@ def render_dashboard_page():
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
             llm_code = next((e for e in experiments_data if e.get('experiment_type') in ['llm_generated_code', 'llm_generated_code_evolution']), {})
             
-            metrics = procedural.get('real_metrics', {})
-            comparison = procedural.get('comparison', {})
+            # Get metrics from the most relevant experiment type
+            metrics = llm_code.get('real_metrics', {}) or procedural.get('real_metrics', {}) or {}
+            comparison = llm_code.get('comparison', {}) or procedural.get('comparison', {}) or {}
             
             # Determine methods used
             methods = []
@@ -278,6 +279,8 @@ def render_dashboard_page():
                 methods.append('Procedural')
             if ai_neural:
                 methods.append('Neural Network')
+            if llm_code:
+                methods.append('LLM Code')
             methods_str = ' + '.join(methods) if methods else 'Hybrid'
             
             # Extract LLM evolution info
@@ -290,7 +293,8 @@ def render_dashboard_page():
                         'adopted': evolution.get('adopted', False),
                         'version': evolution.get('version', 0),
                         'metrics': evolution.get('metrics', {}),
-                        'reason': evolution.get('reason', '')
+                        'reason': evolution.get('reason', ''),
+                        'github_commit': evolution.get('github_commit', '')
                     }
             
             # Parse timestamp for time of day
@@ -304,15 +308,37 @@ def render_dashboard_page():
                 except:
                     time_of_day = timestamp_str[11:16] if len(timestamp_str) > 16 else ''
             
+            # Get phase info
+            phase = item.get('phase_completed', 'unknown')
+            
+            # Get video and decoder links
+            video_url = llm_code.get('video_url') or procedural.get('video_url') or None
+            decoder_s3_key = llm_code.get('decoder_s3_key') or procedural.get('decoder_s3_key') or None
+            
+            # Get runtime and test count
+            runtime = metrics.get('processing_time_seconds', 0) or metrics.get('runtime_seconds', 0)
+            test_count = metrics.get('frames_processed', 0) or metrics.get('test_frames', 0)
+            
+            # Get quality metrics
+            psnr = metrics.get('psnr', 0)
+            ssim = metrics.get('ssim', 0)
+            
             experiments.append({
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
+                'phase': phase,
                 'compression': comparison.get('reduction_percent', 0),
                 'bitrate': metrics.get('bitrate_mbps', 0),
                 'timestamp': item.get('timestamp_iso', ''),
                 'time_of_day': time_of_day,
                 'methods': methods_str,
                 'evolution': evolution_info,
+                'video_url': video_url,
+                'decoder_s3_key': decoder_s3_key,
+                'runtime': runtime,
+                'test_count': test_count,
+                'psnr': psnr,
+                'ssim': ssim,
                 'full_data': experiments_data  # Keep full data for blog linking
             })
         
@@ -428,71 +454,67 @@ def render_dashboard_page():
         # Generate experiments table rows with blog links
         experiments_html = ""
         for i, exp in enumerate(experiments[:10]):
-            status_class = 'completed' if exp['status'] == 'completed' else 'running'
+            status_class = 'completed' if exp['status'] == 'completed' else ('running' if exp['status'] == 'running' else 'pending')
             
-            # Positive reduction = good (smaller file), negative = bad (larger file)
-            compression = exp['compression']
-            if compression > 0:
-                compression_display = f'<span style="color: green;">↓ {compression:.1f}%</span>'
-            elif compression < 0:
-                compression_display = f'<span style="color: red;">↑ {abs(compression):.1f}%</span>'
+            # Format phase
+            phase = exp.get('phase', 'unknown')
+            phase_display = phase.replace('_', ' ').title() if phase != 'unknown' else '—'
+            
+            # Format PSNR
+            psnr = exp.get('psnr', 0)
+            if psnr and psnr > 0:
+                psnr_color = '#28a745' if psnr >= 30 else ('#ffc107' if psnr >= 25 else '#dc3545')
+                psnr_display = f'<span style="color: {psnr_color}; font-weight: 600;">{psnr:.1f}</span>'
             else:
-                compression_display = f'{compression:.1f}%'
+                psnr_display = '<span style="color: #999;">—</span>'
             
-            # Code Evolution Fields
-            code_changed = exp.get('code_changed', False)
-            version = exp.get('version', 0)
-            evo_status = exp.get('status', 'N/A')  # adopted, rejected, test_failed, skipped
-            improvement = exp.get('improvement', 'N/A')
-            deployment_status = exp.get('deployment_status', 'not_deployed')
-            github_committed = exp.get('github_committed', False)
-            github_hash = exp.get('github_commit_hash', '')
-            
-            # Code changed indicator
-            code_badge = ''
-            if code_changed:
-                code_badge = '<span style="background: #667eea; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75em;" title="LLM generated new code">✨ LLM</span>'
+            # Format SSIM
+            ssim = exp.get('ssim', 0)
+            if ssim and ssim > 0:
+                ssim_color = '#28a745' if ssim >= 0.9 else ('#ffc107' if ssim >= 0.8 else '#dc3545')
+                ssim_display = f'<span style="color: {ssim_color}; font-weight: 600;">{ssim:.3f}</span>'
             else:
-                code_badge = '<span style="color: #999; font-size: 0.75em;">—</span>'
+                ssim_display = '<span style="color: #999;">—</span>'
             
-            # Version display
-            version_display = f'<span style="font-weight: 600; color: #667eea;">v{version}</span>' if code_changed else '<span style="color: #999;">—</span>'
-            
-            # Status badge with colors
-            status_colors = {
-                'adopted': ('#28a745', '✓ Adopted', 'Code successfully adopted and deployed'),
-                'rejected': ('#dc3545', '✗ Rejected', 'Code rejected - no improvement'),
-                'test_failed': ('#ffc107', '⚠ Failed', 'Testing failed'),
-                'skipped': ('#6c757d', '⊘ Skipped', 'Evolution skipped')
-            }
-            status_info = status_colors.get(evo_status, ('#999', evo_status, ''))
-            adoption_badge = f'<span style="background: {status_info[0]}; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75em;" title="{status_info[2]}">{status_info[1]}</span>' if code_changed else '<span style="color: #999;">—</span>'
-            
-            # GitHub status
-            github_display = ''
-            if github_committed and github_hash:
-                short_hash = github_hash[:7] if github_hash else ''
-                github_display = f'<a href="https://github.com/your-repo/commit/{github_hash}" target="_blank" style="color: #28a745; text-decoration: none;" title="Committed: {short_hash}"><i class="fab fa-github"></i> {short_hash}</a>'
-            elif deployment_status == 'deployed':
-                github_display = '<span style="color: #28a745; font-size: 0.75em;" title="Deployed locally">📦 Local</span>'
+            # Format runtime
+            runtime = exp.get('runtime', 0)
+            if runtime and runtime > 0:
+                if runtime < 60:
+                    runtime_display = f'{runtime:.1f}s'
+                elif runtime < 3600:
+                    runtime_display = f'{runtime/60:.1f}m'
+                else:
+                    runtime_display = f'{runtime/3600:.1f}h'
             else:
-                github_display = '<span style="color: #999;">—</span>'
+                runtime_display = '<span style="color: #999;">—</span>'
             
-            # Improvement tooltip
-            improvement_tooltip = f'title="{improvement}"' if improvement != 'N/A' else ''
+            # Format test count
+            test_count = exp.get('test_count', 0)
+            test_display = f'{int(test_count)}' if test_count > 0 else '<span style="color: #999;">—</span>'
+            
+            # Media links (video/decoder)
+            media_icons = ''
+            if exp.get('video_url'):
+                media_icons += f'<a href="{exp["video_url"]}" target="_blank" title="View Video" style="color: #667eea; margin-right: 8px;"><i class="fas fa-play-circle"></i></a>'
+            if exp.get('decoder_s3_key'):
+                decoder_url = f'https://ai-video-codec-videos-580473065386.s3.amazonaws.com/{exp["decoder_s3_key"]}'
+                media_icons += f'<a href="{decoder_url}" target="_blank" title="Download Decoder" style="color: #0ea5e9;"><i class="fas fa-download"></i></a>'
+            if not media_icons:
+                media_icons = '<span style="color: #999;">—</span>'
             
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1fr 0.6fr 0.5fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.5fr 0.6fr 0.7fr 0.6fr 0.6fr 0.5fr 0.5fr 0.5fr 0.4fr 0.6fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
+                    <div class="col" style="font-size: 0.85em;">{phase_display}</div>
                     <div class="col">{exp.get('time_of_day', 'N/A')}</div>
                     <div class="col">{exp['methods']}</div>
-                    <div class="col" {improvement_tooltip}>{compression_display}</div>
-                    <div class="col">{exp['bitrate']:.2f} Mbps</div>
-                    <div class="col">{code_badge}</div>
-                    <div class="col">{version_display}</div>
-                    <div class="col">{adoption_badge}</div>
-                    <div class="col">{github_display}</div>
+                    <div class="col">{exp['bitrate']:.2f}</div>
+                    <div class="col">{psnr_display}</div>
+                    <div class="col">{ssim_display}</div>
+                    <div class="col">{runtime_display}</div>
+                    <div class="col">{test_display}</div>
+                    <div class="col" onclick="event.stopPropagation();">{media_icons}</div>
                     <div class="col"><a href="/blog.html#exp-{i+1}" style="color: #667eea; text-decoration: none;"><i class="fas fa-arrow-right"></i></a></div>
                 </div>
             '''
@@ -597,17 +619,18 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1fr 0.6fr 0.5fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr 0.8fr 0.5fr;">
+                    <div class="table-header" style="grid-template-columns: 1.2fr 0.7fr 0.5fr 0.6fr 0.7fr 0.6fr 0.6fr 0.5fr 0.5fr 0.5fr 0.4fr 0.6fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
+                        <div>Phase</div>
                         <div>Time</div>
                         <div>Methods</div>
-                        <div>Compression</div>
                         <div>Bitrate</div>
-                        <div><i class="fas fa-code"></i> Code</div>
-                        <div><i class="fas fa-code-branch"></i> Version</div>
-                        <div><i class="fas fa-check-circle"></i> Adopted</div>
-                        <div><i class="fab fa-github"></i> GitHub</div>
+                        <div>PSNR</div>
+                        <div>SSIM</div>
+                        <div>Runtime</div>
+                        <div>Tests</div>
+                        <div>Media</div>
                         <div>Details</div>
                     </div>
                     <div class="table-body">

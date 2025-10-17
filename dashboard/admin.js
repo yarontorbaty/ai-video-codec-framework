@@ -487,6 +487,7 @@ function renderExperimentsTable(experiments) {
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Tests Run</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Best Bitrate</th>
+                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-trophy"></i> Achievement</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-clock"></i> Runtime</th>
@@ -653,19 +654,54 @@ function renderExperimentsTable(experiments) {
         }
         phaseBadge += `</div>`;
         
-        // Parse experiments JSON to get video_url and decoder_s3_key
+        // Parse experiments JSON to get video_url, decoder_s3_key, and achievement tier
         let videoUrl = null;
         let decoderKey = null;
+        let achievementTier = null;
+        let reductionPercent = 0;
         try {
             if (exp.experiments) {
                 const experimentsData = typeof exp.experiments === 'string' ? JSON.parse(exp.experiments) : exp.experiments;
                 if (experimentsData && experimentsData.length > 0) {
                     videoUrl = experimentsData[0].video_url;
                     decoderKey = experimentsData[0].decoder_s3_key;
+                    const comparison = experimentsData[0].comparison || {};
+                    achievementTier = comparison.achievement_tier;
+                    reductionPercent = comparison.reduction_percent || 0;
                 }
             }
         } catch (e) {
             // Ignore parsing errors
+        }
+        
+        // Achievement tier display
+        let achievementDisplay = '<span style="color: #666;">—</span>';
+        if (achievementTier) {
+            let tierColor, tierBg, tierIcon;
+            if (achievementTier.includes('90%')) {
+                tierColor = '#fbbf24';
+                tierBg = '#fef3c7';
+                tierIcon = '🏆';
+            } else if (achievementTier.includes('70%')) {
+                tierColor = '#10b981';
+                tierBg = '#d1fae5';
+                tierIcon = '🥇';
+            } else if (achievementTier.includes('50%')) {
+                tierColor = '#60a5fa';
+                tierBg = '#dbeafe';
+                tierIcon = '🥈';
+            } else {
+                tierColor = '#94a3b8';
+                tierBg = '#f1f5f9';
+                tierIcon = '🎯';
+            }
+            achievementDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <span style="font-size: 1.5em;">${tierIcon}</span>
+                <span style="padding: 4px 8px; background: ${tierBg}; border: 1px solid ${tierColor}; border-radius: 6px; color: ${tierColor}; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
+                    ${achievementTier}
+                </span>
+                <span style="font-size: 0.7em; color: #94a3b8;">${reductionPercent.toFixed(1)}% vs HEVC</span>
+            </div>`;
         }
 
         // Media download buttons
@@ -732,6 +768,7 @@ function renderExperimentsTable(experiments) {
                 </td>
                 <td style="padding: 15px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
                 <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                <td style="padding: 15px; text-align: center;">${achievementDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${runtimeDisplay}</td>
@@ -744,12 +781,14 @@ function renderExperimentsTable(experiments) {
                 <td style="padding: 15px; text-align: center;">${humanBadge}</td>
                 <td style="padding: 15px; text-align: center;">
                     <button onclick="viewExperimentDetails('${exp.id}')" 
-                            style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; margin: 0 4px; font-size: 0.85em; font-weight: 600;">
-                        <i class="fas fa-eye"></i> View
+                            title="View experiment details"
+                            style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; margin: 0 3px; font-size: 1em;">
+                        <i class="fas fa-eye"></i>
                     </button>
                     <button onclick="rerunExperiment('${exp.id}')" 
-                            style="padding: 8px 12px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 1px solid #34d399; border-radius: 6px; color: white; cursor: pointer; margin: 0 4px; font-size: 0.85em; font-weight: 600;">
-                        <i class="fas fa-redo"></i> Rerun
+                            title="Rerun this experiment"
+                            style="padding: 8px 12px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 1px solid #34d399; border-radius: 6px; color: white; cursor: pointer; margin: 0 3px; font-size: 1em;">
+                        <i class="fas fa-redo"></i>
                     </button>
                 </td>
             </tr>
