@@ -479,24 +479,24 @@ function renderExperimentsTable(experiments) {
     }
     
     let tableHTML = `
-        <table style="width: 100%; border-collapse: collapse; color: #f1f5f9;">
+        <table style="width: 100%; border-collapse: collapse; color: #f1f5f9; font-size: 0.85em;">
             <thead>
                 <tr style="background: rgba(0,0,0,0.3); border-bottom: 2px solid #475569;">
-                    <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Experiment ID</th>
-                    <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Time</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Tests Run</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Best Bitrate</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-clock"></i> Runtime</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code-branch"></i> Ver</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fab fa-github"></i> Git</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-bug"></i> Analysis</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-user-cog"></i> Human</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Actions</th>
+                    <th style="padding: 6px 8px; text-align: left; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Experiment ID</th>
+                    <th style="padding: 6px 8px; text-align: left; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Time</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Status</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Tests</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Bitrate</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-chart-line"></i> PSNR</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-eye"></i> Quality</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-clock"></i> Time</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-list-ol"></i> Phase</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-code"></i> Code</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-code-branch"></i> Ver</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fab fa-github"></i> Git</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-bug"></i> Analyze</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-user-cog"></i> Human</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -690,25 +690,25 @@ function renderExperimentsTable(experiments) {
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; background: ${rowHighlight};" 
                 onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'" 
                 onmouseout="this.style.background='${rowHighlight}'">
-                <td style="padding: 15px; font-family: monospace; font-size: 0.9em; color: #93c5fd;">${exp.id}</td>
-                <td style="padding: 15px; color: #cbd5e1; font-size: 0.95em;">${time}</td>
-                <td style="padding: 15px; text-align: center;">
-                    <span style="padding: 6px 12px; background: ${statusColor}33; color: ${statusColor}; border-radius: 6px; font-weight: 600; font-size: 0.9em;">
+                <td style="padding: 8px; font-family: monospace; font-size: 0.85em; color: #93c5fd;">${exp.id}</td>
+                <td style="padding: 8px; color: #cbd5e1; font-size: 0.85em;">${time}</td>
+                <td style="padding: 8px; text-align: center;">
+                    <span style="padding: 4px 8px; background: ${statusColor}33; color: ${statusColor}; border-radius: 6px; font-weight: 600; font-size: 0.8em;">
                         ${exp.status.toUpperCase()}
                     </span>
                 </td>
-                <td style="padding: 15px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
-                <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
-                <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${runtimeDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
-                <td style="padding: 15px; text-align: center;">${codeBadge}</td>
-                <td style="padding: 15px; text-align: center;">${versionDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${githubBadge}</td>
-                <td style="padding: 15px; text-align: center;">${analysisBadge}</td>
-                <td style="padding: 15px; text-align: center;">${humanBadge}</td>
-                <td style="padding: 15px; text-align: center;">
+                <td style="padding: 8px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
+                <td style="padding: 8px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                <td style="padding: 8px; text-align: center;">${psnrDisplay}</td>
+                <td style="padding: 8px; text-align: center;">${qualityDisplay}</td>
+                <td style="padding: 8px; text-align: center;">${runtimeDisplay}</td>
+                <td style="padding: 8px; text-align: center;">${phaseBadge}</td>
+                <td style="padding: 8px; text-align: center;">${codeBadge}</td>
+                <td style="padding: 8px; text-align: center;">${versionDisplay}</td>
+                <td style="padding: 8px; text-align: center;">${githubBadge}</td>
+                <td style="padding: 8px; text-align: center;">${analysisBadge}</td>
+                <td style="padding: 8px; text-align: center;">${humanBadge}</td>
+                <td style="padding: 8px; text-align: center;">
                     <button onclick="viewExperimentDetails('${exp.id}')" 
                             style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; margin: 0 4px; font-size: 0.85em; font-weight: 600;">
                         <i class="fas fa-eye"></i> View
