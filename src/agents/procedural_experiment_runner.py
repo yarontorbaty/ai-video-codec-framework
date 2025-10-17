@@ -427,6 +427,18 @@ class ProceduralExperimentRunner:
         
         # Store results in format compatible with blog
         from datetime import datetime
+        from decimal import Decimal
+        
+        # Convert floats to Decimal for DynamoDB
+        def convert_floats(obj):
+            if isinstance(obj, dict):
+                return {k: convert_floats(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_floats(item) for item in obj]
+            elif isinstance(obj, float):
+                return Decimal(str(obj))
+            return obj
+        
         experiment_data = {
             'experiment_id': experiment_id,
             'timestamp': int(time.time()),
@@ -441,7 +453,9 @@ class ProceduralExperimentRunner:
         }
         
         try:
-            self.experiments_table.put_item(Item=experiment_data)
+            # Convert any float values to Decimal for DynamoDB
+            experiment_data_converted = convert_floats(experiment_data)
+            self.experiments_table.put_item(Item=experiment_data_converted)
             logger.info(f"  ✅ Results stored to DynamoDB")
             logger.info(f"  Bitrate: {bitrate_mbps:.2f} Mbps, Reduction: {reduction_percent:.1f}%")
         except Exception as e:
