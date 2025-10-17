@@ -907,14 +907,8 @@ def generate_blog_html(experiments, reasoning_items):
                             <div class="metric-value">{achievement_tier[:2]}</div>
                             <div class="metric-label">{achievement_tier[3:]}</div>
                         </div>
-                        {f'''<div class="metric-card">
-                            <div class="metric-value">{psnr:.1f} dB</div>
-                            <div class="metric-label">PSNR</div>
-                        </div>''' if psnr > 0 else ''}
-                        {f'''<div class="metric-card">
-                            <div class="metric-value">{quality.title()}</div>
-                            <div class="metric-label">Quality</div>
-                        </div>''' if quality and quality != 'unknown' else ''}
+                        {f'<div class="metric-card"><div class="metric-value">{psnr:.1f} dB</div><div class="metric-label">PSNR</div></div>' if psnr > 0 else ''}
+                        {f'<div class="metric-card"><div class="metric-value">{quality.title()}</div><div class="metric-label">Quality</div></div>' if quality and quality != 'unknown' else ''}
                     </div>
                 </div>
                 
