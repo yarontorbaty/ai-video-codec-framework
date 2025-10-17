@@ -75,6 +75,7 @@ class ProceduralExperimentRunner:
         """
         experiment_id = f"proc_exp_{int(time.time())}"
         start_time = time.time()
+        initial_timestamp = int(start_time)  # Store for consistent DynamoDB key
         
         logger.info(f"=" * 60)
         logger.info(f"PROCEDURAL EXPERIMENT {iteration}")
@@ -85,7 +86,7 @@ class ProceduralExperimentRunner:
         estimated_duration_seconds = 106
         
         # Create initial experiment record in DynamoDB
-        self._update_experiment_status(experiment_id, 'design', 'running', {
+        self._update_experiment_status(experiment_id, initial_timestamp, 'design', 'running', {
             'start_time': start_time,
             'estimated_duration_seconds': estimated_duration_seconds,
             'elapsed_seconds': 0
@@ -100,7 +101,7 @@ class ProceduralExperimentRunner:
             
             # Update: Design complete
             elapsed = time.time() - start_time
-            self._update_experiment_status(experiment_id, 'deploy', 'running', {
+            self._update_experiment_status(experiment_id, initial_timestamp, 'deploy', 'running', {
                 'start_time': start_time,
                 'estimated_duration_seconds': estimated_duration_seconds,
                 'elapsed_seconds': int(elapsed)
@@ -114,7 +115,7 @@ class ProceduralExperimentRunner:
             
             # Update: Deploy complete
             elapsed = time.time() - start_time
-            self._update_experiment_status(experiment_id, 'validation', 'running', {
+            self._update_experiment_status(experiment_id, initial_timestamp, 'validation', 'running', {
                 'start_time': start_time,
                 'estimated_duration_seconds': estimated_duration_seconds,
                 'elapsed_seconds': int(elapsed)
@@ -128,7 +129,7 @@ class ProceduralExperimentRunner:
             
             # Update: Validation complete
             elapsed = time.time() - start_time
-            self._update_experiment_status(experiment_id, 'execution', 'running', {
+            self._update_experiment_status(experiment_id, initial_timestamp, 'execution', 'running', {
                 'start_time': start_time,
                 'estimated_duration_seconds': estimated_duration_seconds,
                 'elapsed_seconds': int(elapsed),
@@ -143,7 +144,7 @@ class ProceduralExperimentRunner:
             
             # Update: Execution complete
             elapsed = time.time() - start_time
-            self._update_experiment_status(experiment_id, 'analysis', 'running', {
+            self._update_experiment_status(experiment_id, initial_timestamp, 'analysis', 'running', {
                 'start_time': start_time,
                 'estimated_duration_seconds': estimated_duration_seconds,
                 'elapsed_seconds': int(elapsed),
@@ -165,12 +166,13 @@ class ProceduralExperimentRunner:
             logger.error(f"❌ Unexpected error in experiment: {e}")
             return self._create_failure_result(experiment_id, "unexpected_error", {'error': str(e)})
     
-    def _update_experiment_status(self, experiment_id: str, current_phase: str, status: str, extra_data: Dict):
+    def _update_experiment_status(self, experiment_id: str, timestamp: int, current_phase: str, status: str, extra_data: Dict):
         """
         Update experiment status in DynamoDB for real-time dashboard visibility.
         
         Args:
             experiment_id: Experiment ID
+            timestamp: Fixed timestamp for this experiment (DynamoDB sort key)
             current_phase: Current phase (design, deploy, validation, execution, analysis, complete)
             status: Status (running, completed, failed)
             extra_data: Additional data to merge (e.g., retry counts)
@@ -190,7 +192,7 @@ class ProceduralExperimentRunner:
             
             item = {
                 'experiment_id': experiment_id,
-                'timestamp': int(time.time()),
+                'timestamp': timestamp,  # Use fixed timestamp for consistent key
                 'status': status,
                 'current_phase': current_phase,
                 'phase_completed': current_phase,  # Track last completed phase
@@ -208,11 +210,17 @@ class ProceduralExperimentRunner:
         """
         Write initial blog post after design phase completes.
         This creates a blog entry with the approach/hypothesis before execution.
+        
+        Note: This function is called FROM _phase_design, so it doesn't need timestamp
+        passed in - it extracts it from the experiment_id.
         """
         from datetime import datetime
         from decimal import Decimal
         
         try:
+            # Extract timestamp from experiment_id (format: proc_exp_{timestamp})
+            timestamp = int(experiment_id.split('_')[-1])
+            
             # Create placeholder experiments array with approach but no results yet
             experiments_array = [{
                 'experiment_type': 'real_procedural_generation',
@@ -234,8 +242,8 @@ class ProceduralExperimentRunner:
             
             blog_data = {
                 'experiment_id': experiment_id,
-                'timestamp': int(time.time()),
-                'timestamp_iso': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': timestamp,  # Use consistent timestamp from experiment_id
+                'timestamp_iso': datetime.utcfromtimestamp(timestamp).isoformat() + 'Z',
                 'status': 'running',
                 'experiments': json.dumps(experiments_array),
                 'phase_completed': 'design',
@@ -248,7 +256,7 @@ class ProceduralExperimentRunner:
             reasoning_table = boto3.resource('dynamodb', region_name='us-east-1').Table('ai-video-codec-reasoning')
             reasoning_data = {
                 'experiment_id': experiment_id,
-                'timestamp': int(time.time()),
+                'timestamp': timestamp,  # Use same consistent timestamp
                 'hypothesis': llm_analysis.get('hypothesis', ''),
                 'root_cause': llm_analysis.get('root_cause', ''),
                 'insights': json.dumps(llm_analysis.get('insights', [])),
@@ -510,20 +518,15 @@ class ProceduralExperimentRunner:
                 return Decimal(str(obj))
             return obj
         
-        try:
-            # Get existing blog post to preserve original timestamp
-            existing = self.experiments_table.get_item(Key={'experiment_id': experiment_id})
-            original_timestamp = existing.get('Item', {}).get('timestamp', int(time.time()))
-            original_timestamp_iso = existing.get('Item', {}).get('timestamp_iso', datetime.utcnow().isoformat() + 'Z')
-        except:
-            original_timestamp = int(time.time())
-            original_timestamp_iso = datetime.utcnow().isoformat() + 'Z'
+        # Extract timestamp from experiment_id (format: proc_exp_{timestamp})
+        timestamp = int(experiment_id.split('_')[-1])
+        timestamp_iso = datetime.utcfromtimestamp(timestamp).isoformat() + 'Z'
         
-        # Update blog post with results (preserving original timestamp)
+        # Update blog post with results (using consistent timestamp)
         experiment_data = {
             'experiment_id': experiment_id,
-            'timestamp': original_timestamp,  # Preserve original timestamp from design phase
-            'timestamp_iso': original_timestamp_iso,
+            'timestamp': timestamp,  # Use consistent timestamp from experiment_id
+            'timestamp_iso': timestamp_iso,
             'status': 'completed',
             'experiments': json.dumps(experiments_array),  # Blog expects JSON string with results
             'validation_retries': 0,  # Will be filled from validation phase

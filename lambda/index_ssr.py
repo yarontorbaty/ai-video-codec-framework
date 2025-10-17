@@ -12,6 +12,27 @@ def decimal_to_float(obj):
         return float(obj)
     raise TypeError
 
+def _generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out):
+    """Generate metrics HTML to avoid backslash in f-string issues"""
+    if is_timed_out:
+        return ''
+    
+    # Build sign for reduction
+    sign = '+' if reduction < 0 else ''
+    color = '#dc3545' if reduction < 0 else '#28a745'
+    
+    # Build HTML
+    bitrate_value = expected_bitrate if is_running and not bitrate else bitrate
+    bitrate_label = 'Expected' if is_running and not bitrate else ''
+    
+    html = f'<div class="metrics-grid"><div class="metric-card"><div class="metric-value">{bitrate_value:.2f}</div><div class="metric-label">{bitrate_label} Mbps</div></div>'
+    
+    if not (is_running and not bitrate):
+        html += f'<div class="metric-card"><div class="metric-value" style="color: {color}">{sign}{reduction:.1f}%</div><div class="metric-label">vs HEVC Baseline</div></div>'
+    
+    html += '</div>'
+    return html
+
 def handler(event, context):
     """
     Lambda function for server-side rendering
