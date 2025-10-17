@@ -717,7 +717,38 @@ def generate_blog_html(experiments, reasoning_items):
             'comparison': comparison
         })
     
-    # Generate HTML
+    # Calculate summary statistics
+    completed_experiments = [p for p in blog_posts if p['exp'].get('status') == 'completed']
+    total_experiments = len(blog_posts)
+    best_bitrate = min([p['metrics'].get('bitrate_mbps', 999) for p in completed_experiments], default=10.0)
+    
+    tier90_count = sum(1 for p in completed_experiments if p['metrics'].get('bitrate_mbps', 999) <= 1.0)
+    tier70_count = sum(1 for p in completed_experiments if 1.0 < p['metrics'].get('bitrate_mbps', 999) <= 3.0)
+    tier50_count = sum(1 for p in completed_experiments if 3.0 < p['metrics'].get('bitrate_mbps', 999) <= 5.0)
+    
+    # Generate summary section
+    summary_html = f'''
+    <div class="summary-section">
+        <h2>🎯 Research Progress Summary</h2>
+        <p>Our autonomous AI system has conducted {total_experiments} compression experiments, systematically exploring different approaches to achieve significant bitrate reductions while maintaining video quality.</p>
+        <div class="summary-stats">
+            <div class="summary-stat">
+                <div class="value">{total_experiments}</div>
+                <div class="label">Total Experiments</div>
+            </div>
+            <div class="summary-stat">
+                <div class="value">{best_bitrate:.2f} Mbps</div>
+                <div class="label">Best Bitrate</div>
+            </div>
+            <div class="summary-stat">
+                <div class="value">🏆 {tier90_count} | 🥇 {tier70_count} | 🥈 {tier50_count}</div>
+                <div class="label">Tier Achievements</div>
+            </div>
+        </div>
+    </div>
+    '''
+    
+    # Generate blog posts
     posts_html = ""
     if not blog_posts:
         posts_html = '''
@@ -726,11 +757,10 @@ def generate_blog_html(experiments, reasoning_items):
             <p>The autonomous AI system is initializing. The first experiment analysis will appear here within 6 hours.</p>
             <p>Each blog post will include:</p>
             <ul>
-                <li>What the experiment tried</li>
-                <li>Root cause analysis of failures</li>
-                <li>LLM reasoning and insights</li>
-                <li>Hypothesis for next experiment</li>
-                <li>Expected improvements</li>
+                <li><strong>Methods:</strong> Detailed description of what this experiment is trying</li>
+                <li><strong>Results:</strong> Performance metrics and achievement tier</li>
+                <li><strong>Analysis:</strong> What worked, what didn't, and why</li>
+                <li><strong>Recommendations:</strong> What the AI suggests trying next</li>
             </ul>
         </div>
         '''
@@ -741,75 +771,154 @@ def generate_blog_html(experiments, reasoning_items):
             metrics = post['metrics']
             comparison = post['comparison']
             
-            # Parse experiment data for methods
+            # Get previous post for context
+            previous_post = blog_posts[i+1] if i+1 < len(blog_posts) else None
+            
+            # Parse experiment data
             experiments_data = json.loads(exp.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
-            ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
-            
-            methods_used = []
-            if procedural:
-                methods_used.append('Procedural Generation (Demoscene-inspired)')
-            if ai_neural:
-                methods_used.append('Neural Network Compression')
             
             bitrate = metrics.get('bitrate_mbps', 0)
+            psnr = metrics.get('psnr_db', 0)
+            ssim = metrics.get('ssim', 0)
+            quality = metrics.get('quality', 'unknown')
             reduction = comparison.get('reduction_percent', 0)
+            achievement_tier = comparison.get('achievement_tier', '🎯 In Progress')
             
             status_class = 'status-success' if exp.get('status') == 'completed' else 'status-failed'
             
-            hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else 'Baseline Measurement'
-            root_cause = reasoning.get('root_cause', '') if reasoning else ''
-            insights = reasoning.get('insights', []) if reasoning else []
+            # Generate short title from approach
+            approach = procedural.get('approach', '') or (reasoning.get('hypothesis', '') if reasoning else '')
+            short_title = 'Compression Experiment'
+            if 'JPEG' in approach:
+                short_title = 'JPEG-based Compression'
+            elif 'Downsample' in approach or 'Spatial' in approach:
+                short_title = 'Spatial Downsampling'
+            elif 'Quantization' in approach:
+                short_title = 'Advanced Quantization'
+            elif 'DCT' in approach:
+                short_title = 'DCT Transform'
+            elif 'Neural' in approach or 'PyTorch' in approach:
+                short_title = 'Neural Codec'
+            elif 'Wavelet' in approach:
+                short_title = 'Wavelet Transform'
+            elif 'Hybrid' in approach:
+                short_title = 'Hybrid Approach'
+            elif approach:
+                # Use first few words of approach
+                short_title = ' '.join(approach.split()[:4])
+            
+            # Get detailed methods description
+            methods_description = ''
+            if reasoning:
+                generated_code = reasoning.get('generated_code', {})
+                if isinstance(generated_code, str):
+                    try:
+                        generated_code = json.loads(generated_code)
+                    except:
+                        generated_code = {}
+                methods_description = generated_code.get('description', approach)
+            if not methods_description:
+                methods_description = approach or 'Hybrid compression approach combining multiple techniques.'
+            
+            # Build on previous results section
+            previous_context_html = ''
+            if previous_post:
+                prev_bitrate = previous_post['metrics'].get('bitrate_mbps', 10)
+                prev_approach = previous_post['reasoning'].get('hypothesis', 'previous experiment') if previous_post['reasoning'] else 'previous experiment'
+                improvement_text = 'improved' if bitrate < prev_bitrate else 'did not improve'
+                previous_context_html = f'''
+                <div class="blog-section">
+                    <h3>🔄 Building on Previous Results</h3>
+                    <p>The previous experiment ({prev_approach}) achieved {prev_bitrate:.2f} Mbps. This experiment {improvement_text} upon that result, achieving {bitrate:.2f} Mbps.</p>
+                </div>
+                '''
+            
+            # Recommendations section
+            recommendations_html = ''
             next_experiment = reasoning.get('next_experiment', {}) if reasoning else {}
-            
-            # Generate insights HTML
-            insights_html = ""
-            if isinstance(insights, str):
+            if isinstance(next_experiment, str):
                 try:
-                    insights = json.loads(insights)
+                    next_experiment = json.loads(next_experiment)
                 except:
-                    insights = []
-            for insight in insights:
-                insights_html += f"<li>{insight}</li>"
+                    next_experiment = {}
             
-            # Generate methods HTML
-            methods_html = "<br>".join([f"<i class='fas fa-check-circle'></i> {m}" for m in methods_used])
+            if next_experiment and isinstance(next_experiment, dict):
+                suggested_approach = next_experiment.get('approach', '')
+                changes = next_experiment.get('changes', [])
+                if isinstance(changes, str):
+                    try:
+                        changes = json.loads(changes)
+                    except:
+                        changes = []
+                risks = next_experiment.get('risks', [])
+                if isinstance(risks, str):
+                    try:
+                        risks = json.loads(risks)
+                    except:
+                        risks = []
+                expected_bitrate = next_experiment.get('expected_bitrate_mbps', 0)
+                expected_psnr = next_experiment.get('expected_psnr_db', 0)
+                
+                changes_html = ''.join([f"<li>{change}</li>" for change in changes]) if changes else ''
+                risks_html = ''.join([f"<li>{risk}</li>" for risk in risks]) if risks else ''
+                
+                recommendations_html = f'''
+                <div class="blog-section">
+                    <h3>💡 Recommendations for Next Iteration</h3>
+                    {f'<p><strong>Suggested Approach:</strong> {suggested_approach}</p>' if suggested_approach else ''}
+                    {f'<p><strong>Proposed Changes:</strong></p><ul>{changes_html}</ul>' if changes_html else ''}
+                    {f'<p><strong>Risks:</strong></p><ul>{risks_html}</ul>' if risks_html else ''}
+                    {f'<p><strong>Expected Metrics:</strong> {expected_bitrate:.2f} Mbps bitrate, {expected_psnr:.1f} dB PSNR</p>' if expected_bitrate > 0 else ''}
+                </div>
+                '''
             
             posts_html += f'''
             <div class="blog-post" id="exp-{i+1}">
-                <h2><i class="fas fa-flask"></i> Iteration {len(blog_posts) - i}: {hypothesis}</h2>
+                <h2>Experiment #{len(blog_posts) - i}: {short_title}</h2>
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar"></i> {exp.get('timestamp_iso', '')[:10]}</span>
                     <span><i class="fas fa-microscope"></i> {exp.get('experiment_id', '')}</span>
                     <span class="status-badge {status_class}">{exp.get('status', 'unknown')}</span>
+                    <span class="achievement-badge">{achievement_tier}</span>
+                </div>
+                
+                {previous_context_html}
+                
+                <div class="blog-section">
+                    <h3>🔬 Methods</h3>
+                    <p>{methods_description}</p>
                 </div>
                 
                 <div class="blog-section">
-                    <h3><i class="fas fa-cogs"></i> Methods Used</h3>
-                    <p>{methods_html if methods_html else 'Hybrid Approach'}</p>
-                </div>
-                
-                <div class="blog-section">
-                    <h3><i class="fas fa-chart-bar"></i> Results</h3>
+                    <h3>📊 Results</h3>
                     <div class="metrics-grid">
                         <div class="metric-card">
                             <div class="metric-value">{bitrate:.2f}</div>
-                            <div class="metric-label">Mbps</div>
+                            <div class="metric-label">Bitrate (Mbps)</div>
                         </div>
                         <div class="metric-card">
                             <div class="metric-value" style="color: {'#dc3545' if reduction < 0 else '#28a745'}">
-                                {'+' if reduction < 0 else ''}{reduction:.1f}%
+                                {reduction:.1f}%
                             </div>
-                            <div class="metric-label">vs HEVC Baseline</div>
+                            <div class="metric-label">Reduction vs HEVC</div>
                         </div>
+                        <div class="metric-card">
+                            <div class="metric-value">{achievement_tier[:2]}</div>
+                            <div class="metric-label">{achievement_tier[3:]}</div>
+                        </div>
+                        {f'''<div class="metric-card">
+                            <div class="metric-value">{psnr:.1f} dB</div>
+                            <div class="metric-label">PSNR</div>
+                        </div>''' if psnr > 0 else ''}
+                        {f'''<div class="metric-card">
+                            <div class="metric-value">{quality.title()}</div>
+                            <div class="metric-label">Quality</div>
+                        </div>''' if quality and quality != 'unknown' else ''}
                     </div>
                 </div>
                 
-                {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
-                
-                {f'<div class="blog-section"><h3><i class="fas fa-lightbulb"></i> Key Insights</h3><ul>{insights_html}</ul></div>' if insights_html else ''}
-                
-                {generate_next_steps_html(next_experiment) if next_experiment else ''}
+                {recommendations_html}
             </div>
             '''
     
@@ -827,14 +936,22 @@ def generate_blog_html(experiments, reasoning_items):
         .blog-container {{ max-width: 900px; margin: 0 auto; }}
         .blog-header {{ text-align: center; margin-bottom: 60px; }}
         .blog-header h1 {{ font-size: 2.5em; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+        .summary-section {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 12px; padding: 40px; margin-bottom: 50px; box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3); }}
+        .summary-section h2 {{ font-size: 2em; margin-bottom: 20px; color: white; }}
+        .summary-section p {{ font-size: 1.1em; line-height: 1.8; margin-bottom: 15px; opacity: 0.95; }}
+        .summary-stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 30px; }}
+        .summary-stat {{ background: rgba(255, 255, 255, 0.2); border-radius: 8px; padding: 20px; text-align: center; }}
+        .summary-stat .value {{ font-size: 2.5em; font-weight: bold; margin-bottom: 5px; }}
+        .summary-stat .label {{ font-size: 0.9em; opacity: 0.9; }}
         .blog-post {{ background: white; border-radius: 12px; padding: 40px; margin-bottom: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); border-left: 4px solid #667eea; }}
-        .blog-meta {{ display: flex; gap: 20px; margin-bottom: 20px; font-size: 0.9em; color: #666; }}
+        .blog-meta {{ display: flex; gap: 20px; margin-bottom: 20px; font-size: 0.9em; color: #666; flex-wrap: wrap; }}
         .status-badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }}
         .status-success {{ background: #d4edda; color: #155724; }}
         .status-failed {{ background: #f8d7da; color: #721c24; }}
+        .achievement-badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; background: #e3f2fd; color: #1976d2; }}
         .blog-section {{ margin: 30px 0; }}
         .blog-section h3 {{ font-size: 1.3em; margin-bottom: 15px; color: #667eea; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
-        .metrics-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
+        .metrics-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; margin: 20px 0; }}
         .metric-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }}
         .metric-value {{ font-size: 2em; font-weight: bold; color: #667eea; }}
         .metric-label {{ font-size: 0.9em; color: #666; margin-top: 5px; }}
@@ -852,8 +969,10 @@ def generate_blog_html(experiments, reasoning_items):
         
         <div class="blog-header">
             <h1>🤖 AI Research Blog</h1>
-            <p>Server-Side Rendered • Real-Time Updates</p>
+            <p>Autonomous Learning Journey • Real-Time Updates</p>
         </div>
+        
+        {summary_html if summary_html else ''}
         
         {posts_html}
     </div>
