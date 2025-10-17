@@ -479,26 +479,26 @@ function renderExperimentsTable(experiments) {
     }
     
     let tableHTML = `
-        <table style="width: 100%; border-collapse: collapse; color: #f1f5f9;">
+        <table style="width: 100%; border-collapse: collapse; color: #f1f5f9; font-size: 0.85em;">
             <thead>
                 <tr style="background: rgba(0,0,0,0.3); border-bottom: 2px solid #475569;">
-                    <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Experiment ID</th>
-                    <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Time</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Tests Run</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Best Bitrate</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-trophy"></i> Achievement</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-clock"></i> Runtime</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code-branch"></i> Ver</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fab fa-github"></i> Git</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-video"></i> Media</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-bug"></i> Analysis</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-user-cog"></i> Human</th>
-                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Actions</th>
+                    <th style="padding: 6px 8px; text-align: left; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Experiment ID</th>
+                    <th style="padding: 6px 8px; text-align: left; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Time</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Status</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Tests</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Bitrate</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-trophy"></i> Tier</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-chart-line"></i> PSNR</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-eye"></i> Quality</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-clock"></i> Time</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-list-ol"></i> Phase</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-code"></i> Code</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-code-branch"></i> Ver</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fab fa-github"></i> Git</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-video"></i> Media</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-bug"></i> Analyze</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-user-cog"></i> Human</th>
+                    <th style="padding: 6px 8px; text-align: center; color: #cbd5e1; font-weight: 600; font-size: 0.75em; white-space: nowrap;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -517,17 +517,17 @@ function renderExperimentsTable(experiments) {
         const ssim = exp.ssim || null;
         const quality = exp.quality || null;
         
-        let psnrDisplay = '<span style="color: #666;">—</span>';
+        let psnrDisplay = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (psnr !== null && psnr > 0) {
             const psnrColor = psnr >= 30 ? '#10b981' : (psnr >= 25 ? '#f59e0b' : '#ef4444');
-            const psnrLabel = psnr >= 35 ? 'Excellent' : (psnr >= 30 ? 'Good' : (psnr >= 25 ? 'Acceptable' : 'Poor'));
-            psnrDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                <span style="font-weight: 600; color: ${psnrColor}; font-size: 1.1em;">${psnr.toFixed(1)} dB</span>
-                <span style="font-size: 0.75em; color: ${psnrColor}88;">${psnrLabel}</span>
+            const psnrLabel = psnr >= 35 ? 'Exc' : (psnr >= 30 ? 'Good' : (psnr >= 25 ? 'OK' : 'Poor'));
+            psnrDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 1px;">
+                <span style="font-weight: 600; color: ${psnrColor}; font-size: 0.85em;">${psnr.toFixed(1)}</span>
+                <span style="font-size: 0.65em; color: ${psnrColor}88;">${psnrLabel}</span>
             </div>`;
         }
         
-        let qualityDisplay = '<span style="color: #666;">—</span>';
+        let qualityDisplay = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (quality && quality !== 'unknown') {
             const qualityColors = {
                 'excellent': '#10b981',
@@ -543,10 +543,10 @@ function renderExperimentsTable(experiments) {
             };
             const qColor = qualityColors[quality] || '#94a3b8';
             const qEmoji = qualityEmoji[quality] || '❓';
-            qualityDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                <span style="font-size: 1.3em;">${qEmoji}</span>
-                <span style="font-size: 0.75em; color: ${qColor}; font-weight: 600;">${quality.toUpperCase()}</span>
-                ${ssim !== null && ssim > 0 ? `<span style="font-size: 0.7em; color: #94a3b8;">SSIM: ${ssim.toFixed(3)}</span>` : ''}
+            qualityDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 1px;">
+                <span style="font-size: 1em;">${qEmoji}</span>
+                <span style="font-size: 0.65em; color: ${qColor}; font-weight: 600;">${quality.substring(0,3).toUpperCase()}</span>
+                ${ssim !== null && ssim > 0 ? `<span style="font-size: 0.6em; color: #94a3b8;">${ssim.toFixed(2)}</span>` : ''}
             </div>`;
         }
         
@@ -560,37 +560,37 @@ function renderExperimentsTable(experiments) {
         
         // Code badge
         const codeBadge = codeChanged ? 
-            `<span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.75em;" title="LLM generated code">✨ LLM</span>` :
-            `<span style="color: #666;">—</span>`;
+            `<span style="background: #667eea; color: white; padding: 2px 4px; border-radius: 3px; font-size: 0.65em;" title="LLM generated code">✨</span>` :
+            `<span style="color: #666; font-size: 0.75em;">—</span>`;
         
         // Version display  
         const versionDisplay = codeChanged ? 
-            `<span style="font-weight: 600; color: #60a5fa; font-size: 1.1em;">v${version}</span>` :
-            `<span style="color: #666;">—</span>`;
+            `<span style="font-weight: 600; color: #60a5fa; font-size: 0.8em;">v${version}</span>` :
+            `<span style="color: #666; font-size: 0.75em;">—</span>`;
         
         // GitHub badge
-        let githubBadge = '<span style="color: #666;">—</span>';
+        let githubBadge = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (githubCommitted && githubHash) {
-            const shortHash = githubHash.substring(0, 7);
-            githubBadge = `<a href="https://github.com/your-repo/commit/${githubHash}" target="_blank" style="color: #10b981; text-decoration: none; font-family: monospace;" title="${improvement}">
+            const shortHash = githubHash.substring(0, 5);
+            githubBadge = `<a href="https://github.com/your-repo/commit/${githubHash}" target="_blank" style="color: #10b981; text-decoration: none; font-family: monospace; font-size: 0.7em;" title="${improvement}">
                 <i class="fab fa-github"></i> ${shortHash}
             </a>`;
         } else if (exp.deployment_status === 'deployed') {
-            githubBadge = `<span style="color: #f59e0b;" title="Deployed locally">📦 Local</span>`;
+            githubBadge = `<span style="color: #f59e0b; font-size: 0.7em;" title="Deployed locally">📦</span>`;
         }
         
         // Human intervention badge
-        let humanBadge = '<span style="color: #666;">—</span>';
+        let humanBadge = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (exp.needs_human && exp.human_intervention_reasons && exp.human_intervention_reasons.length > 0) {
             const reasonsText = exp.human_intervention_reasons.map(r => 
                 `${r.phase}: ${r.reason}`
             ).join('\\n');
             humanBadge = `<button onclick="showHumanIntervention('${exp.id}', ${JSON.stringify(exp.human_intervention_reasons).replace(/"/g, '&quot;')})"
-                style="padding: 6px 10px; background: #dc262622; border: 1px solid #dc2626; border-radius: 6px; color: #dc2626; cursor: pointer; font-size: 0.85em; font-weight: 600; transition: all 0.2s; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;"
+                style="padding: 3px 6px; background: #dc262622; border: 1px solid #dc2626; border-radius: 3px; color: #dc2626; cursor: pointer; font-size: 0.65em; font-weight: 600; transition: all 0.2s; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;"
                 onmouseover="this.style.background='#dc262644'"
                 onmouseout="this.style.background='#dc262622'"
                 title="${reasonsText}">
-                <i class="fas fa-user-cog"></i> HUMAN NEEDED
+                <i class="fas fa-user-cog"></i> HELP
             </button>`;
         }
         
@@ -610,14 +610,14 @@ function renderExperimentsTable(experiments) {
                             elapsedSeconds > estimatedSeconds * 1.5 ? '#ef4444' : 
                             elapsedSeconds > estimatedSeconds ? '#f59e0b' : '#3b82f6';
         
-        let runtimeDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-            <span style="font-weight: 600; color: ${runtimeColor};">${formatTime(elapsedSeconds)}</span>
-            <span style="font-size: 0.75em; color: #94a3b8;">est: ${formatTime(estimatedSeconds)}</span>`;
+        let runtimeDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 1px;">
+            <span style="font-weight: 600; color: ${runtimeColor}; font-size: 0.8em;">${formatTime(elapsedSeconds)}</span>
+            <span style="font-size: 0.6em; color: #94a3b8;">${formatTime(estimatedSeconds)}</span>`;
         
         // Progress bar (only for running experiments)
         if (exp.status === 'running') {
             runtimeDisplay += `
-                <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                <div style="width: 30px; height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
                     <div style="width: ${progressPercent}%; height: 100%; background: ${runtimeColor}; transition: width 0.5s;"></div>
                 </div>`;
         }
@@ -638,8 +638,8 @@ function renderExperimentsTable(experiments) {
         const currentPhase = exp.current_phase || exp.phase_completed || 'unknown';
         const phase = phaseData[currentPhase] || phaseData['unknown'];
         
-        let phaseBadge = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-            <span style="padding: 6px 10px; background: ${phase.color}22; border: 1px solid ${phase.color}; border-radius: 6px; color: ${phase.color}; font-size: 0.85em; font-weight: 600; white-space: nowrap;">
+        let phaseBadge = `<div style="display: flex; flex-direction: column; align-items: center; gap: 1px;">
+            <span style="padding: 2px 4px; background: ${phase.color}22; border: 1px solid ${phase.color}; border-radius: 3px; color: ${phase.color}; font-size: 0.65em; font-weight: 600; white-space: nowrap;">
                 <i class="fas ${phase.icon}"></i> ${phase.label}
             </span>`;
         
@@ -647,9 +647,9 @@ function renderExperimentsTable(experiments) {
         const valRetries = exp.validation_retries || 0;
         const execRetries = exp.execution_retries || 0;
         if (valRetries > 0 || execRetries > 0) {
-            phaseBadge += `<span style="font-size: 0.75em; color: #94a3b8;">`;
-            if (valRetries > 0) phaseBadge += `Val: ${valRetries}x `;
-            if (execRetries > 0) phaseBadge += `Exec: ${execRetries}x`;
+            phaseBadge += `<span style="font-size: 0.6em; color: #94a3b8;">`;
+            if (valRetries > 0) phaseBadge += `V:${valRetries} `;
+            if (execRetries > 0) phaseBadge += `E:${execRetries}`;
             phaseBadge += `</span>`;
         }
         phaseBadge += `</div>`;
@@ -675,54 +675,58 @@ function renderExperimentsTable(experiments) {
         }
         
         // Achievement tier display
-        let achievementDisplay = '<span style="color: #666;">—</span>';
+        let achievementDisplay = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (achievementTier) {
-            let tierColor, tierBg, tierIcon;
+            let tierColor, tierBg, tierIcon, tierShort;
             if (achievementTier.includes('90%')) {
                 tierColor = '#fbbf24';
                 tierBg = '#fef3c7';
                 tierIcon = '🏆';
+                tierShort = '90%';
             } else if (achievementTier.includes('70%')) {
                 tierColor = '#10b981';
                 tierBg = '#d1fae5';
                 tierIcon = '🥇';
+                tierShort = '70%';
             } else if (achievementTier.includes('50%')) {
                 tierColor = '#60a5fa';
                 tierBg = '#dbeafe';
                 tierIcon = '🥈';
+                tierShort = '50%';
             } else {
                 tierColor = '#94a3b8';
                 tierBg = '#f1f5f9';
                 tierIcon = '🎯';
+                tierShort = 'WIP';
             }
-            achievementDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-                <span style="font-size: 1.5em;">${tierIcon}</span>
-                <span style="padding: 4px 8px; background: ${tierBg}; border: 1px solid ${tierColor}; border-radius: 6px; color: ${tierColor}; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
-                    ${achievementTier}
+            achievementDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 1px;">
+                <span style="font-size: 1em;">${tierIcon}</span>
+                <span style="padding: 2px 4px; background: ${tierBg}; border: 1px solid ${tierColor}; border-radius: 3px; color: ${tierColor}; font-size: 0.65em; font-weight: 600; white-space: nowrap;">
+                    ${tierShort}
                 </span>
-                <span style="font-size: 0.7em; color: #94a3b8;">${reductionPercent.toFixed(1)}% vs HEVC</span>
+                <span style="font-size: 0.6em; color: #94a3b8;">${reductionPercent.toFixed(0)}%</span>
             </div>`;
         }
 
         // Media download buttons
-        let mediaBadge = '<span style="color: #666;">—</span>';
+        let mediaBadge = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (videoUrl || decoderKey) {
-            mediaBadge = '<div style="display: flex; flex-direction: column; gap: 4px;">';
+            mediaBadge = '<div style="display: flex; flex-direction: column; gap: 2px;">';
             if (videoUrl) {
-                mediaBadge += `<a href="${videoUrl}" target="_blank" style="padding: 4px 8px; background: #ec489922; border: 1px solid #ec4899; border-radius: 4px; color: #ec4899; text-decoration: none; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
-                    <i class="fas fa-video"></i> Video
+                mediaBadge += `<a href="${videoUrl}" target="_blank" style="padding: 2px 4px; background: #ec489922; border: 1px solid #ec4899; border-radius: 3px; color: #ec4899; text-decoration: none; font-size: 0.65em; font-weight: 600; white-space: nowrap;">
+                    <i class="fas fa-video"></i>
                 </a>`;
             }
             if (decoderKey) {
-                mediaBadge += `<a href="https://ai-video-codec-videos-580473065386.s3.amazonaws.com/${decoderKey}" target="_blank" style="padding: 4px 8px; background: #0ea5e922; border: 1px solid #0ea5e9; border-radius: 4px; color: #0ea5e9; text-decoration: none; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
-                    <i class="fas fa-code"></i> Decoder
+                mediaBadge += `<a href="https://ai-video-codec-videos-580473065386.s3.amazonaws.com/${decoderKey}" target="_blank" style="padding: 2px 4px; background: #0ea5e922; border: 1px solid #0ea5e9; border-radius: 3px; color: #0ea5e9; text-decoration: none; font-size: 0.65em; font-weight: 600; white-space: nowrap;">
+                    <i class="fas fa-code"></i>
                 </a>`;
             }
             mediaBadge += '</div>';
         }
         
         // Failure analysis badge
-        let analysisBadge = '<span style="color: #666;">—</span>';
+        let analysisBadge = '<span style="color: #666; font-size: 0.75em;">—</span>';
         if (exp.failure_analysis) {
             const fa = exp.failure_analysis;
             const severityColors = {
@@ -744,11 +748,11 @@ function renderExperimentsTable(experiments) {
             const icon = categoryIcons[fa.category] || 'fa-bug';
             
             analysisBadge = `<button onclick="showFailureAnalysis('${exp.id}', ${JSON.stringify(fa).replace(/"/g, '&quot;')})" 
-                style="padding: 6px 10px; background: ${severityColor}22; border: 1px solid ${severityColor}; border-radius: 6px; color: ${severityColor}; cursor: pointer; font-size: 0.85em; font-weight: 600; transition: all 0.2s;"
+                style="padding: 3px 6px; background: ${severityColor}22; border: 1px solid ${severityColor}; border-radius: 3px; color: ${severityColor}; cursor: pointer; font-size: 0.65em; font-weight: 600; transition: all 0.2s;"
                 onmouseover="this.style.background='${severityColor}44'"
                 onmouseout="this.style.background='${severityColor}22'"
                 title="${fa.root_cause}">
-                <i class="fas ${icon}"></i> ${fa.severity.toUpperCase()}
+                <i class="fas ${icon}"></i> ${fa.severity.substring(0,3).toUpperCase()}
             </button>`;
         }
         
@@ -759,35 +763,35 @@ function renderExperimentsTable(experiments) {
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s; background: ${rowHighlight};" 
                 onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'" 
                 onmouseout="this.style.background='${rowHighlight}'">
-                <td style="padding: 15px; font-family: monospace; font-size: 0.9em; color: #93c5fd;">${exp.id}</td>
-                <td style="padding: 15px; color: #cbd5e1; font-size: 0.95em;">${time}</td>
-                <td style="padding: 15px; text-align: center;">
-                    <span style="padding: 6px 12px; background: ${statusColor}33; color: ${statusColor}; border-radius: 6px; font-weight: 600; font-size: 0.9em;">
+                <td style="padding: 6px 8px; font-family: monospace; font-size: 0.8em; color: #93c5fd;">${exp.id}</td>
+                <td style="padding: 6px 8px; color: #cbd5e1; font-size: 0.8em;">${time}</td>
+                <td style="padding: 6px 8px; text-align: center;">
+                    <span style="padding: 3px 6px; background: ${statusColor}33; color: ${statusColor}; border-radius: 4px; font-weight: 600; font-size: 0.75em;">
                         ${exp.status.toUpperCase()}
                     </span>
                 </td>
-                <td style="padding: 15px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
-                <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
-                <td style="padding: 15px; text-align: center;">${achievementDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${runtimeDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
-                <td style="padding: 15px; text-align: center;">${codeBadge}</td>
-                <td style="padding: 15px; text-align: center;">${versionDisplay}</td>
-                <td style="padding: 15px; text-align: center;">${githubBadge}</td>
-                <td style="padding: 15px; text-align: center;">${mediaBadge}</td>
-                <td style="padding: 15px; text-align: center;">${analysisBadge}</td>
-                <td style="padding: 15px; text-align: center;">${humanBadge}</td>
-                <td style="padding: 15px; text-align: center;">
+                <td style="padding: 6px 8px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
+                <td style="padding: 6px 8px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                <td style="padding: 6px 8px; text-align: center;">${achievementDisplay}</td>
+                <td style="padding: 6px 8px; text-align: center;">${psnrDisplay}</td>
+                <td style="padding: 6px 8px; text-align: center;">${qualityDisplay}</td>
+                <td style="padding: 6px 8px; text-align: center;">${runtimeDisplay}</td>
+                <td style="padding: 6px 8px; text-align: center;">${phaseBadge}</td>
+                <td style="padding: 6px 8px; text-align: center;">${codeBadge}</td>
+                <td style="padding: 6px 8px; text-align: center;">${versionDisplay}</td>
+                <td style="padding: 6px 8px; text-align: center;">${githubBadge}</td>
+                <td style="padding: 6px 8px; text-align: center;">${mediaBadge}</td>
+                <td style="padding: 6px 8px; text-align: center;">${analysisBadge}</td>
+                <td style="padding: 6px 8px; text-align: center;">${humanBadge}</td>
+                <td style="padding: 6px 8px; text-align: center;">
                     <button onclick="viewExperimentDetails('${exp.id}')" 
                             title="View experiment details"
-                            style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; margin: 0 3px; font-size: 1em;">
+                            style="padding: 4px 8px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 4px; color: white; cursor: pointer; margin: 0 2px; font-size: 0.85em;">
                         <i class="fas fa-eye"></i>
                     </button>
                     <button onclick="rerunExperiment('${exp.id}')" 
                             title="Rerun this experiment"
-                            style="padding: 8px 12px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 1px solid #34d399; border-radius: 6px; color: white; cursor: pointer; margin: 0 3px; font-size: 1em;">
+                            style="padding: 4px 8px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 1px solid #34d399; border-radius: 4px; color: white; cursor: pointer; margin: 0 2px; font-size: 0.85em;">
                         <i class="fas fa-redo"></i>
                     </button>
                 </td>
