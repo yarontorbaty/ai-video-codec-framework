@@ -291,10 +291,14 @@ class ProceduralExperimentRunner:
                     'root_cause': llm_analysis.get('root_cause', ''),
                     'insights': json.dumps(llm_analysis.get('insights', [])),
                     'next_experiment': json.dumps(llm_analysis.get('next_experiment', {})),
-                    'confidence_score': llm_analysis.get('confidence_score', 0.0)
+                    'confidence_score': llm_analysis.get('confidence_score', 0.0),
+                    'generated_code': json.dumps(llm_analysis.get('generated_code', {})),  # Save the LLM-generated code
+                    'expected_bitrate_mbps': llm_analysis.get('expected_bitrate_mbps', 0.0),
+                    'expected_psnr_db': llm_analysis.get('expected_psnr_db', 0.0),
+                    'risks': json.dumps(llm_analysis.get('risks', []))
                 }
                 reasoning_table.put_item(Item=convert_floats(reasoning_data))
-                logger.info(f"  📝 Reasoning data stored")
+                logger.info(f"  📝 Reasoning data stored (including generated code)")
             except Exception as e:
                 logger.debug(f"  Could not write to reasoning table: {e}")
         except Exception as e:
