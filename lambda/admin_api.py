@@ -518,9 +518,9 @@ The admin's message follows..."""
             }
         }]
         
-        # Tool calling loop (unlimited rounds for admin chat - let LLM decide when done)
+        # Tool calling loop (let LLM investigate but force summary after reasonable attempts)
         result = None
-        max_rounds = 20  # Safety limit to prevent infinite loops
+        max_rounds = 10  # After 10 tool rounds, force a summary response
         for round_num in range(max_rounds):
             data = json.dumps({
                 "model": "claude-sonnet-4-5",
@@ -539,7 +539,27 @@ The admin's message follows..."""
             
             # If LLM wants to use tools
             if stop_reason == 'tool_use':
-                logger.info(f"🛠️  Admin chat: LLM using tools (round {round_num + 1})")
+                logger.info(f"🛠️  Admin chat: LLM using tools (round {round_num + 1}/{max_rounds})")
+                
+                # Check if we're approaching max rounds - force summary instead
+                if round_num >= max_rounds - 2:  # On round 9 or later (out of 10)
+                    logger.warning(f"⚠️  Approaching max tool rounds ({round_num + 1}/{max_rounds}) - forcing final summary")
+                    messages.append({"role": "assistant", "content": result['content']})
+                    messages.append({"role": "user", "content": [{"type": "text", "text": "You've investigated thoroughly with many tools. Please provide a final summary response now based on what you found. Do not use any more tools."}]})
+                    
+                    # One final call without tools
+                    data = json.dumps({
+                        "model": "claude-sonnet-4-5",
+                        "max_tokens": 4096,
+                        "temperature": 0.7,
+                        "system": system_prompt,
+                        "messages": messages
+                    }).encode('utf-8')
+                    
+                    req = urllib.request.Request(url, data=data, headers=headers)
+                    with urllib.request.urlopen(req, timeout=120) as response:
+                        result = json.loads(response.read().decode('utf-8'))
+                    break  # Exit loop with final result
                 
                 # Add assistant message
                 messages.append({"role": "assistant", "content": result['content']})
@@ -616,26 +636,6 @@ The admin's message follows..."""
             
             # No more tools - extract final response
             break
-        
-        # Check if we hit max rounds without a final response
-        if round_num >= max_rounds - 1 and result and result.get('stop_reason') == 'tool_use':
-            logger.warning(f"⚠️  Hit max tool rounds ({max_rounds}) without final response - requesting final answer")
-            # Force one more call asking for a summary
-            messages.append({"role": "assistant", "content": result['content']})
-            messages.append({"role": "user", "content": [{"type": "text", "text": "Please provide a final summary response based on the tool results above. Do not use any more tools."}]})
-            
-            # One final call without tools
-            data = json.dumps({
-                "model": "claude-sonnet-4-5",
-                "max_tokens": 4096,
-                "temperature": 0.7,
-                "system": system_prompt,
-                "messages": messages
-            }).encode('utf-8')
-            
-            req = urllib.request.Request(url, data=data, headers=headers)
-            with urllib.request.urlopen(req, timeout=120) as response:
-                result = json.loads(response.read().decode('utf-8'))
         
         # Extract response text (after loop)
         response_text = None
