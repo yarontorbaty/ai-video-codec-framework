@@ -937,6 +937,9 @@ def get_experiments_list():
                 'status': exp.get('status', 'unknown'),
                 'duration': 0,
                 'best_bitrate': None,
+                'psnr_db': None,
+                'ssim': None,
+                'quality': None,
                 'experiments_run': 0,
                 # Phase tracking
                 'current_phase': exp.get('current_phase', 'unknown'),
@@ -997,12 +1000,16 @@ def get_experiments_list():
                                 'severity': failure_analysis.get('severity', 'unknown')
                             }
                     
-                    # Find best bitrate
+                    # Find best bitrate and quality metrics
                     metrics = e.get('real_metrics', {})
                     bitrate = metrics.get('bitrate_mbps')
                     if bitrate:
                         if exp_data['best_bitrate'] is None or bitrate < exp_data['best_bitrate']:
                             exp_data['best_bitrate'] = float(bitrate)
+                            # Also extract quality metrics from the best performing experiment
+                            exp_data['psnr_db'] = float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None
+                            exp_data['ssim'] = float(metrics.get('ssim')) if metrics.get('ssim') else None
+                            exp_data['quality'] = metrics.get('quality')
             except Exception as e:
                 logger.error(f"Error parsing experiment {exp_data['id']}: {e}")
             

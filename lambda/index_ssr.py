@@ -12,8 +12,8 @@ def decimal_to_float(obj):
         return float(obj)
     raise TypeError
 
-def _generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out):
-    """Generate metrics HTML to avoid backslash in f-string issues"""
+def _generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out, psnr=None, ssim=None, quality=None):
+    """Generate metrics HTML including PSNR/SSIM quality metrics"""
     if is_timed_out:
         return ''
     
@@ -25,10 +25,37 @@ def _generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_
     bitrate_value = expected_bitrate if is_running and not bitrate else bitrate
     bitrate_label = 'Expected' if is_running and not bitrate else ''
     
-    html = f'<div class="metrics-grid"><div class="metric-card"><div class="metric-value">{bitrate_value:.2f}</div><div class="metric-label">{bitrate_label} Mbps</div></div>'
+    html = '<div class="metrics-grid">'
     
+    # Bitrate card
+    html += f'<div class="metric-card"><div class="metric-value">{bitrate_value:.2f}</div><div class="metric-label">{bitrate_label} Mbps</div></div>'
+    
+    # Reduction card
     if not (is_running and not bitrate):
         html += f'<div class="metric-card"><div class="metric-value" style="color: {color}">{sign}{reduction:.1f}%</div><div class="metric-label">vs HEVC Baseline</div></div>'
+    
+    # PSNR card (NEW!)
+    if psnr is not None and psnr > 0:
+        psnr_color = '#28a745' if psnr >= 30 else ('#ffc107' if psnr >= 25 else '#dc3545')
+        psnr_label = 'Excellent' if psnr >= 35 else ('Good' if psnr >= 30 else ('Acceptable' if psnr >= 25 else 'Poor'))
+        html += f'<div class="metric-card"><div class="metric-value" style="color: {psnr_color}">{psnr:.1f} dB</div><div class="metric-label">PSNR ({psnr_label})</div></div>'
+    
+    # SSIM card (NEW!)
+    if ssim is not None and ssim > 0:
+        ssim_color = '#28a745' if ssim >= 0.9 else ('#ffc107' if ssim >= 0.8 else '#dc3545')
+        html += f'<div class="metric-card"><div class="metric-value" style="color: {ssim_color}">{ssim:.3f}</div><div class="metric-label">SSIM</div></div>'
+    
+    # Quality badge (NEW!)
+    if quality and quality != 'unknown':
+        quality_colors = {
+            'excellent': '#28a745',
+            'good': '#20c997',
+            'acceptable': '#ffc107',
+            'poor': '#dc3545'
+        }
+        quality_color = quality_colors.get(quality, '#6c757d')
+        quality_emoji = '🏆' if quality == 'excellent' else ('✅' if quality == 'good' else ('⚠️' if quality == 'acceptable' else '❌'))
+        html += f'<div class="metric-card"><div class="metric-value" style="color: {quality_color}">{quality_emoji}</div><div class="metric-label">Quality: {quality.capitalize()}</div></div>'
     
     html += '</div>'
     return html
@@ -781,6 +808,11 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             bitrate = metrics.get('bitrate_mbps', 0)
             reduction = comparison.get('reduction_percent', 0)
             
+            # Extract quality metrics (NEW!)
+            psnr = metrics.get('psnr_db', None)
+            ssim = metrics.get('ssim', None)
+            quality = metrics.get('quality', None)
+            
             status = exp.get('status', 'unknown')
             if status == 'completed':
                 status_class = 'status-success'
@@ -840,7 +872,7 @@ def generate_blog_html(experiments, reasoning_items, total_count):
                     <h3><i class="fas fa-chart-bar"></i> {'Expected Results' if is_running else 'Results'}</h3>
                     {f'<p style="color: #f59e0b; font-weight: 600;"><i class="fas fa-spinner fa-spin"></i> Experiment in progress... Results will appear here when execution completes.</p>' if is_running else ''}
                     {f'<p style="color: #9e9e9e; font-style: italic;">No results available - experiment was abandoned before completion.</p>' if is_timed_out else ''}
-                    {_generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out)}
+                    {_generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out, psnr, ssim, quality)}
                 </div>
                 
                 {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}

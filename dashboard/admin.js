@@ -487,6 +487,8 @@ function renderExperimentsTable(experiments) {
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Tests Run</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Best Bitrate</th>
+                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
+                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-clock"></i> Runtime</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
@@ -507,6 +509,44 @@ function renderExperimentsTable(experiments) {
         
         const time = new Date(exp.timestamp * 1000).toLocaleString();
         const bitrate = exp.best_bitrate ? `${exp.best_bitrate.toFixed(2)} Mbps` : 'N/A';
+        
+        // Quality metrics (PSNR, SSIM, quality)
+        const psnr = exp.psnr_db || null;
+        const ssim = exp.ssim || null;
+        const quality = exp.quality || null;
+        
+        let psnrDisplay = '<span style="color: #666;">—</span>';
+        if (psnr !== null && psnr > 0) {
+            const psnrColor = psnr >= 30 ? '#10b981' : (psnr >= 25 ? '#f59e0b' : '#ef4444');
+            const psnrLabel = psnr >= 35 ? 'Excellent' : (psnr >= 30 ? 'Good' : (psnr >= 25 ? 'Acceptable' : 'Poor'));
+            psnrDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                <span style="font-weight: 600; color: ${psnrColor}; font-size: 1.1em;">${psnr.toFixed(1)} dB</span>
+                <span style="font-size: 0.75em; color: ${psnrColor}88;">${psnrLabel}</span>
+            </div>`;
+        }
+        
+        let qualityDisplay = '<span style="color: #666;">—</span>';
+        if (quality && quality !== 'unknown') {
+            const qualityColors = {
+                'excellent': '#10b981',
+                'good': '#20c997',
+                'acceptable': '#f59e0b',
+                'poor': '#ef4444'
+            };
+            const qualityEmoji = {
+                'excellent': '🏆',
+                'good': '✅',
+                'acceptable': '⚠️',
+                'poor': '❌'
+            };
+            const qColor = qualityColors[quality] || '#94a3b8';
+            const qEmoji = qualityEmoji[quality] || '❓';
+            qualityDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                <span style="font-size: 1.3em;">${qEmoji}</span>
+                <span style="font-size: 0.75em; color: ${qColor}; font-weight: 600;">${quality.toUpperCase()}</span>
+                ${ssim !== null && ssim > 0 ? `<span style="font-size: 0.7em; color: #94a3b8;">SSIM: ${ssim.toFixed(3)}</span>` : ''}
+            </div>`;
+        }
         
         // Code evolution fields
         const codeChanged = exp.code_changed || false;
@@ -658,6 +698,8 @@ function renderExperimentsTable(experiments) {
                 </td>
                 <td style="padding: 15px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
                 <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
+                <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${runtimeDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
                 <td style="padding: 15px; text-align: center;">${codeBadge}</td>
