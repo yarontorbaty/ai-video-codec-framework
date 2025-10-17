@@ -30,6 +30,53 @@
             color: #666;
         }
 
+        .summary-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 40px;
+            margin-bottom: 50px;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .summary-section h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .summary-section p {
+            font-size: 1.1em;
+            line-height: 1.8;
+            margin-bottom: 15px;
+            opacity: 0.95;
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .summary-stat {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .summary-stat .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .summary-stat .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
         .blog-post {
             background: white;
             border-radius: 12px;
@@ -82,6 +129,40 @@
             color: #856404;
         }
 
+        .achievement-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+
+        .achievement-90 {
+            background: #fef3c7;
+            color: #92400e;
+            border: 2px solid #fbbf24;
+        }
+
+        .achievement-70 {
+            background: #d1fae5;
+            color: #065f46;
+            border: 2px solid #10b981;
+        }
+
+        .achievement-50 {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 2px solid #60a5fa;
+        }
+
+        .achievement-wip {
+            background: #f1f5f9;
+            color: #475569;
+            border: 2px solid #94a3b8;
+        }
+
         .blog-section {
             margin: 30px 0;
         }
@@ -101,88 +182,68 @@
         }
 
         .blog-section ul {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        .blog-section li {
-            padding: 10px 0 10px 30px;
-            position: relative;
-            line-height: 1.6;
+            padding-left: 25px;
+            line-height: 1.8;
             color: #555;
         }
 
-        .blog-section li:before {
-            content: "→";
-            position: absolute;
-            left: 0;
-            color: #667eea;
-            font-weight: bold;
+        .blog-section li {
+            margin-bottom: 10px;
         }
 
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 20px;
             margin: 20px 0;
         }
 
         .metric-card {
             background: #f8f9fa;
-            padding: 20px;
             border-radius: 8px;
+            padding: 20px;
             text-align: center;
+            border: 2px solid #e9ecef;
         }
 
         .metric-value {
             font-size: 2em;
             font-weight: bold;
             color: #667eea;
+            margin-bottom: 5px;
         }
 
         .metric-label {
             font-size: 0.9em;
             color: #666;
-            margin-top: 5px;
-        }
-
-        .code-block {
-            background: #f5f5f5;
-            border-left: 4px solid #667eea;
-            padding: 15px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            overflow-x: auto;
-            margin: 15px 0;
         }
 
         .confidence-bar {
-            height: 10px;
-            background: #eee;
-            border-radius: 10px;
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
             overflow: hidden;
-            margin-top: 10px;
+            margin: 10px 0;
         }
 
         .confidence-fill {
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            transition: width 0.3s ease;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s;
         }
 
         .loading {
             text-align: center;
-            padding: 60px;
-            color: #666;
+            padding: 60px 20px;
         }
 
         .loading-spinner {
+            width: 60px;
+            height: 60px;
             border: 4px solid #f3f3f3;
             border-top: 4px solid #667eea;
             border-radius: 50%;
-            width: 50px;
-            height: 50px;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
@@ -194,7 +255,7 @@
 
         .back-link {
             display: inline-block;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             color: #667eea;
             text-decoration: none;
             font-weight: 600;
@@ -202,6 +263,37 @@
 
         .back-link:hover {
             text-decoration: underline;
+        }
+
+        .code-snippet {
+            background: #f8f9fa;
+            border-left: 3px solid #667eea;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #495057;
+            overflow-x: auto;
+        }
+
+        .recommendation-box {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 20px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+
+        .recommendation-box h4 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .recommendation-box p {
+            color: #856404;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -212,6 +304,10 @@
         <div class="blog-header">
             <h1>🤖 Autonomous AI Research Blog</h1>
             <p>Follow the journey of an AI that learns to compress video better than HEVC</p>
+        </div>
+
+        <div id="summary-section">
+            <!-- Summary will be inserted here -->
         </div>
 
         <div id="blog-posts">
@@ -227,31 +323,30 @@
 
         async function loadBlogPosts() {
             try {
-                // Fetch experiments and reasoning data
-                const [experimentsRes, reasoningRes] = await Promise.all([
-                    fetch(`${API_BASE_URL}/dashboard?type=experiments`),
-                    fetch(`${API_BASE_URL}/dashboard?type=reasoning`)
-                ]);
-
+                // Fetch experiments data
+                const experimentsRes = await fetch(`${API_BASE_URL}/dashboard?type=experiments`);
                 const experimentsData = await experimentsRes.json();
-                const reasoningData = await reasoningRes.json();
-
                 const experiments = experimentsData.experiments || [];
-                const reasoning = reasoningData.reasoning || [];
 
-                // Match experiments with their reasoning
-                const blogPosts = experiments.map(exp => {
-                    const relatedReasoning = reasoning.find(r => 
-                        r.experiment_id === exp.id || 
-                        Math.abs(new Date(r.timestamp) - new Date(exp.created_at)) < 3600000
-                    );
+                // Create blog posts structure with full experiment data
+                const blogPosts = await Promise.all(experiments.map(async exp => {
+                    // Fetch full experiment details from DynamoDB
+                    try {
+                        const detailsRes = await fetch(`${API_BASE_URL}/dashboard?type=experiment&id=${exp.id}`);
+                        const details = await detailsRes.json();
+                        return {
+                            experiment: exp,
+                            details: details
+                        };
+                    } catch (e) {
+                        return {
+                            experiment: exp,
+                            details: null
+                        };
+                    }
+                }));
 
-                    return {
-                        experiment: exp,
-                        reasoning: relatedReasoning
-                    };
-                });
-
+                renderSummary(blogPosts);
                 renderBlogPosts(blogPosts);
             } catch (error) {
                 console.error('Error loading blog posts:', error);
@@ -265,6 +360,70 @@
             }
         }
 
+        function renderSummary(posts) {
+            const summaryContainer = document.getElementById('summary-section');
+            
+            if (posts.length === 0) {
+                summaryContainer.innerHTML = '';
+                return;
+            }
+
+            // Calculate overall statistics
+            const completedExperiments = posts.filter(p => p.experiment.status === 'completed');
+            const bestBitrate = Math.min(...completedExperiments.map(p => p.experiment.bitrate || 999));
+            const avgBitrate = completedExperiments.length > 0 ? 
+                completedExperiments.reduce((sum, p) => sum + (p.experiment.bitrate || 0), 0) / completedExperiments.length : 0;
+            
+            // Find experiments that achieved tiers
+            const tier90 = completedExperiments.filter(p => p.experiment.bitrate <= 1.0).length;
+            const tier70 = completedExperiments.filter(p => p.experiment.bitrate <= 3.0 && p.experiment.bitrate > 1.0).length;
+            const tier50 = completedExperiments.filter(p => p.experiment.bitrate <= 5.0 && p.experiment.bitrate > 3.0).length;
+
+            // Determine current status
+            let statusText = '';
+            let currentTier = '';
+            if (bestBitrate <= 1.0) {
+                statusText = `🏆 Breakthrough! We've achieved 90% reduction from HEVC baseline (10 Mbps → ${bestBitrate.toFixed(2)} Mbps). This represents state-of-the-art compression performance.`;
+                currentTier = '90%';
+            } else if (bestBitrate <= 3.0) {
+                statusText = `🥇 Excellent progress! We've achieved 70% reduction from HEVC baseline (10 Mbps → ${bestBitrate.toFixed(2)} Mbps). The AI is making strong gains through iterative learning.`;
+                currentTier = '70%';
+            } else if (bestBitrate <= 5.0) {
+                statusText = `🥈 Good progress! We've achieved 50% reduction from HEVC baseline (10 Mbps → ${bestBitrate.toFixed(2)} Mbps). The system is successfully improving with each iteration.`;
+                currentTier = '50%';
+            } else {
+                statusText = `🎯 Early stages. Current best: ${bestBitrate.toFixed(2)} Mbps. The AI is exploring different compression approaches to find what works best.`;
+                currentTier = 'In Progress';
+            }
+
+            summaryContainer.innerHTML = `
+                <div class="summary-section">
+                    <h2>📊 Research Progress Summary</h2>
+                    <p>${statusText}</p>
+                    <p>The autonomous AI has run <strong>${posts.length} experiments</strong>, iteratively learning from each result to design better compression algorithms. Each experiment builds on insights from the previous iteration.</p>
+                    
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="value">${posts.length}</div>
+                            <div class="label">Total Experiments</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="value">${bestBitrate.toFixed(2)}</div>
+                            <div class="label">Best Bitrate (Mbps)</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="value">${currentTier}</div>
+                            <div class="label">Current Tier</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="value">${((10 - bestBitrate) / 10 * 100).toFixed(0)}%</div>
+                            <div class="label">Best Reduction</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         function renderBlogPosts(posts) {
             const container = document.getElementById('blog-posts');
 
@@ -275,126 +434,209 @@
                         <p>The autonomous AI system is initializing. The first experiment analysis will appear here within 6 hours.</p>
                         <p>Each blog post will include:</p>
                         <ul>
-                            <li>What the experiment tried</li>
-                            <li>Root cause analysis of failures</li>
-                            <li>LLM reasoning and insights</li>
-                            <li>Hypothesis for next experiment</li>
-                            <li>Expected improvements</li>
+                            <li><strong>Methods:</strong> Detailed description of what this experiment is trying</li>
+                            <li><strong>Results:</strong> Performance metrics and achievement tier</li>
+                            <li><strong>Analysis:</strong> What worked, what didn't, and why</li>
+                            <li><strong>Recommendations:</strong> What the AI suggests trying next</li>
                         </ul>
                     </div>
                 `;
                 return;
             }
 
+            // Sort by timestamp, newest first
+            posts.sort((a, b) => (b.experiment.timestamp || 0) - (a.experiment.timestamp || 0));
+
             container.innerHTML = posts.map((post, index) => 
-                renderBlogPost(post, index + 1, posts.length)
+                renderBlogPost(post, posts.length - index, posts[index + 1])
             ).join('');
         }
 
-        function renderBlogPost(post, iteration, total) {
+        function renderBlogPost(post, experimentNumber, previousPost) {
             const exp = post.experiment;
-            const reasoning = post.reasoning;
+            const details = post.details;
 
             const statusClass = exp.status === 'completed' ? 'status-success' : 
                                exp.status === 'failed' ? 'status-failed' : 'status-running';
 
-            const bitrateChange = exp.compression < 0 ? 
-                `<span style="color: #dc3545;">+${Math.abs(exp.compression).toFixed(1)}% (worse)</span>` :
-                `<span style="color: #28a745;">-${exp.compression.toFixed(1)}% (better)</span>`;
+            // Calculate achievement tier
+            let achievementClass = 'achievement-wip';
+            let achievementIcon = '🎯';
+            let achievementText = 'In Progress';
+            const reduction = ((10 - exp.bitrate) / 10 * 100);
+            
+            if (exp.bitrate <= 1.0) {
+                achievementClass = 'achievement-90';
+                achievementIcon = '🏆';
+                achievementText = '90% Reduction';
+            } else if (exp.bitrate <= 3.0) {
+                achievementClass = 'achievement-70';
+                achievementIcon = '🥇';
+                achievementText = '70% Reduction';
+            } else if (exp.bitrate <= 5.0) {
+                achievementClass = 'achievement-50';
+                achievementIcon = '🥈';
+                achievementText = '50% Reduction';
+            }
+
+            // Generate short title from approach or generate generic one
+            const shortTitle = generateShortTitle(details, experimentNumber);
+
+            // Get experiment description (methods)
+            const methods = getExperimentMethods(details);
+
+            // Get previous experiment context for comparison
+            const previousContext = previousPost ? getPreviousContext(previousPost) : null;
+
+            // Get recommendations for next iteration
+            const recommendations = getRecommendations(details);
 
             return `
-                <div class="blog-post">
-                    <h2>Iteration ${total - iteration + 1}: ${reasoning?.hypothesis || 'Baseline Measurement'}</h2>
+                <div class="blog-post" id="${exp.id}">
+                    <h2>Experiment #${experimentNumber}: ${shortTitle}</h2>
                     
                     <div class="blog-meta">
-                        <span>📅 ${new Date(exp.created_at).toLocaleDateString()}</span>
-                        <span>🔬 Experiment ${exp.id}</span>
+                        <span>📅 ${new Date(exp.created_at || exp.timestamp * 1000).toLocaleDateString()}</span>
+                        <span>🔬 ${exp.id}</span>
                         <span class="status-badge ${statusClass}">${exp.status}</span>
+                        <span class="achievement-badge ${achievementClass}">${achievementIcon} ${achievementText}</span>
                     </div>
 
-                    ${reasoning ? `
+                    ${previousContext ? `
                         <div class="blog-section">
-                            <h3>🎯 What We Tried</h3>
-                            <p>${reasoning.hypothesis || 'Initial baseline measurement to establish performance metrics.'}</p>
+                            <h3>🔄 Building on Previous Results</h3>
+                            <p>${previousContext}</p>
                         </div>
+                    ` : ''}
 
+                    <div class="blog-section">
+                        <h3>🔬 Methods</h3>
+                        ${methods}
+                    </div>
+
+                    <div class="blog-section">
+                        <h3>📊 Results</h3>
+                        <div class="metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-value">${exp.bitrate.toFixed(2)}</div>
+                                <div class="metric-label">Bitrate (Mbps)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value">${reduction.toFixed(1)}%</div>
+                                <div class="metric-label">Reduction vs HEVC</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value">${achievementIcon}</div>
+                                <div class="metric-label">${achievementText}</div>
+                            </div>
+                        </div>
+                        ${exp.status === 'completed' ? `
+                            <p>This experiment ${exp.bitrate < (previousPost?.experiment.bitrate || 10) ? '<strong style="color: #28a745;">improved</strong>' : '<strong style="color: #dc3545;">did not improve</strong>'} upon the previous iteration.</p>
+                        ` : '<p>Experiment is still running...</p>'}
+                    </div>
+
+                    ${recommendations ? `
                         <div class="blog-section">
-                            <h3>📊 Results</h3>
-                            <div class="metrics-grid">
-                                <div class="metric-card">
-                                    <div class="metric-value">${exp.bitrate.toFixed(2)}</div>
-                                    <div class="metric-label">Mbps</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value">${bitrateChange}</div>
-                                    <div class="metric-label">vs HEVC Baseline</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value">${(reasoning.confidence_score * 100).toFixed(0)}%</div>
-                                    <div class="metric-label">Confidence</div>
-                                </div>
-                            </div>
+                            <h3>💡 Recommendations for Next Iteration</h3>
+                            ${recommendations}
                         </div>
-
-                        <div class="blog-section">
-                            <h3>🔍 Root Cause Analysis</h3>
-                            <p>${reasoning.root_cause || 'Analyzing results...'}</p>
-                        </div>
-
-                        ${reasoning.insights && reasoning.insights.length > 0 ? `
-                            <div class="blog-section">
-                                <h3>💡 Key Insights</h3>
-                                <ul>
-                                    ${reasoning.insights.map(insight => `<li>${insight}</li>`).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
-
-                        ${reasoning.next_experiment ? `
-                            <div class="blog-section">
-                                <h3>🚀 Next Steps</h3>
-                                <p><strong>Approach:</strong> ${reasoning.next_experiment.approach}</p>
-                                ${reasoning.next_experiment.changes ? `
-                                    <ul>
-                                        ${reasoning.next_experiment.changes.map(change => `<li>${change}</li>`).join('')}
-                                    </ul>
-                                ` : ''}
-                                <p><strong>Expected Bitrate:</strong> ${reasoning.expected_bitrate_mbps} Mbps</p>
-                                <div class="confidence-bar">
-                                    <div class="confidence-fill" style="width: ${reasoning.confidence_score * 100}%"></div>
-                                </div>
-                                <p style="font-size: 0.9em; color: #666; margin-top: 5px;">
-                                    Confidence: ${(reasoning.confidence_score * 100).toFixed(0)}%
-                                </p>
-                            </div>
-                        ` : ''}
-
-                        ${reasoning.risks && reasoning.risks.length > 0 ? `
-                            <div class="blog-section">
-                                <h3>⚠️ Known Risks</h3>
-                                <ul>
-                                    ${reasoning.risks.map(risk => `<li>${risk}</li>`).join('')}
-                                </ul>
-                            </div>
-                        ` : ''}
-                    ` : `
-                        <div class="blog-section">
-                            <h3>📊 Baseline Results</h3>
-                            <div class="metrics-grid">
-                                <div class="metric-card">
-                                    <div class="metric-value">${exp.bitrate.toFixed(2)}</div>
-                                    <div class="metric-label">Mbps Achieved</div>
-                                </div>
-                                <div class="metric-card">
-                                    <div class="metric-value">${bitrateChange}</div>
-                                    <div class="metric-label">vs 10 Mbps HEVC</div>
-                                </div>
-                            </div>
-                            <p>This was a baseline measurement. LLM analysis will follow in the next iteration.</p>
-                        </div>
-                    `}
+                    ` : ''}
                 </div>
             `;
+        }
+
+        function generateShortTitle(details, experimentNumber) {
+            // Try to extract a meaningful short title from the details
+            if (details && details.approach) {
+                const approach = details.approach;
+                if (approach.includes('JPEG')) return 'JPEG-based Compression';
+                if (approach.includes('Downsample')) return 'Spatial Downsampling';
+                if (approach.includes('Quantization')) return 'Advanced Quantization';
+                if (approach.includes('DCT')) return 'DCT Transform';
+                if (approach.includes('Neural') || approach.includes('PyTorch')) return 'Neural Codec';
+                if (approach.includes('Wavelet')) return 'Wavelet Transform';
+                if (approach.includes('Hybrid')) return 'Hybrid Approach';
+            }
+            return `Compression Approach ${experimentNumber}`;
+        }
+
+        function getExperimentMethods(details) {
+            if (!details) {
+                return '<p>Detailed methodology information not available for this experiment.</p>';
+            }
+
+            // Try to get description from generated_code
+            let description = '';
+            if (details.generated_code && details.generated_code.description) {
+                description = details.generated_code.description;
+            } else if (details.approach) {
+                description = details.approach;
+            }
+
+            // Try to get expected improvement
+            let expectedImprovement = '';
+            if (details.generated_code && details.generated_code.expected_improvement) {
+                expectedImprovement = `<p><strong>Expected Improvement:</strong> ${details.generated_code.expected_improvement}</p>`;
+            }
+
+            return `
+                <p>${description || 'This experiment explores a new compression approach designed by the AI.'}</p>
+                ${expectedImprovement}
+                ${details.hypothesis ? `<p><strong>Hypothesis:</strong> ${details.hypothesis}</p>` : ''}
+            `;
+        }
+
+        function getPreviousContext(previousPost) {
+            if (!previousPost || !previousPost.experiment) return null;
+
+            const prevExp = previousPost.experiment;
+            const prevBitrate = prevExp.bitrate.toFixed(2);
+            
+            return `The previous experiment (Experiment #${previousPost.experimentNumber || 'N'}) achieved ${prevBitrate} Mbps. This iteration aims to improve upon that result by testing modifications based on analysis of what worked and what didn't.`;
+        }
+
+        function getRecommendations(details) {
+            if (!details) return null;
+
+            let recommendations = '';
+
+            // Get next experiment suggestions
+            if (details.next_experiment) {
+                const next = details.next_experiment;
+                recommendations += `<div class="recommendation-box">`;
+                recommendations += `<h4>Suggested Next Approach</h4>`;
+                if (next.approach) {
+                    recommendations += `<p><strong>Approach:</strong> ${next.approach}</p>`;
+                }
+                if (next.changes && Array.isArray(next.changes)) {
+                    recommendations += `<p><strong>Key Changes:</strong></p><ul>`;
+                    next.changes.forEach(change => {
+                        recommendations += `<li>${change}</li>`;
+                    });
+                    recommendations += `</ul>`;
+                }
+                recommendations += `</div>`;
+            }
+
+            // Get risks
+            if (details.risks && Array.isArray(details.risks) && details.risks.length > 0) {
+                recommendations += `<p><strong>Potential Risks:</strong></p><ul>`;
+                details.risks.forEach(risk => {
+                    recommendations += `<li>${risk}</li>`;
+                });
+                recommendations += `</ul>`;
+            }
+
+            // Get expected metrics
+            if (details.expected_bitrate_mbps) {
+                recommendations += `<p><strong>Expected Bitrate:</strong> ${details.expected_bitrate_mbps} Mbps</p>`;
+            }
+            if (details.confidence_score) {
+                recommendations += `<div class="confidence-bar"><div class="confidence-fill" style="width: ${details.confidence_score * 100}%"></div></div>`;
+                recommendations += `<p style="font-size: 0.9em; color: #666;">Confidence: ${(details.confidence_score * 100).toFixed(0)}%</p>`;
+            }
+
+            return recommendations || null;
         }
 
         // Load blog posts on page load
@@ -405,4 +647,3 @@
     </script>
 </body>
 </html>
-

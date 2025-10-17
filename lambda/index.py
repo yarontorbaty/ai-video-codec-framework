@@ -36,6 +36,17 @@ def handler(event, context):
         data_type = query_params.get('type')
         if data_type == 'experiments':
             return get_experiments()
+        elif data_type == 'experiment':
+            # Get single experiment details
+            exp_id = query_params.get('id')
+            if exp_id:
+                return get_experiment_details(exp_id)
+            else:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Missing experiment id parameter'})
+                }
         elif data_type == 'metrics':
             return get_metrics()
         elif data_type == 'costs':
@@ -1018,5 +1029,97 @@ def get_reasoning():
                 'total': 0,
                 'error': str(e)
             })
+        }
+
+def get_experiment_details(experiment_id):
+    """Fetch detailed experiment data including LLM analysis"""
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    experiments_table = dynamodb.Table('ai-video-codec-experiments')
+    reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
+    
+    try:
+        # Query experiments table
+        exp_response = experiments_table.query(
+            KeyConditionExpression='experiment_id = :id',
+            ExpressionAttributeValues={':id': experiment_id}
+        )
+        
+        if not exp_response.get('Items'):
+            return {
+                'statusCode': 404,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json'
+                },
+                'body': json.dumps({'error': 'Experiment not found'})
+            }
+        
+        exp_item = exp_response['Items'][0]
+        
+        # Parse experiments JSON
+        experiments_data = json.loads(exp_item.get('experiments', '[]'))
+        procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+        
+        # Try to get reasoning data
+        try:
+            reasoning_response = reasoning_table.query(
+                KeyConditionExpression='reasoning_id = :id',
+                ExpressionAttributeValues={':id': experiment_id}
+            )
+            reasoning_item = reasoning_response['Items'][0] if reasoning_response.get('Items') else {}
+        except:
+            reasoning_item = {}
+        
+        # Parse JSON fields
+        def safe_json_parse(value, default):
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except:
+                    return default
+            return value if value else default
+        
+        insights = safe_json_parse(reasoning_item.get('insights'), [])
+        next_experiment = safe_json_parse(reasoning_item.get('next_experiment'), {})
+        risks = safe_json_parse(reasoning_item.get('risks'), [])
+        generated_code = safe_json_parse(reasoning_item.get('generated_code'), {})
+        
+        # Build detailed response
+        details = {
+            'experiment_id': experiment_id,
+            'status': exp_item.get('status', 'unknown'),
+            'approach': procedural.get('approach', reasoning_item.get('hypothesis', 'Compression experiment')),
+            'hypothesis': reasoning_item.get('hypothesis', ''),
+            'root_cause': reasoning_item.get('root_cause', ''),
+            'insights': insights,
+            'next_experiment': next_experiment,
+            'risks': risks,
+            'expected_bitrate_mbps': float(reasoning_item.get('expected_bitrate_mbps', 0)) if reasoning_item.get('expected_bitrate_mbps') else 0,
+            'expected_psnr_db': float(reasoning_item.get('expected_psnr_db', 0)) if reasoning_item.get('expected_psnr_db') else 0,
+            'confidence_score': float(reasoning_item.get('confidence_score', 0)) if reasoning_item.get('confidence_score') else 0,
+            'generated_code': generated_code,
+            'real_metrics': procedural.get('real_metrics', {}),
+            'comparison': procedural.get('comparison', {})
+        }
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps(details, default=decimal_to_float)
+        }
+    except Exception as e:
+        print(f"Error fetching experiment details: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({'error': str(e)})
         }
 
