@@ -943,6 +943,10 @@ def get_experiments_list():
                 'phase_completed': exp.get('phase_completed', 'unknown'),
                 'validation_retries': exp.get('validation_retries', 0),
                 'execution_retries': exp.get('execution_retries', 0),
+                # Runtime tracking
+                'start_time': exp.get('start_time'),
+                'elapsed_seconds': exp.get('elapsed_seconds', 0),
+                'estimated_duration_seconds': exp.get('estimated_duration_seconds', 0),
                 # Code evolution fields
                 'code_changed': False,
                 'version': 0,

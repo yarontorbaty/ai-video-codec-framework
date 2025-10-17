@@ -487,6 +487,7 @@ function renderExperimentsTable(experiments) {
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Tests Run</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Best Bitrate</th>
+                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-clock"></i> Runtime</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code-branch"></i> Ver</th>
@@ -550,6 +551,35 @@ function renderExperimentsTable(experiments) {
                 <i class="fas fa-user-cog"></i> HUMAN NEEDED
             </button>`;
         }
+        
+        // Runtime display with progress bar
+        const elapsedSeconds = exp.elapsed_seconds || 0;
+        const estimatedSeconds = exp.estimated_duration_seconds || 106;
+        const progressPercent = Math.min(100, (elapsedSeconds / estimatedSeconds) * 100);
+        
+        const formatTime = (seconds) => {
+            if (seconds < 60) return `${seconds}s`;
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}m ${secs}s`;
+        };
+        
+        const runtimeColor = exp.status === 'completed' ? '#10b981' : 
+                            elapsedSeconds > estimatedSeconds * 1.5 ? '#ef4444' : 
+                            elapsedSeconds > estimatedSeconds ? '#f59e0b' : '#3b82f6';
+        
+        let runtimeDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <span style="font-weight: 600; color: ${runtimeColor};">${formatTime(elapsedSeconds)}</span>
+            <span style="font-size: 0.75em; color: #94a3b8;">est: ${formatTime(estimatedSeconds)}</span>`;
+        
+        // Progress bar (only for running experiments)
+        if (exp.status === 'running') {
+            runtimeDisplay += `
+                <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                    <div style="width: ${progressPercent}%; height: 100%; background: ${runtimeColor}; transition: width 0.5s;"></div>
+                </div>`;
+        }
+        runtimeDisplay += `</div>`;
         
         // Phase display with progress indicator
         const phaseData = {
@@ -628,6 +658,7 @@ function renderExperimentsTable(experiments) {
                 </td>
                 <td style="padding: 15px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
                 <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                <td style="padding: 15px; text-align: center;">${runtimeDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
                 <td style="padding: 15px; text-align: center;">${codeBadge}</td>
                 <td style="padding: 15px; text-align: center;">${versionDisplay}</td>

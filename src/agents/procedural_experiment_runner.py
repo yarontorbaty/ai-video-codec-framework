@@ -74,14 +74,22 @@ class ProceduralExperimentRunner:
             Experiment results dict
         """
         experiment_id = f"proc_exp_{int(time.time())}"
+        start_time = time.time()
         
         logger.info(f"=" * 60)
         logger.info(f"PROCEDURAL EXPERIMENT {iteration}")
         logger.info(f"ID: {experiment_id}")
         logger.info(f"=" * 60)
         
+        # Estimate: Design (10s) + Deploy (1s) + Validation (30s) + Execution (60s) + Analysis (5s) = ~106s
+        estimated_duration_seconds = 106
+        
         # Create initial experiment record in DynamoDB
-        self._update_experiment_status(experiment_id, 'design', 'running', {})
+        self._update_experiment_status(experiment_id, 'design', 'running', {
+            'start_time': start_time,
+            'estimated_duration_seconds': estimated_duration_seconds,
+            'elapsed_seconds': 0
+        })
         
         try:
             # Phase 1: Design
@@ -91,7 +99,12 @@ class ProceduralExperimentRunner:
                 return self._create_failure_result(experiment_id, "design_failed", design_result)
             
             # Update: Design complete
-            self._update_experiment_status(experiment_id, 'deploy', 'running', {})
+            elapsed = time.time() - start_time
+            self._update_experiment_status(experiment_id, 'deploy', 'running', {
+                'start_time': start_time,
+                'estimated_duration_seconds': estimated_duration_seconds,
+                'elapsed_seconds': int(elapsed)
+            })
             
             # Phase 2: Deploy
             self.current_phase = ExperimentPhase.DEPLOY
@@ -100,7 +113,12 @@ class ProceduralExperimentRunner:
                 return self._create_failure_result(experiment_id, "deploy_failed", deploy_result)
             
             # Update: Deploy complete
-            self._update_experiment_status(experiment_id, 'validation', 'running', {})
+            elapsed = time.time() - start_time
+            self._update_experiment_status(experiment_id, 'validation', 'running', {
+                'start_time': start_time,
+                'estimated_duration_seconds': estimated_duration_seconds,
+                'elapsed_seconds': int(elapsed)
+            })
             
             # Phase 3: Validation (with retry loop)
             self.current_phase = ExperimentPhase.VALIDATION
@@ -109,7 +127,11 @@ class ProceduralExperimentRunner:
                 return self._create_failure_result(experiment_id, "validation_failed", validation_result)
             
             # Update: Validation complete
+            elapsed = time.time() - start_time
             self._update_experiment_status(experiment_id, 'execution', 'running', {
+                'start_time': start_time,
+                'estimated_duration_seconds': estimated_duration_seconds,
+                'elapsed_seconds': int(elapsed),
                 'validation_retries': validation_result.get('retries', 0)
             })
             
@@ -120,7 +142,11 @@ class ProceduralExperimentRunner:
                 return self._create_failure_result(experiment_id, "execution_failed", execution_result)
             
             # Update: Execution complete
+            elapsed = time.time() - start_time
             self._update_experiment_status(experiment_id, 'analysis', 'running', {
+                'start_time': start_time,
+                'estimated_duration_seconds': estimated_duration_seconds,
+                'elapsed_seconds': int(elapsed),
                 'validation_retries': validation_result.get('retries', 0),
                 'execution_retries': execution_result.get('retries', 0)
             })
@@ -131,6 +157,8 @@ class ProceduralExperimentRunner:
             
             # Phase 6: Complete
             self.current_phase = ExperimentPhase.COMPLETE
+            final_elapsed = time.time() - start_time
+            logger.info(f"✅ Experiment completed in {final_elapsed:.1f}s (estimated: {estimated_duration_seconds}s)")
             return self._create_success_result(experiment_id, analysis_result)
             
         except Exception as e:
