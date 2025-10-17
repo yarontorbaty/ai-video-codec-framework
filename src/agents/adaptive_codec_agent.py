@@ -483,11 +483,11 @@ class AdaptiveCodecAgent:
                     break
                 
                 config = {'quality': 0.8, 'frame_index': i}
-                # execute_function expects: (code, function_name, args_tuple, kwargs_dict)
+                # execute_function expects keyword args for the tuple
                 success, result, error = sandbox.execute_function(
                     code,
                     'compress_video_frame',
-                    (frame, i, config)  # Pass as TUPLE
+                    args=(frame, i, config)  # Pass as keyword argument
                 )
                 
                 if success and result:
