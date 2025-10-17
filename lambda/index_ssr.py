@@ -200,13 +200,25 @@ def render_dashboard_page():
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     
     try:
-        # Fetch all data in parallel (conceptually - boto3 is synchronous)
+        # Fetch ALL experiments with pagination
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
-        experiments_response = experiments_table.scan(Limit=50)  # Show more experiments
+        
+        # Get ALL experiments using pagination
+        all_items = []
+        scan_kwargs = {}
+        
+        while True:
+            experiments_response = experiments_table.scan(**scan_kwargs)
+            all_items.extend(experiments_response.get('Items', []))
+            
+            # Check if there are more items to fetch
+            if 'LastEvaluatedKey' not in experiments_response:
+                break
+            scan_kwargs['ExclusiveStartKey'] = experiments_response['LastEvaluatedKey']
         
         # Process experiments with more details
         experiments = []
-        for item in experiments_response.get('Items', []):
+        for item in all_items:
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
@@ -251,11 +263,22 @@ def render_dashboard_page():
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
                 'compression': comparison.get('reduction_percent', 0),
+                'reduction_percent': comparison.get('reduction_percent', 0),
                 'bitrate': metrics.get('bitrate_mbps', 0),
+                'psnr_db': float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None,
+                'ssim': float(metrics.get('ssim')) if metrics.get('ssim') else None,
+                'quality': metrics.get('quality'),
+                'quality_verified': metrics.get('quality_verified', False),
+                'achievement_tier': comparison.get('achievement_tier'),
+                'target_achieved': comparison.get('target_achieved', False),
+                'current_phase': item.get('current_phase', 'unknown'),
+                'phase_completed': item.get('phase_completed', 'unknown'),
                 'timestamp': item.get('timestamp_iso', ''),
                 'time_of_day': time_of_day,
                 'methods': methods_str,
                 'evolution': evolution_info,
+                'video_url': procedural.get('video_url'),
+                'decoder_s3_key': procedural.get('decoder_s3_key'),
                 'full_data': experiments_data  # Keep full data for blog linking
             })
         
@@ -346,9 +369,9 @@ def render_dashboard_page():
                 'Other': round(monthly_cost * 0.02, 2)
             }
         
-        # Generate experiments table rows with blog links
+        # Generate experiments table rows with blog links (show latest 50)
         experiments_html = ""
-        for i, exp in enumerate(experiments[:10]):
+        for i, exp in enumerate(experiments[:50]):
             status_class = 'completed' if exp['status'] == 'completed' else 'running'
             
             # Positive reduction = good (smaller file), negative = bad (larger file)
@@ -359,6 +382,42 @@ def render_dashboard_page():
                 compression_display = f'<span style="color: red;">↑ {abs(compression):.1f}%</span>'
             else:
                 compression_display = f'{compression:.1f}%'
+            
+            # PSNR display
+            psnr = exp.get('psnr_db')
+            if psnr and psnr > 0:
+                psnr_color = '#10b981' if psnr >= 30 else ('#f59e0b' if psnr >= 25 else '#ef4444')
+                psnr_display = f'<span style="color: {psnr_color}; font-weight: 600;">{psnr:.1f} dB</span>'
+            else:
+                psnr_display = '<span style="color: #666;">—</span>'
+            
+            # Quality display
+            quality = exp.get('quality')
+            if quality and quality != 'unknown':
+                quality_colors = {'excellent': '#10b981', 'good': '#20c997', 'acceptable': '#f59e0b', 'poor': '#ef4444'}
+                quality_color = quality_colors.get(quality, '#666')
+                quality_display = f'<span style="color: {quality_color}; font-weight: 600;">{quality.title()}</span>'
+            else:
+                quality_display = '<span style="color: #666;">—</span>'
+            
+            # Achievement tier
+            tier = exp.get('achievement_tier', '🎯 In Progress')
+            tier_colors = {'🏆 90% Reduction': '#fbbf24', '🥇 70% Reduction': '#10b981', '🥈 50% Reduction': '#3b82f6'}
+            tier_color = tier_colors.get(tier, '#94a3b8')
+            tier_display = f'<span style="color: {tier_color}; font-size: 0.9em;">{tier}</span>'
+            
+            # Phase badge
+            phase = exp.get('current_phase', 'unknown')
+            phase_data = {
+                'design': ('fa-lightbulb', '#3b82f6'),
+                'deploy': ('fa-upload', '#8b5cf6'),
+                'validation': ('fa-check-circle', '#f59e0b'),
+                'execution': ('fa-play-circle', '#10b981'),
+                'quality_verification': ('fa-eye', '#ec4899'),
+                'analysis': ('fa-chart-line', '#06b6d4')
+            }
+            phase_icon, phase_color = phase_data.get(phase, ('fa-question', '#94a3b8'))
+            phase_display = f'<i class="fas {phase_icon}" style="color: {phase_color};"></i>'
             
             # Evolution badge
             evolution_badge = ''
@@ -372,14 +431,17 @@ def render_dashboard_page():
                     evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{reason}">⏭️</span>'
             
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1fr 0.6fr 0.5fr 0.9fr 0.7fr 0.6fr 0.7fr 0.7fr 0.7fr 0.5fr 0.7fr 0.4fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
                     <div class="col">{exp.get('time_of_day', 'N/A')}</div>
                     <div class="col">{exp['methods']}{evolution_badge}</div>
                     <div class="col">{compression_display}</div>
-                    <div class="col">95.0%</div>
+                    <div class="col">{tier_display}</div>
+                    <div class="col">{psnr_display}</div>
+                    <div class="col">{quality_display}</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
+                    <div class="col">{phase_display}</div>
                     <div class="col">{exp['timestamp'][:10]}</div>
                     <div class="col"><a href="/blog.html#exp-{i+1}" style="color: #667eea; text-decoration: none;"><i class="fas fa-arrow-right"></i></a></div>
                 </div>
@@ -480,14 +542,17 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;">
+                    <div class="table-header" style="grid-template-columns: 1fr 0.6fr 0.5fr 0.9fr 0.7fr 0.6fr 0.7fr 0.7fr 0.7fr 0.5fr 0.7fr 0.4fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
                         <div>Time</div>
-                        <div>Methods / Evolution</div>
-                        <div>Compression</div>
-                        <div>Quality</div>
+                        <div>Methods</div>
+                        <div>Reduction</div>
+                        <div><i class="fas fa-trophy"></i> Tier</div>
+                        <div><i class="fas fa-chart-line"></i> PSNR</div>
+                        <div><i class="fas fa-eye"></i> Quality</div>
                         <div>Bitrate</div>
+                        <div><i class="fas fa-tasks"></i> Phase</div>
                         <div>Date</div>
                         <div>Details</div>
                     </div>
@@ -571,11 +636,25 @@ def render_blog_page():
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
         reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
         
-        experiments_res = experiments_table.scan(Limit=50)
-        reasoning_res = reasoning_table.scan(Limit=50)
+        # Fetch ALL experiments with pagination
+        experiments = []
+        scan_kwargs = {}
+        while True:
+            experiments_res = experiments_table.scan(**scan_kwargs)
+            experiments.extend(experiments_res.get('Items', []))
+            if 'LastEvaluatedKey' not in experiments_res:
+                break
+            scan_kwargs['ExclusiveStartKey'] = experiments_res['LastEvaluatedKey']
         
-        experiments = experiments_res.get('Items', [])
-        reasoning_items = reasoning_res.get('Items', [])
+        # Fetch ALL reasoning with pagination
+        reasoning_items = []
+        scan_kwargs = {}
+        while True:
+            reasoning_res = reasoning_table.scan(**scan_kwargs)
+            reasoning_items.extend(reasoning_res.get('Items', []))
+            if 'LastEvaluatedKey' not in reasoning_res:
+                break
+            scan_kwargs['ExclusiveStartKey'] = reasoning_res['LastEvaluatedKey']
         
         # Sort by timestamp
         experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
