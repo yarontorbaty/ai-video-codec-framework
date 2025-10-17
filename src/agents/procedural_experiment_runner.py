@@ -414,41 +414,66 @@ class ProceduralExperimentRunner:
         logger.info("▶️  PHASE 4: EXECUTION (with intelligent retry)")
         
         code = validation_result.get('code')
-        if not code or not validation_result.get('validated'):
+        has_llm_code = bool(code and validation_result.get('validated'))
+        
+        if not has_llm_code:
             logger.info("  ⚠️  No validated code - using baseline")
-            code = None
+        else:
+            logger.info(f"  ✅ Using LLM-generated code ({len(code)} chars)")
         
         for attempt in range(1, self.max_execution_retries + 1):
             logger.info(f"  Execution attempt {attempt}/{self.max_execution_retries}")
             
             # Run actual experiment
             try:
-                # Import here to avoid circular dependencies
-                from agents.procedural_generator import ProceduralCompressionAgent
-                
-                agent = ProceduralCompressionAgent(resolution=(1920, 1080), config={})
-                
-                # Generate test video
-                timestamp = int(time.time())
-                output_path = f"/tmp/proc_exp_{timestamp}.mp4"
-                
-                results = agent.generate_procedural_video(
-                    output_path,
-                    duration=10.0,
-                    fps=30.0
-                )
+                if has_llm_code:
+                    # USE THE LLM CODE! Run with AdaptiveCodecAgent
+                    logger.info("  🧪 Running experiment with LLM code...")
+                    
+                    results = self.codec_agent.run_real_experiment_with_code(
+                        code=code,
+                        duration=10.0,
+                        fps=30.0,
+                        resolution=(1920, 1080)
+                    )
+                    
+                    logger.info(f"  📊 LLM code execution complete")
+                    
+                else:
+                    # Fallback: Use baseline procedural generator
+                    logger.info("  🔄 Running baseline procedural generator...")
+                    from agents.procedural_generator import ProceduralCompressionAgent
+                    
+                    agent = ProceduralCompressionAgent(resolution=(1920, 1080), config={})
+                    
+                    # Generate test video
+                    timestamp = int(time.time())
+                    output_path = f"/tmp/proc_exp_{timestamp}.mp4"
+                    
+                    results = agent.generate_procedural_video(
+                        output_path,
+                        duration=10.0,
+                        fps=30.0
+                    )
                 
                 # Check if execution succeeded
                 if results.get('status') == 'completed':
                     logger.info(f"  ✅ Execution SUCCEEDED on attempt {attempt}")
                     bitrate = results.get('real_metrics', {}).get('bitrate_mbps', 0)
-                    logger.info(f"  Bitrate: {bitrate:.4f} Mbps")
+                    logger.info(f"  📈 Bitrate: {bitrate:.4f} Mbps")
+                    
+                    # Log if this is LLM code vs baseline
+                    if has_llm_code:
+                        logger.info(f"  🎯 Result from LLM-generated compression code")
+                    else:
+                        logger.info(f"  ⚠️  Result from baseline (no LLM code)")
                     
                     return {
                         'success': True,
                         'executed': True,
                         'retries': attempt - 1,
-                        'results': results
+                        'results': results,
+                        'used_llm_code': has_llm_code
                     }
                 else:
                     logger.warning(f"  ❌ Execution returned non-completed status")

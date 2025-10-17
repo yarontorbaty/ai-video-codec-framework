@@ -7,6 +7,7 @@ This agent can replace its own implementation with better LLM-generated code.
 import os
 import json
 import logging
+import time
 import numpy as np
 import cv2
 from typing import Dict, Optional, Tuple
@@ -424,6 +425,125 @@ class AdaptiveCodecAgent:
             'bitrate_reduction_percent': bitrate_improvement,
             'compression_ratio_change': new.get('compression_ratio', 0) / prev.get('compression_ratio', 1)
         }
+    
+    def run_real_experiment_with_code(self, code: str, duration: float = 10.0, fps: float = 30.0, resolution: tuple = (1920, 1080)) -> Dict:
+        """
+        Run a real experiment using LLM-generated code.
+        
+        This is THE METHOD that actually uses the LLM code for compression!
+        
+        Args:
+            code: LLM-generated compress_video_frame() function
+            duration: Video duration in seconds
+            fps: Frames per second
+            resolution: Video resolution (width, height)
+            
+        Returns:
+            Dict with status, metrics, and results
+        """
+        try:
+            logger.info(f"🧪 Running real experiment with LLM code...")
+            
+            # Generate procedural test video
+            from agents.procedural_generator import ProceduralCompressionAgent
+            proc_agent = ProceduralCompressionAgent(resolution=resolution, config={})
+            
+            timestamp = int(time.time())
+            input_video_path = f"/tmp/test_input_{timestamp}.mp4"
+            output_compressed_path = f"/tmp/test_output_{timestamp}.dat"
+            
+            logger.info(f"  📹 Generating test video...")
+            proc_result = proc_agent.generate_procedural_video(
+                input_video_path,
+                duration=duration,
+                fps=fps
+            )
+            
+            if proc_result.get('status') != 'completed':
+                raise Exception("Failed to generate test video")
+            
+            logger.info(f"  🗜️  Compressing with LLM code...")
+            
+            # Now compress the test video using the LLM code
+            from utils.code_sandbox import CodeSandbox
+            import cv2
+            
+            cap = cv2.VideoCapture(input_video_path)
+            video_fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            
+            compressed_data = []
+            sandbox = CodeSandbox(timeout=60)
+            
+            logger.info(f"  📊 Compressing {frame_count} frames...")
+            
+            for i in range(frame_count):
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                
+                config = {'quality': 0.8, 'frame_index': i}
+                success, result, error = sandbox.execute_function(
+                    code,
+                    'compress_video_frame',
+                    frame,
+                    i,
+                    config
+                )
+                
+                if success and result:
+                    # Extract compressed bytes
+                    if isinstance(result, dict):
+                        compressed_data.append(result.get('compressed', result.get('return_value', b'')))
+                    elif isinstance(result, bytes):
+                        compressed_data.append(result)
+                    else:
+                        compressed_data.append(b'')
+                else:
+                    logger.warning(f"    Frame {i} compression failed: {error}")
+                    compressed_data.append(b'')
+            
+            cap.release()
+            
+            # Calculate metrics
+            total_compressed_size = sum(len(d) for d in compressed_data)
+            duration_actual = frame_count / video_fps
+            bitrate_mbps = (total_compressed_size * 8) / (duration_actual * 1_000_000)
+            
+            logger.info(f"  ✅ Compression complete!")
+            logger.info(f"  📈 Compressed size: {total_compressed_size / 1_000_000:.2f} MB")
+            logger.info(f"  📈 Bitrate: {bitrate_mbps:.4f} Mbps")
+            
+            # Clean up
+            import os
+            try:
+                os.remove(input_video_path)
+            except:
+                pass
+            
+            return {
+                'status': 'completed',
+                'real_metrics': {
+                    'bitrate_mbps': bitrate_mbps,
+                    'file_size_mb': total_compressed_size / 1_000_000,
+                    'compressed_size_bytes': total_compressed_size,
+                    'duration': duration_actual,
+                    'fps': video_fps,
+                    'total_frames': frame_count,
+                    'resolution': f"{resolution[0]}x{resolution[1]}"
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"  ❌ Experiment with LLM code failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            return {
+                'status': 'failed',
+                'error': str(e),
+                'real_metrics': {}
+            }
     
     def compress_video(self, input_path: str, output_path: str) -> Dict:
         """
