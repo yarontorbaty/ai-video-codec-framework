@@ -14,16 +14,23 @@ dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 experiments_table = dynamodb.Table('ai-video-codec-experiments')
 
 # Timeout thresholds (in seconds)
+# With retries and quality verification, experiments can take much longer
 PHASE_TIMEOUTS = {
-    'design': 300,      # 5 minutes (LLM analysis)
-    'deploy': 60,       # 1 minute (code deployment)
-    'validation': 600,  # 10 minutes (validation with retries)
-    'execution': 900,   # 15 minutes (video generation + compression)
-    'analysis': 120,    # 2 minutes (store results)
+    'design': 600,              # 10 minutes (LLM analysis)
+    'deploy': 120,              # 2 minutes (code deployment)
+    'validation': 3600,         # 60 minutes (validation with up to 10 retries)
+    'execution': 7200,          # 120 minutes (execution with up to 10 retries + quality check)
+    'quality_verification': 1800,  # 30 minutes (decompression + PSNR/SSIM calculation)
+    'analysis': 300,            # 5 minutes (store results + blog update)
 }
 
-# Maximum overall experiment time (30 minutes)
-MAX_EXPERIMENT_TIME = 1800
+# Maximum overall experiment time (6 hours)
+# Only timeout if actually stuck (no progress)
+MAX_EXPERIMENT_TIME = 21600  # 6 hours
+
+# Minimum time before checking for stuck status (1 hour)
+# Don't timeout experiments younger than this
+MIN_EXPERIMENT_AGE = 3600
 
 
 def handler(event, context):
@@ -59,6 +66,9 @@ def handler(event, context):
             start_time = exp.get('start_time')
             timestamp = exp.get('timestamp', 0)
             current_phase = exp.get('current_phase', 'unknown')
+            elapsed_seconds = exp.get('elapsed_seconds', 0)
+            validation_retries = exp.get('validation_retries', 0)
+            execution_retries = exp.get('execution_retries', 0)
             
             # Determine experiment age
             if start_time:
@@ -66,33 +76,55 @@ def handler(event, context):
             else:
                 age = current_time - int(timestamp)
             
+            # Check if experiment is making progress
+            # If retries are increasing or elapsed_seconds is updating, it's working
+            has_recent_activity = (elapsed_seconds > 0 and age - elapsed_seconds < 600)  # Activity within last 10 min
+            has_retries = (validation_retries > 0 or execution_retries > 0)  # Actively retrying
+            
             # Check if experiment is stuck
             is_stuck = False
             reason = None
             
-            # Check 1: Overall timeout
-            if age > MAX_EXPERIMENT_TIME:
-                is_stuck = True
-                reason = f"Exceeded maximum experiment time ({MAX_EXPERIMENT_TIME}s = {MAX_EXPERIMENT_TIME//60} min)"
+            # SKIP: Don't timeout young experiments (< 1 hour)
+            if age < MIN_EXPERIMENT_AGE:
+                print(f"  ⏳ {exp_id}: Too young to timeout ({age}s < {MIN_EXPERIMENT_AGE}s)")
+                continue
             
-            # Check 2: Phase-specific timeout
+            # Check 1: Overall timeout (6 hours) - but only if no recent activity
+            if age > MAX_EXPERIMENT_TIME:
+                if has_recent_activity or has_retries:
+                    print(f"  ⚠️  {exp_id}: Old but still active (retries: val={validation_retries}, exec={execution_retries})")
+                else:
+                    is_stuck = True
+                    reason = f"Exceeded maximum experiment time ({MAX_EXPERIMENT_TIME}s = {MAX_EXPERIMENT_TIME//3600}h) with no recent activity"
+            
+            # Check 2: Phase-specific timeout - but only if no progress
             elif current_phase in PHASE_TIMEOUTS:
                 phase_timeout = PHASE_TIMEOUTS[current_phase]
                 if age > phase_timeout:
-                    is_stuck = True
-                    reason = f"Stuck in {current_phase} phase (>{phase_timeout}s = {phase_timeout//60} min)"
+                    # Check if making progress (retries)
+                    if has_retries and (validation_retries < 10 or execution_retries < 10):
+                        print(f"  🔄 {exp_id}: In {current_phase} with retries (val={validation_retries}, exec={execution_retries})")
+                    elif has_recent_activity:
+                        print(f"  🔄 {exp_id}: In {current_phase} with recent activity (elapsed: {elapsed_seconds}s)")
+                    else:
+                        is_stuck = True
+                        reason = f"Stuck in {current_phase} phase (>{phase_timeout}s = {phase_timeout//60} min) with no progress"
             
-            # Check 3: Unknown phase for too long
-            elif current_phase == 'unknown' and age > 300:
+            # Check 3: Unknown phase for too long (no progress indicator)
+            elif current_phase == 'unknown' and age > 600:
                 is_stuck = True
-                reason = f"Unknown phase for {age}s (>{300}s = 5 min)"
+                reason = f"Unknown phase for {age}s (>{600}s = 10 min) - likely crashed"
             
             if is_stuck:
                 print(f"  🔴 {exp_id}: {reason}")
                 cleanup_experiment(exp_id, exp, reason, age)
                 cleaned_up.append(exp_id)
             else:
-                print(f"  ✅ {exp_id}: Running normally (age: {age}s, phase: {current_phase})")
+                if age > 3600:  # Log if running over 1 hour
+                    print(f"  ✅ {exp_id}: Running normally (age: {age}s = {age//3600}h {(age%3600)//60}m, phase: {current_phase})")
+                else:
+                    print(f"  ✅ {exp_id}: Running normally (age: {age}s, phase: {current_phase})")
         
         result = {
             'cleaned_up_count': len(cleaned_up),
