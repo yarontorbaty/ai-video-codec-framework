@@ -785,15 +785,27 @@ def generate_blog_html(experiments, reasoning_items):
 
 # Keep existing API functions
 def get_experiments():
-    """Fetch experiments from DynamoDB"""
+    """Fetch experiments from DynamoDB - now returns ALL experiments with full details"""
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     table = dynamodb.Table('ai-video-codec-experiments')
     
     try:
-        response = table.scan(Limit=50)
+        # Get ALL experiments with pagination
+        all_items = []
+        scan_kwargs = {}
+        
+        while True:
+            response = table.scan(**scan_kwargs)
+            all_items.extend(response.get('Items', []))
+            
+            # Check if there are more items to fetch
+            if 'LastEvaluatedKey' not in response:
+                break
+            scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        
         experiments = []
         
-        for item in response.get('Items', []):
+        for item in all_items:
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             metrics = procedural.get('real_metrics', {})
@@ -803,12 +815,23 @@ def get_experiments():
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
                 'compression': comparison.get('reduction_percent', 0),
-                'quality': 95.0,
+                'reduction_percent': comparison.get('reduction_percent', 0),
                 'bitrate': metrics.get('bitrate_mbps', 0),
+                'psnr_db': float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None,
+                'ssim': float(metrics.get('ssim')) if metrics.get('ssim') else None,
+                'quality': metrics.get('quality'),
+                'quality_verified': metrics.get('quality_verified', False),
+                'achievement_tier': comparison.get('achievement_tier'),
+                'target_achieved': comparison.get('target_achieved', False),
+                'current_phase': item.get('current_phase', 'unknown'),
+                'phase_completed': item.get('phase_completed', 'unknown'),
                 'created_at': item.get('timestamp_iso', ''),
-                'timestamp': float(item.get('timestamp', 0))
+                'timestamp': float(item.get('timestamp', 0)),
+                'video_url': procedural.get('video_url'),
+                'decoder_s3_key': procedural.get('decoder_s3_key')
             })
         
+        # Sort by timestamp descending (newest first)
         experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
         
         return {
@@ -824,6 +847,8 @@ def get_experiments():
         }
     except Exception as e:
         print(f"Experiments error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'statusCode': 200,
             'headers': {
