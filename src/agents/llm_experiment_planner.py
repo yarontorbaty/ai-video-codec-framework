@@ -299,13 +299,33 @@ Be direct, technical, and actionable. Focus on the fundamental problem that proc
 
 # CODE GENERATION
 
-**IMPORTANT**: Along with your analysis, generate a `compress_video_frame()` function implementing your hypothesis.
+**CRITICAL REQUIREMENT**: Generate BOTH compression AND decompression functions!
+
+The codec MUST be able to reconstruct frames for quality verification (PSNR/SSIM).
+
+Required functions:
+
+1. **compress_video_frame()**
+   - Signature: `def compress_video_frame(frame: np.ndarray, frame_index: int, config: dict) -> bytes:`
+   - Compresses frame to bytes
+   
+2. **decompress_video_frame()**
+   - Signature: `def decompress_video_frame(compressed_data: bytes, frame_index: int, config: dict) -> np.ndarray:`
+   - Reconstructs frame from compressed bytes
+   - Must return numpy array (H, W, 3) in BGR format
+   - Quality target: PSNR >= 30 dB (acceptable) or PSNR >= 35 dB (good)
 
 Requirements:
-- Function signature: `def compress_video_frame(frame: np.ndarray, frame_index: int, config: dict) -> bytes:`
 - Use allowed imports: numpy, cv2, json, struct, base64, math, torch (if needed)
-- Return compressed bytes
+- Both functions must work together (compress → decompress → similar frame)
 - Must be runnable in Python 3.7
+- Prioritize: bitrate < 5 Mbps AND PSNR >= 30 dB
+
+**Quality vs Bitrate Tradeoff:**
+- PSNR < 25 dB: Poor quality (blocky/blurry)
+- PSNR 25-30 dB: Acceptable quality
+- PSNR 30-35 dB: Good quality (target!)
+- PSNR > 35 dB: Excellent quality (H.264/HEVC level)
 
 # OUTPUT FORMAT
 
@@ -316,9 +336,10 @@ Format your response as JSON with these keys:
 - `next_experiment`: object - Concrete steps for next experiment
 - `risks`: array - What could go wrong
 - `expected_bitrate_mbps`: number - Expected bitrate
+- `expected_psnr_db`: number - Expected PSNR (quality)
 - `confidence_score`: number - Confidence (0.0-1.0)
 - `generated_code`: object with:
-  - `code`: string - Full Python code for compress_video_frame() function
+  - `code`: string - Full Python code with BOTH compress_video_frame() AND decompress_video_frame() functions
   - `description`: string - Brief description of the approach
   - `expected_improvement`: string - Expected performance gain
 """

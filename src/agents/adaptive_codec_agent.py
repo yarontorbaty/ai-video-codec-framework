@@ -196,7 +196,7 @@ class AdaptiveCodecAgent:
             sandbox = CodeSandbox(timeout=30)
             analyzer = LogAnalyzer()
             
-            # Validate code
+            # Validate code syntax
             is_valid, error = sandbox.validate_code(code, save_attempt=True)
             if not is_valid:
                 logger.error(f"❌ CODE VALIDATION FAILED")
@@ -233,6 +233,20 @@ class AdaptiveCodecAgent:
                 self._last_failure_analysis = analysis
                 
                 return False, None
+            
+            # Check for BOTH compress and decompress functions
+            has_compress = 'def compress_video_frame' in code
+            has_decompress = 'def decompress_video_frame' in code
+            
+            if not has_compress:
+                logger.error(f"❌ Missing compress_video_frame function!")
+                return False, None
+            
+            if not has_decompress:
+                logger.warning(f"⚠️  Missing decompress_video_frame function!")
+                logger.warning(f"   Quality verification will fail - PSNR/SSIM cannot be measured")
+                logger.warning(f"   LLM should generate BOTH compress and decompress functions")
+                # Don't fail validation yet - let it try, but warn
             
             # Test on sample frames from real video
             # Option 1: Use synthetic test frames (current - fast for testing)
@@ -504,7 +518,7 @@ class AdaptiveCodecAgent:
             
             cap.release()
             
-            # Calculate metrics
+            # Calculate compression metrics
             total_compressed_size = sum(len(d) for d in compressed_data)
             duration_actual = frame_count / video_fps
             bitrate_mbps = (total_compressed_size * 8) / (duration_actual * 1_000_000)
@@ -513,7 +527,108 @@ class AdaptiveCodecAgent:
             logger.info(f"  📈 Compressed size: {total_compressed_size / 1_000_000:.2f} MB")
             logger.info(f"  📈 Bitrate: {bitrate_mbps:.4f} Mbps")
             
-            # Clean up
+            # ============================================
+            # QUALITY VERIFICATION - CRITICAL!
+            # ============================================
+            logger.info(f"  🔍 Verifying quality (decompression + PSNR/SSIM)...")
+            
+            try:
+                # Re-read original video for comparison
+                cap = cv2.VideoCapture(input_video_path)
+                original_frames = []
+                for i in range(frame_count):
+                    ret, frame = cap.read()
+                    if ret:
+                        original_frames.append(frame)
+                cap.release()
+                
+                # Decompress all frames
+                reconstructed_frames = []
+                for i, data in enumerate(compressed_data):
+                    success, result, error = sandbox.execute_function(
+                        code,
+                        'decompress_video_frame',
+                        args=(data, i, {})
+                    )
+                    
+                    if success and result is not None:
+                        # Convert result to numpy array if needed
+                        if isinstance(result, dict):
+                            recon = result.get('frame', result.get('return_value'))
+                        else:
+                            recon = result
+                        
+                        if isinstance(recon, np.ndarray):
+                            reconstructed_frames.append(recon)
+                        else:
+                            reconstructed_frames.append(np.zeros_like(original_frames[i]))
+                    else:
+                        logger.warning(f"    Frame {i} decompression failed: {error}")
+                        reconstructed_frames.append(np.zeros_like(original_frames[i]))
+                
+                # Calculate PSNR and SSIM
+                from skimage.metrics import peak_signal_noise_ratio as psnr_metric
+                from skimage.metrics import structural_similarity as ssim_metric
+                
+                psnr_values = []
+                ssim_values = []
+                
+                for orig, recon in zip(original_frames, reconstructed_frames):
+                    # Ensure same shape
+                    if orig.shape != recon.shape:
+                        recon = cv2.resize(recon, (orig.shape[1], orig.shape[0]))
+                    
+                    # Calculate PSNR
+                    try:
+                        psnr_val = psnr_metric(orig, recon, data_range=255)
+                        psnr_values.append(psnr_val)
+                    except:
+                        psnr_values.append(0.0)
+                    
+                    # Calculate SSIM
+                    try:
+                        ssim_val = ssim_metric(orig, recon, channel_axis=2, data_range=255)
+                        ssim_values.append(ssim_val)
+                    except:
+                        ssim_values.append(0.0)
+                
+                avg_psnr = sum(psnr_values) / len(psnr_values) if psnr_values else 0.0
+                avg_ssim = sum(ssim_values) / len(ssim_values) if ssim_values else 0.0
+                
+                logger.info(f"  📊 Quality metrics:")
+                logger.info(f"    PSNR: {avg_psnr:.2f} dB")
+                logger.info(f"    SSIM: {avg_ssim:.4f}")
+                
+                # Quality assessment
+                if avg_psnr >= 35:
+                    quality = "excellent"
+                elif avg_psnr >= 30:
+                    quality = "good"
+                elif avg_psnr >= 25:
+                    quality = "acceptable"
+                else:
+                    quality = "poor"
+                
+                logger.info(f"    Quality: {quality}")
+                
+                # Save reconstructed video for verification
+                output_reconstructed = f"/tmp/reconstructed_{timestamp}.mp4"
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_reconstructed, fourcc, video_fps, (resolution[0], resolution[1]))
+                for frame in reconstructed_frames:
+                    out.write(frame)
+                out.release()
+                logger.info(f"  💾 Saved reconstructed video: {output_reconstructed}")
+                
+            except Exception as e:
+                logger.error(f"  ❌ Quality verification failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                avg_psnr = 0.0
+                avg_ssim = 0.0
+                quality = "unknown"
+            
+            # Clean up input video
             import os
             try:
                 os.remove(input_video_path)
@@ -529,7 +644,11 @@ class AdaptiveCodecAgent:
                     'duration': duration_actual,
                     'fps': video_fps,
                     'total_frames': frame_count,
-                    'resolution': f"{resolution[0]}x{resolution[1]}"
+                    'resolution': f"{resolution[0]}x{resolution[1]}",
+                    'psnr_db': avg_psnr,
+                    'ssim': avg_ssim,
+                    'quality': quality,
+                    'quality_verified': True
                 }
             }
             

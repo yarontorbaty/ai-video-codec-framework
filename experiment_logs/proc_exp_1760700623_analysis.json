@@ -1,0 +1,20 @@
+{
+  "experiment_id": "proc_exp_1760700623",
+  "phases": {
+    "design": "completed",
+    "deploy": "completed",
+    "validation": "completed",
+    "execution": "completed"
+  },
+  "errors": [],
+  "warnings": [],
+  "metrics": {
+    "code_chars": 6073,
+    "validation_attempts": 1,
+    "max_validation_retries": 10,
+    "execution_attempts": 1,
+    "max_execution_retries": 10
+  },
+  "timeline": [],
+  "hypothesis": "To achieve 90% compression, we must shift from 'procedural generation' to 'neural-assisted delta com..."
+}
