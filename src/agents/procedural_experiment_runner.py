@@ -840,18 +840,20 @@ This decoder can reconstruct video frames from compressed data.
         except Exception as e:
             logger.debug(f"Could not fetch existing approach: {e}")
         
-        # Upload reconstructed video if available
+        # Upload reconstructed video if available and quality verified
         video_url = None
         reconstructed_path = results.get('reconstructed_video_path')
-        if reconstructed_path and target_achieved:  # Only upload for successful experiments
-            logger.info(f"  🎬 Uploading reconstructed video for successful experiment...")
+        quality_verified = real_metrics.get('quality_verified', False)
+        
+        if reconstructed_path and quality_verified:  # Upload for all quality-verified experiments
+            logger.info(f"  🎬 Uploading reconstructed video for quality-verified experiment...")
             video_url = self._upload_reconstructed_video(reconstructed_path, experiment_id)
         
-        # Save decoder code for successful experiments
+        # Save decoder code for quality-verified experiments
         decoder_s3_key = None
         decoder_code = results.get('decoder_code')
-        if decoder_code and target_achieved:
-            logger.info(f"  💾 Saving decoder code for successful experiment...")
+        if decoder_code and quality_verified:
+            logger.info(f"  💾 Saving decoder code for quality-verified experiment...")
             decoder_s3_key = self._save_decoder_code(decoder_code, experiment_id)
         
         experiments_array = [{
