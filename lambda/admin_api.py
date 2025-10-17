@@ -510,9 +510,10 @@ The admin's message follows..."""
             }
         }]
         
-        # Tool calling loop (max 3 rounds for admin chat to ensure we get final response)
+        # Tool calling loop (unlimited rounds for admin chat - let LLM decide when done)
         result = None
-        for round_num in range(3):
+        max_rounds = 20  # Safety limit to prevent infinite loops
+        for round_num in range(max_rounds):
             data = json.dumps({
                 "model": "claude-sonnet-4-5",
                 "max_tokens": 4096,

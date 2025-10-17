@@ -56,8 +56,8 @@ class ProceduralExperimentRunner:
         self.experiments_table = self.dynamodb.Table('ai-video-codec-experiments')
         
         # Retry limits
-        self.max_validation_retries = 5
-        self.max_execution_retries = 5
+        self.max_validation_retries = 10
+        self.max_execution_retries = 10
         
         # State tracking
         self.current_phase = ExperimentPhase.DESIGN
