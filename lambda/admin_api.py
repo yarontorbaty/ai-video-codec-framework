@@ -447,12 +447,20 @@ You are in direct conversation with the human administrator.
 - Recent experiments data (provided below)
 - Can use run_shell_command tool to check orchestrator logs/status via SSM
 
+**Orchestrator System Paths:**
+- Framework root: `/home/ec2-user/ai-video-codec`
+- Source code: `/home/ec2-user/ai-video-codec/src/`
+- Orchestrator log: `/tmp/orch.log`
+- Scripts: `/home/ec2-user/ai-video-codec/scripts/`
+
 **For this conversation:**
 - Answer questions about experiments
-- Use run_shell_command to check orchestrator logs when asked
+- Use run_shell_command to check orchestrator logs/files when asked
 - Provide insights and recommendations
 - Explain your reasoning clearly
 - Be conversational but precise
+- If you need to check code, use: `cat /home/ec2-user/ai-video-codec/path/to/file.py`
+- After gathering information with tools, ALWAYS provide a final summary response
 
 **Note**: You can execute shell commands on the orchestrator to check status!
 
@@ -609,6 +617,26 @@ The admin's message follows..."""
             # No more tools - extract final response
             break
         
+        # Check if we hit max rounds without a final response
+        if round_num >= max_rounds - 1 and result and result.get('stop_reason') == 'tool_use':
+            logger.warning(f"⚠️  Hit max tool rounds ({max_rounds}) without final response - requesting final answer")
+            # Force one more call asking for a summary
+            messages.append({"role": "assistant", "content": result['content']})
+            messages.append({"role": "user", "content": [{"type": "text", "text": "Please provide a final summary response based on the tool results above. Do not use any more tools."}]})
+            
+            # One final call without tools
+            data = json.dumps({
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "system": system_prompt,
+                "messages": messages
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=120) as response:
+                result = json.loads(response.read().decode('utf-8'))
+        
         # Extract response text (after loop)
         response_text = None
         if result:
@@ -637,7 +665,8 @@ The admin's message follows..."""
         # Final fallback
         if not response_text:
             logger.warning(f"Failed to extract response text from LLM result. Content: {result.get('content') if result else 'No result'}")
-            response_text = "I apologize, I encountered an issue generating a response. Please try rephrasing your question."
+            logger.warning(f"Stop reason: {result.get('stop_reason') if result else 'No result'}, Rounds: {round_num if 'round_num' in locals() else 'unknown'}")
+            response_text = "I apologize, I used many tools to investigate but didn't provide a final summary. Please ask me to summarize what I found, or try a more specific question."
         
         # Track token usage
         try:
