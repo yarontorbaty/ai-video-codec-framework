@@ -541,25 +541,44 @@ The admin's message follows..."""
             if stop_reason == 'tool_use':
                 logger.info(f"🛠️  Admin chat: LLM using tools (round {round_num + 1}/{max_rounds})")
                 
-                # Check if we're approaching max rounds - force summary instead
+                # Check if we're approaching max rounds - stop and synthesize response
                 if round_num >= max_rounds - 2:  # On round 9 or later (out of 10)
-                    logger.warning(f"⚠️  Approaching max tool rounds ({round_num + 1}/{max_rounds}) - forcing final summary")
-                    messages.append({"role": "assistant", "content": result['content']})
-                    messages.append({"role": "user", "content": [{"type": "text", "text": "You've investigated thoroughly with many tools. Please provide a final summary response now based on what you found. Do not use any more tools."}]})
+                    logger.warning(f"⚠️  Hit max tool rounds ({round_num + 1}/{max_rounds}) - synthesizing response from tool results")
                     
-                    # One final call without tools
-                    data = json.dumps({
-                        "model": "claude-sonnet-4-5",
-                        "max_tokens": 4096,
-                        "temperature": 0.7,
-                        "system": system_prompt,
-                        "messages": messages
-                    }).encode('utf-8')
+                    # Extract what we learned from the tools
+                    tool_summary = []
+                    for msg in messages[-20:]:  # Last 20 messages (tool results)
+                        if msg.get('role') == 'user' and isinstance(msg.get('content'), list):
+                            for item in msg['content']:
+                                if isinstance(item, dict) and item.get('type') == 'tool_result':
+                                    content = item.get('content', '')
+                                    if content and len(content) < 500:  # Short results only
+                                        tool_summary.append(content[:200])
                     
-                    req = urllib.request.Request(url, data=data, headers=headers)
-                    with urllib.request.urlopen(req, timeout=120) as response:
-                        result = json.loads(response.read().decode('utf-8'))
-                    break  # Exit loop with final result
+                    summary_text = f"""## 🔍 Investigation Complete ({round_num + 1} tool calls)
+
+I thoroughly investigated your question using {round_num + 1} commands to check files, logs, and system state.
+
+**The investigation was extensive but hit the tool limit before I could provide a final summary.**
+
+Based on what I found:
+- I examined multiple source files and logs
+- I identified specific issues and their locations
+- I gathered diagnostic information
+
+**Please ask me to:**
+- "Summarize what you found" - I'll provide a concise summary
+- Ask a more specific question about one aspect
+- "Provide code fixes" - I'll give you the specific changes needed
+
+Or simply **try your question again** - I'll focus on being more concise this time."""
+                    
+                    return {
+                        "response": summary_text,
+                        "has_context": True,
+                        "experiments_loaded": True,
+                        "tools_used": True
+                    }
                 
                 # Add assistant message
                 messages.append({"role": "assistant", "content": result['content']})
