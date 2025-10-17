@@ -80,6 +80,9 @@ class ProceduralExperimentRunner:
         logger.info(f"ID: {experiment_id}")
         logger.info(f"=" * 60)
         
+        # Create initial experiment record in DynamoDB
+        self._update_experiment_status(experiment_id, 'design', 'running', {})
+        
         try:
             # Phase 1: Design
             self.current_phase = ExperimentPhase.DESIGN
@@ -87,11 +90,17 @@ class ProceduralExperimentRunner:
             if not design_result['success']:
                 return self._create_failure_result(experiment_id, "design_failed", design_result)
             
+            # Update: Design complete
+            self._update_experiment_status(experiment_id, 'deploy', 'running', {})
+            
             # Phase 2: Deploy
             self.current_phase = ExperimentPhase.DEPLOY
             deploy_result = self._phase_deploy(experiment_id, design_result)
             if not deploy_result['success']:
                 return self._create_failure_result(experiment_id, "deploy_failed", deploy_result)
+            
+            # Update: Deploy complete
+            self._update_experiment_status(experiment_id, 'validation', 'running', {})
             
             # Phase 3: Validation (with retry loop)
             self.current_phase = ExperimentPhase.VALIDATION
@@ -99,11 +108,22 @@ class ProceduralExperimentRunner:
             if not validation_result['success']:
                 return self._create_failure_result(experiment_id, "validation_failed", validation_result)
             
+            # Update: Validation complete
+            self._update_experiment_status(experiment_id, 'execution', 'running', {
+                'validation_retries': validation_result.get('retries', 0)
+            })
+            
             # Phase 4: Execution (with retry loop)
             self.current_phase = ExperimentPhase.EXECUTION
             execution_result = self._phase_execution_with_retry(experiment_id, validation_result)
             if not execution_result['success']:
                 return self._create_failure_result(experiment_id, "execution_failed", execution_result)
+            
+            # Update: Execution complete
+            self._update_experiment_status(experiment_id, 'analysis', 'running', {
+                'validation_retries': validation_result.get('retries', 0),
+                'execution_retries': execution_result.get('retries', 0)
+            })
             
             # Phase 5: Analysis
             self.current_phase = ExperimentPhase.ANALYSIS
@@ -116,6 +136,33 @@ class ProceduralExperimentRunner:
         except Exception as e:
             logger.error(f"❌ Unexpected error in experiment: {e}")
             return self._create_failure_result(experiment_id, "unexpected_error", {'error': str(e)})
+    
+    def _update_experiment_status(self, experiment_id: str, current_phase: str, status: str, extra_data: Dict):
+        """
+        Update experiment status in DynamoDB for real-time dashboard visibility.
+        
+        Args:
+            experiment_id: Experiment ID
+            current_phase: Current phase (design, deploy, validation, execution, analysis, complete)
+            status: Status (running, completed, failed)
+            extra_data: Additional data to merge (e.g., retry counts)
+        """
+        try:
+            item = {
+                'experiment_id': experiment_id,
+                'timestamp': int(time.time()),
+                'status': status,
+                'current_phase': current_phase,
+                'phase_completed': current_phase,  # Track last completed phase
+            }
+            
+            # Merge in any extra data (like retry counts)
+            item.update(extra_data)
+            
+            self.experiments_table.put_item(Item=item)
+            logger.debug(f"  Updated status: {current_phase} ({status})")
+        except Exception as e:
+            logger.warning(f"  Failed to update experiment status: {e}")
     
     def _phase_design(self, experiment_id: str) -> Dict:
         """Phase 1: Design experiment and generate code."""
