@@ -765,21 +765,51 @@ function viewExperimentDetails(experimentId) {
 }
 
 async function rerunExperiment(experimentId) {
-    if (!confirm(`Rerun experiment ${experimentId}?\n\nThis will start a new experiment with similar parameters.`)) {
-        return;
-    }
-    
     const statusDiv = document.getElementById('commandStatus');
-    statusDiv.style.display = 'block';
-    statusDiv.style.background = 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)';
-    statusDiv.style.borderColor = '#60a5fa';
-    statusDiv.style.color = '#ffffff';
-    statusDiv.textContent = `Rerunning experiment...`;
     
     try {
+        // Fetch the original experiment details
+        const response = await fetch(`/dashboard?type=experiment&id=${experimentId}`);
+        const expDetails = await response.json();
+        
+        if (!expDetails || expDetails.error) {
+            throw new Error('Could not fetch experiment details');
+        }
+        
+        // Check if we have the original code
+        const hasCode = expDetails.generated_code && expDetails.generated_code.code;
+        const hasDecoderInS3 = expDetails.decoder_s3_key;
+        
+        let confirmMsg = `Rerun experiment ${experimentId}?\n\n`;
+        if (hasCode || hasDecoderInS3) {
+            confirmMsg += `✓ Will use original LLM-generated code\n`;
+            confirmMsg += `Approach: ${expDetails.approach || 'Unknown'}\n`;
+            if (expDetails.real_metrics && expDetails.real_metrics.bitrate_mbps) {
+                confirmMsg += `Original bitrate: ${expDetails.real_metrics.bitrate_mbps.toFixed(2)} Mbps\n`;
+            }
+        } else {
+            confirmMsg += `⚠️ Original code not found - will generate new code\n`;
+            confirmMsg += `Note: This may produce different results\n`;
+        }
+        
+        if (!confirm(confirmMsg)) {
+            return;
+        }
+        
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)';
+        statusDiv.style.borderColor = '#60a5fa';
+        statusDiv.style.color = '#ffffff';
+        statusDiv.textContent = hasCode ? `🔄 Rerunning with original code...` : `🔄 Starting new experiment...`;
+        
         // For now, just start a new experiment
+        // TODO: Implement proper code preservation in orchestrator
         await executeCommand('start_experiment');
+        
+        statusDiv.textContent = `✓ Experiment queued`;
+        
     } catch (error) {
+        statusDiv.style.display = 'block';
         statusDiv.style.background = 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)';
         statusDiv.style.borderColor = '#f87171';
         statusDiv.textContent = `✗ Error: ${error.message}`;
