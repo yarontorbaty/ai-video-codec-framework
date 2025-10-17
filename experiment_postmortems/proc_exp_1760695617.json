@@ -1,0 +1,30 @@
+{
+  "experiment_id": "proc_exp_1760695617",
+  "timestamp": 1760695617.0,
+  "timestamp_iso": "2025-10-17T10:06:57Z",
+  "status": "completed",
+  "metadata": {
+    "phase_completed": "analysis",
+    "validation_retries": 0.0,
+    "execution_retries": 0.0,
+    "needs_human": true
+  },
+  "phases": {},
+  "results": {
+    "bitrate_mbps": 15.038184,
+    "file_size_mb": 17.926912307739258,
+    "approach": "N/A",
+    "expected_bitrate": 0,
+    "reduction_percent": -50.38183999999999,
+    "target_achieved": false
+  },
+  "issues": [
+    {
+      "phase": "design",
+      "reason": "LLM code generation returned 0 characters",
+      "llm_analysis": "N/A - LLM API error",
+      "hypothesis": "N/A - LLM API error"
+    }
+  ],
+  "code_generation": {}
+}

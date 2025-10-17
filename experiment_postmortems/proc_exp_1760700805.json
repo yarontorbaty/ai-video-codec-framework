@@ -1,0 +1,16 @@
+{
+  "experiment_id": "proc_exp_1760700805",
+  "timestamp": 1760700805.0,
+  "timestamp_iso": "2025-10-17T11:33:25Z",
+  "status": "running",
+  "metadata": {
+    "phase_completed": "execution",
+    "validation_retries": 0.0,
+    "execution_retries": 0,
+    "needs_human": false
+  },
+  "phases": {},
+  "results": {},
+  "issues": [],
+  "code_generation": {}
+}

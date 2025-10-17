@@ -1,0 +1,23 @@
+{
+  "experiment_id": "proc_exp_1760695952",
+  "timestamp": 1760695952.0,
+  "timestamp_iso": "2025-10-17T10:12:32Z",
+  "status": "completed",
+  "metadata": {
+    "phase_completed": "analysis",
+    "validation_retries": 0.0,
+    "execution_retries": 0.0,
+    "needs_human": false
+  },
+  "phases": {},
+  "results": {
+    "bitrate_mbps": 57.0903408,
+    "file_size_mb": 71.362926,
+    "approach": "N/A",
+    "expected_bitrate": 0,
+    "reduction_percent": -470.903408,
+    "target_achieved": false
+  },
+  "issues": [],
+  "code_generation": {}
+}

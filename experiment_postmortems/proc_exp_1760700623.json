@@ -1,0 +1,23 @@
+{
+  "experiment_id": "proc_exp_1760700623",
+  "timestamp": 1760700623.0,
+  "timestamp_iso": "2025-10-17T11:30:23Z",
+  "status": "completed",
+  "metadata": {
+    "phase_completed": "analysis",
+    "validation_retries": 0.0,
+    "execution_retries": 0.0,
+    "needs_human": false
+  },
+  "phases": {},
+  "results": {
+    "bitrate_mbps": 11.177824,
+    "file_size_mb": 13.97228,
+    "approach": "Compression experiment",
+    "expected_bitrate": 0,
+    "reduction_percent": -11.778239999999993,
+    "target_achieved": false
+  },
+  "issues": [],
+  "code_generation": {}
+}

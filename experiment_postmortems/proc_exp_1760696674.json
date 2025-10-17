@@ -1,0 +1,27 @@
+{
+  "experiment_id": "proc_exp_1760696674",
+  "timestamp": 1760696674.0,
+  "timestamp_iso": "2025-10-17T10:24:34Z",
+  "status": "timed_out",
+  "metadata": {
+    "phase_completed": "validation",
+    "validation_retries": 0,
+    "execution_retries": 0,
+    "needs_human": true
+  },
+  "phases": {},
+  "results": {
+    "bitrate_mbps": 0,
+    "file_size_mb": 0,
+    "approach": "N/A",
+    "expected_bitrate": 0,
+    "reduction_percent": 0,
+    "target_achieved": false
+  },
+  "issues": [
+    "Experiment abandoned: Stuck in validation phase (>600s = 10 min)",
+    "Stuck in validation phase after 806s (13 minutes)",
+    "System may have crashed or hung - check orchestrator logs"
+  ],
+  "code_generation": {}
+}

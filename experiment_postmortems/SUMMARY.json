@@ -1,0 +1,1207 @@
+{
+  "total_experiments": 50,
+  "generated_at": "2025-10-17T11:35:30.071782Z",
+  "reports": [
+    {
+      "experiment_id": "proc_exp_1760700805",
+      "timestamp": 1760700805.0,
+      "timestamp_iso": "2025-10-17T11:33:25Z",
+      "status": "running",
+      "metadata": {
+        "phase_completed": "execution",
+        "validation_retries": 0.0,
+        "execution_retries": 0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {},
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760700623",
+      "timestamp": 1760700623.0,
+      "timestamp_iso": "2025-10-17T11:30:23Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 11.177824,
+        "file_size_mb": 13.97228,
+        "approach": "Compression experiment",
+        "expected_bitrate": 0,
+        "reduction_percent": -11.778239999999993,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760700466",
+      "timestamp": 1760700466.0,
+      "timestamp_iso": "2025-10-17T11:27:46Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 15.038184,
+        "file_size_mb": 17.926912307739258,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      },
+      "issues": [
+        {
+          "phase": "design",
+          "reason": "LLM code generation returned 0 characters",
+          "llm_analysis": "N/A - LLM API error",
+          "hypothesis": "N/A - LLM API error"
+        }
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760700290",
+      "timestamp": 1760700290.0,
+      "timestamp_iso": "2025-10-17T11:24:50Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.90288,
+        "file_size_mb": 1.1286,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 90.97120000000001,
+        "target_achieved": true
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760699469",
+      "timestamp": 1760699469.0,
+      "timestamp_iso": "2025-10-17T11:11:09Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 70.654568,
+        "file_size_mb": 88.31821,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -606.54568,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760699295",
+      "timestamp": 1760699295.0,
+      "timestamp_iso": "2025-10-17T11:08:15Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 4.7190304,
+        "file_size_mb": 5.898788,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 52.809695999999995,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760699045",
+      "timestamp": 1760699045.0,
+      "timestamp_iso": "2025-10-17T11:04:05Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 19.4496,
+        "file_size_mb": 24.312,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -94.49600000000001,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760698872",
+      "timestamp": 1760698872.0,
+      "timestamp_iso": "2025-10-17T11:01:12Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 4.5327856,
+        "file_size_mb": 5.665982,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 54.672144,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760698698",
+      "timestamp": 1760698698.0,
+      "timestamp_iso": "2025-10-17T10:58:18Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 15.038184,
+        "file_size_mb": 17.926912307739258,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      },
+      "issues": [
+        {
+          "phase": "design",
+          "reason": "LLM code generation returned 0 characters",
+          "llm_analysis": "N/A - LLM API error",
+          "hypothesis": "N/A - LLM API error"
+        }
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760697734",
+      "timestamp": 1760697734.0,
+      "timestamp_iso": "2025-10-17T10:42:14Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 84.3831,
+        "file_size_mb": 105.478875,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -743.8309999999999,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760697545",
+      "timestamp": 1760697545.0,
+      "timestamp_iso": "2025-10-17T10:39:05Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 32.3565824,
+        "file_size_mb": 40.445728,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -223.56582400000002,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760697204",
+      "timestamp": 1760697204.0,
+      "timestamp_iso": "2025-10-17T10:33:24Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 5.9707832,
+        "file_size_mb": 7.463479,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 40.292168000000004,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760697032",
+      "timestamp": 1760697032.0,
+      "timestamp_iso": "2025-10-17T10:30:32Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 15.038184,
+        "file_size_mb": 17.926912307739258,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      },
+      "issues": [
+        {
+          "phase": "design",
+          "reason": "LLM code generation returned 0 characters",
+          "llm_analysis": "N/A - LLM API error",
+          "hypothesis": "N/A - LLM API error"
+        }
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760696859",
+      "timestamp": 1760696859.0,
+      "timestamp_iso": "2025-10-17T10:27:39Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 15.038184,
+        "file_size_mb": 17.926912307739258,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      },
+      "issues": [
+        {
+          "phase": "design",
+          "reason": "LLM code generation returned 0 characters",
+          "llm_analysis": "N/A - LLM API error",
+          "hypothesis": "N/A - LLM API error"
+        }
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760696674",
+      "timestamp": 1760696674.0,
+      "timestamp_iso": "2025-10-17T10:24:34Z",
+      "status": "timed_out",
+      "metadata": {
+        "phase_completed": "validation",
+        "validation_retries": 0,
+        "execution_retries": 0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0,
+        "file_size_mb": 0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 0,
+        "target_achieved": false
+      },
+      "issues": [
+        "Experiment abandoned: Stuck in validation phase (>600s = 10 min)",
+        "Stuck in validation phase after 806s (13 minutes)",
+        "System may have crashed or hung - check orchestrator logs"
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760696502",
+      "timestamp": 1760696502.0,
+      "timestamp_iso": "2025-10-17T10:21:42Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.167696,
+        "file_size_mb": 0.20962,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 98.32304,
+        "target_achieved": true
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760695952",
+      "timestamp": 1760695952.0,
+      "timestamp_iso": "2025-10-17T10:12:32Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 57.0903408,
+        "file_size_mb": 71.362926,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -470.903408,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760695789",
+      "timestamp": 1760695789.0,
+      "timestamp_iso": "2025-10-17T10:09:49Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 5.4221136,
+        "file_size_mb": 6.777642,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 45.778864,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760695617",
+      "timestamp": 1760695617.0,
+      "timestamp_iso": "2025-10-17T10:06:57Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 15.038184,
+        "file_size_mb": 17.926912307739258,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      },
+      "issues": [
+        {
+          "phase": "design",
+          "reason": "LLM code generation returned 0 characters",
+          "llm_analysis": "N/A - LLM API error",
+          "hypothesis": "N/A - LLM API error"
+        }
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760695453",
+      "timestamp": 1760695453.0,
+      "timestamp_iso": "2025-10-17T10:04:13Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 3.0104032,
+        "file_size_mb": 3.763004,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 69.895968,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760695276",
+      "timestamp": 1760695276.0,
+      "timestamp_iso": "2025-10-17T10:01:16Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0281232,
+        "file_size_mb": 0.035154,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 99.718768,
+        "target_achieved": true
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760695108",
+      "timestamp": 1760695108.0,
+      "timestamp_iso": "2025-10-17T09:58:28Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0,
+        "file_size_mb": 0.0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.0,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760694912",
+      "timestamp": 1760694912.0,
+      "timestamp_iso": "2025-10-17T09:55:12Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 3.804928,
+        "file_size_mb": 4.75616,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 61.95071999999999,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760694585",
+      "timestamp": 1760694585.0,
+      "timestamp_iso": "2025-10-17T09:49:45Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 71.8352448,
+        "file_size_mb": 89.794056,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -618.352448,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760694423",
+      "timestamp": 1760694423.0,
+      "timestamp_iso": "2025-10-17T09:47:03Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 5.0678712,
+        "file_size_mb": 6.334839,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 49.321288,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760694080",
+      "timestamp": 1760694080.0,
+      "timestamp_iso": "2025-10-17T09:41:20Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 17.847288,
+        "file_size_mb": 22.30911,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -78.47287999999999,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760693714",
+      "timestamp": 1760693714.0,
+      "timestamp_iso": "2025-10-17T09:35:14Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 27.0853712,
+        "file_size_mb": 33.856714,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -170.853712,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760693195",
+      "timestamp": 1760693195.0,
+      "timestamp_iso": "2025-10-17T09:26:35Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 1676.7238528,
+        "file_size_mb": 2095.904816,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -16667.238528,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760693011",
+      "timestamp": 1760693011.0,
+      "timestamp_iso": "2025-10-17T09:23:31Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 5.472512,
+        "file_size_mb": 6.84064,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 45.27488,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760692844",
+      "timestamp": 1760692844.0,
+      "timestamp_iso": "2025-10-17T09:20:44Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 3.3383128,
+        "file_size_mb": 4.172891,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 66.616872,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760692327",
+      "timestamp": 1760692327.0,
+      "timestamp_iso": "2025-10-17T09:12:07Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 134.82246,
+        "file_size_mb": 168.528075,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -1248.2246,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760692165",
+      "timestamp": 1760692165.0,
+      "timestamp_iso": "2025-10-17T09:09:25Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0,
+        "file_size_mb": 0.0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.0,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760692016",
+      "timestamp": 1760692016.0,
+      "timestamp_iso": "2025-10-17T09:06:56Z",
+      "status": "timed_out",
+      "metadata": {
+        "phase_completed": "validation",
+        "validation_retries": 0,
+        "execution_retries": 0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0,
+        "file_size_mb": 0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 0,
+        "target_achieved": false
+      },
+      "issues": [
+        "Experiment abandoned: Stuck in validation phase (>600s = 10 min)",
+        "Stuck in validation phase after 664s (11 minutes)",
+        "System may have crashed or hung - check orchestrator logs"
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760691770",
+      "timestamp": 1760691770.0,
+      "timestamp_iso": "2025-10-17T09:02:50Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 7.84056,
+        "file_size_mb": 9.8007,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 21.5944,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760691568",
+      "timestamp": 1760691568.0,
+      "timestamp_iso": "2025-10-17T08:59:28Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 11.8775136,
+        "file_size_mb": 14.846892,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -18.775136000000003,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760691287",
+      "timestamp": 1760691287.0,
+      "timestamp_iso": "2025-10-17T08:54:47Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 2.6613896,
+        "file_size_mb": 3.326737,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 73.386104,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760691050",
+      "timestamp": 1760691050.0,
+      "timestamp_iso": "2025-10-17T08:50:50Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 30.821536,
+        "file_size_mb": 38.52692,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -208.21535999999998,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760690573",
+      "timestamp": 1760690573.0,
+      "timestamp_iso": "2025-10-17T08:42:53Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0,
+        "file_size_mb": 0.0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.0,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760690390",
+      "timestamp": 1760690390.0,
+      "timestamp_iso": "2025-10-17T08:39:50Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0,
+        "file_size_mb": 0.0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.0,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760689338",
+      "timestamp": 1760689338.0,
+      "timestamp_iso": "2025-10-17T08:22:18Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 188.8549056,
+        "file_size_mb": 236.068632,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -1788.549056,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760689170",
+      "timestamp": 1760689170.0,
+      "timestamp_iso": "2025-10-17T08:19:30Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.282752,
+        "file_size_mb": 0.35344,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 97.17248,
+        "target_achieved": true
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760689002",
+      "timestamp": 1760689002.0,
+      "timestamp_iso": "2025-10-17T08:16:42Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0052392,
+        "file_size_mb": 0.006549,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 99.947608,
+        "target_achieved": true
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760687280",
+      "timestamp": 1760687280.0,
+      "timestamp_iso": "2025-10-17T07:48:00Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 7.0430664,
+        "file_size_mb": 8.803833,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 29.569336,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760685834",
+      "timestamp": 1760685834.0,
+      "timestamp_iso": "2025-10-17T07:23:54Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 94.3932848,
+        "file_size_mb": 117.991606,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -843.932848,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760685182",
+      "timestamp": 1760685182.0,
+      "timestamp_iso": "2025-10-17T07:13:02Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 26.3837424,
+        "file_size_mb": 32.979678,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -163.837424,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760684905",
+      "timestamp": 1760684905.0,
+      "timestamp_iso": "2025-10-17T07:08:25Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 15.038184,
+        "file_size_mb": 17.926912307739258,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.38183999999999,
+        "target_achieved": false
+      },
+      "issues": [
+        {
+          "phase": "design",
+          "reason": "LLM code generation returned 0 characters",
+          "llm_analysis": "N/A - LLM API error",
+          "hypothesis": "N/A - LLM API error"
+        }
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760684580",
+      "timestamp": 1760684580.0,
+      "timestamp_iso": "2025-10-17T07:03:00Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0.0,
+        "file_size_mb": 0.0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -50.0,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760684423",
+      "timestamp": 1760684423.0,
+      "timestamp_iso": "2025-10-17T07:00:23Z",
+      "status": "completed",
+      "metadata": {
+        "phase_completed": "analysis",
+        "validation_retries": 0.0,
+        "execution_retries": 0.0,
+        "needs_human": false
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 226.6267704,
+        "file_size_mb": 283.283463,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": -2166.267704,
+        "target_achieved": false
+      },
+      "issues": [],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760684259",
+      "timestamp": 1760684259.0,
+      "timestamp_iso": "2025-10-17T06:57:39Z",
+      "status": "timed_out",
+      "metadata": {
+        "phase_completed": "execution",
+        "validation_retries": 0,
+        "execution_retries": 0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0,
+        "file_size_mb": 0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 0,
+        "target_achieved": false
+      },
+      "issues": [
+        "Experiment abandoned: Stuck in execution phase (>900s = 15 min)",
+        "Stuck in execution phase after 921s (15 minutes)",
+        "System may have crashed or hung - check orchestrator logs"
+      ],
+      "code_generation": {}
+    },
+    {
+      "experiment_id": "proc_exp_1760684130",
+      "timestamp": 1760684130.0,
+      "timestamp_iso": "2025-10-17T06:55:30Z",
+      "status": "timed_out",
+      "metadata": {
+        "phase_completed": "execution",
+        "validation_retries": 0,
+        "execution_retries": 0,
+        "needs_human": true
+      },
+      "phases": {},
+      "results": {
+        "bitrate_mbps": 0,
+        "file_size_mb": 0,
+        "approach": "N/A",
+        "expected_bitrate": 0,
+        "reduction_percent": 0,
+        "target_achieved": false
+      },
+      "issues": [
+        "Experiment abandoned: Stuck in execution phase (>900s = 15 min)",
+        "Stuck in execution phase after 1050s (17 minutes)",
+        "System may have crashed or hung - check orchestrator logs"
+      ],
+      "code_generation": {}
+    }
+  ]
+}

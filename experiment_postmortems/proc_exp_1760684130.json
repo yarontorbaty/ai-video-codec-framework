@@ -1,0 +1,27 @@
+{
+  "experiment_id": "proc_exp_1760684130",
+  "timestamp": 1760684130.0,
+  "timestamp_iso": "2025-10-17T06:55:30Z",
+  "status": "timed_out",
+  "metadata": {
+    "phase_completed": "execution",
+    "validation_retries": 0,
+    "execution_retries": 0,
+    "needs_human": true
+  },
+  "phases": {},
+  "results": {
+    "bitrate_mbps": 0,
+    "file_size_mb": 0,
+    "approach": "N/A",
+    "expected_bitrate": 0,
+    "reduction_percent": 0,
+    "target_achieved": false
+  },
+  "issues": [
+    "Experiment abandoned: Stuck in execution phase (>900s = 15 min)",
+    "Stuck in execution phase after 1050s (17 minutes)",
+    "System may have crashed or hung - check orchestrator logs"
+  ],
+  "code_generation": {}
+}
