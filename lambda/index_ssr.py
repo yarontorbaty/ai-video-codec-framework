@@ -717,32 +717,51 @@ def generate_blog_html(experiments, reasoning_items):
             'comparison': comparison
         })
     
-    # Calculate summary statistics
+    # Calculate summary statistics - only for quality-verified experiments with valid bitrates
     completed_experiments = [p for p in blog_posts if p['exp'].get('status') == 'completed']
     total_experiments = len(blog_posts)
-    best_bitrate = min([p['metrics'].get('bitrate_mbps', 999) for p in completed_experiments], default=10.0)
     
-    tier90_count = sum(1 for p in completed_experiments if p['metrics'].get('bitrate_mbps', 999) <= 1.0)
-    tier70_count = sum(1 for p in completed_experiments if 1.0 < p['metrics'].get('bitrate_mbps', 999) <= 3.0)
-    tier50_count = sum(1 for p in completed_experiments if 3.0 < p['metrics'].get('bitrate_mbps', 999) <= 5.0)
+    # Filter to only quality-verified experiments with valid bitrates that beat baseline (10 Mbps)
+    quality_verified_experiments = [
+        p for p in completed_experiments 
+        if p['metrics'].get('quality_verified', False) and 
+           p['metrics'].get('bitrate_mbps', 0) > 0 and
+           p['metrics'].get('bitrate_mbps', 999) < 10.0 and
+           p['metrics'].get('psnr_db', 0) > 0  # Must have PSNR measurement
+    ]
+    
+    # Best bitrate from quality-verified experiments only
+    valid_bitrates = [p['metrics'].get('bitrate_mbps') for p in quality_verified_experiments if p['metrics'].get('bitrate_mbps', 0) > 0]
+    best_bitrate = min(valid_bitrates) if valid_bitrates else 10.0
+    
+    # Count tier achievements - only from quality-verified experiments
+    tier90_count = sum(1 for p in quality_verified_experiments if p['metrics'].get('bitrate_mbps', 999) <= 1.0)
+    tier70_count = sum(1 for p in quality_verified_experiments if 1.0 < p['metrics'].get('bitrate_mbps', 999) <= 3.0)
+    tier50_count = sum(1 for p in quality_verified_experiments if 3.0 < p['metrics'].get('bitrate_mbps', 999) <= 5.0)
+    
+    quality_verified_count = len(quality_verified_experiments)
     
     # Generate summary section
     summary_html = f'''
     <div class="summary-section">
         <h2>🎯 Research Progress Summary</h2>
-        <p>Our autonomous AI system has conducted {total_experiments} compression experiments, systematically exploring different approaches to achieve significant bitrate reductions while maintaining video quality.</p>
+        <p>Our autonomous AI system has conducted {total_experiments} compression experiments, with {quality_verified_count} successfully completing quality verification (PSNR/SSIM measured). These verified experiments demonstrate systematic progress toward significant bitrate reductions while maintaining video quality.</p>
         <div class="summary-stats">
             <div class="summary-stat">
                 <div class="value">{total_experiments}</div>
                 <div class="label">Total Experiments</div>
             </div>
             <div class="summary-stat">
+                <div class="value">{quality_verified_count}</div>
+                <div class="label">Quality Verified</div>
+            </div>
+            <div class="summary-stat">
                 <div class="value">{best_bitrate:.2f} Mbps</div>
-                <div class="label">Best Bitrate</div>
+                <div class="label">Best Verified Bitrate</div>
             </div>
             <div class="summary-stat">
                 <div class="value">🏆 {tier90_count} | 🥇 {tier70_count} | 🥈 {tier50_count}</div>
-                <div class="label">Tier Achievements</div>
+                <div class="label">Verified Achievements</div>
             </div>
         </div>
     </div>
