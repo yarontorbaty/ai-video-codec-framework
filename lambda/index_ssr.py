@@ -76,13 +76,23 @@ def handler(event, context):
         # Keep the full path including /admin
         
         try:
+            # Get Authorization header from request
+            headers_from_event = event.get('headers', {})
+            request_headers = {'Content-Type': 'application/json'}
+            
+            # Forward Authorization header if present (case-insensitive lookup)
+            for header_name, header_value in headers_from_event.items():
+                if header_name.lower() == 'authorization':
+                    request_headers['Authorization'] = header_value
+                    break
+            
             # Forward the request
             if event.get('httpMethod') == 'POST':
                 body = event.get('body', '{}')
                 req = urllib.request.Request(
                     f"{admin_api_endpoint}{path}",
                     data=body.encode('utf-8'),
-                    headers={'Content-Type': 'application/json'}
+                    headers=request_headers
                 )
                 with urllib.request.urlopen(req) as response:
                     return {
@@ -94,7 +104,11 @@ def handler(event, context):
                         'body': response.read().decode('utf-8')
                     }
             else:
-                with urllib.request.urlopen(f"{admin_api_endpoint}{path}") as response:
+                req = urllib.request.Request(
+                    f"{admin_api_endpoint}{path}",
+                    headers=request_headers
+                )
+                with urllib.request.urlopen(req) as response:
                     return {
                         'statusCode': response.status,
                         'headers': {
