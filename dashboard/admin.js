@@ -802,11 +802,31 @@ async function rerunExperiment(experimentId) {
         statusDiv.style.color = '#ffffff';
         statusDiv.textContent = hasCode ? `🔄 Rerunning with original code...` : `🔄 Starting new experiment...`;
         
-        // For now, just start a new experiment
-        // TODO: Implement proper code preservation in orchestrator
-        await executeCommand('start_experiment');
+        // Call the rerun_experiment command with the experiment ID
+        const commandResponse = await fetch('/admin/command', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('admin_token') || ''
+            },
+            body: JSON.stringify({
+                command: 'rerun_experiment',
+                experiment_id: experimentId
+            })
+        });
         
-        statusDiv.textContent = `✓ Experiment queued`;
+        const result = await commandResponse.json();
+        
+        if (result.success) {
+            statusDiv.style.background = 'linear-gradient(135deg, #059669 0%, #10b981 100%)';
+            statusDiv.style.borderColor = '#34d399';
+            statusDiv.textContent = `✓ ${result.message}`;
+            
+            // Refresh experiments list after a delay
+            setTimeout(() => loadExperiments(), 2000);
+        } else {
+            throw new Error(result.message || 'Rerun command failed');
+        }
         
     } catch (error) {
         statusDiv.style.display = 'block';

@@ -1012,6 +1012,39 @@ def main():
     
     runner = ProceduralExperimentRunner()
     
+    # Check if this is a rerun of an existing experiment
+    rerun_experiment_id = os.environ.get('RERUN_EXPERIMENT_ID')
+    
+    if rerun_experiment_id:
+        logger.info("=" * 60)
+        logger.info(f"RERUN MODE: Re-executing experiment {rerun_experiment_id}")
+        logger.info("=" * 60)
+        
+        # Try to fetch original code from DynamoDB
+        try:
+            reasoning_table = boto3.resource('dynamodb', region_name='us-east-1').Table('ai-video-codec-reasoning')
+            response = reasoning_table.query(
+                KeyConditionExpression='reasoning_id = :id',
+                ExpressionAttributeValues={':id': rerun_experiment_id}
+            )
+            
+            if response.get('Items'):
+                reasoning_item = response['Items'][0]
+                generated_code_str = reasoning_item.get('generated_code')
+                
+                if generated_code_str and generated_code_str != '{}':
+                    generated_code = json.loads(generated_code_str) if isinstance(generated_code_str, str) else generated_code_str
+                    logger.info("✅ Found original code in DynamoDB!")
+                    logger.info(f"   Code length: {len(generated_code.get('code', ''))} characters")
+                    logger.info(f"   Original hypothesis: {reasoning_item.get('hypothesis', 'N/A')[:100]}...")
+                    # TODO: Use this code in the experiment
+                else:
+                    logger.warning("⚠️  Original code field is empty - will generate fresh code")
+            else:
+                logger.warning(f"⚠️  No reasoning found for {rerun_experiment_id} - will generate fresh code")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not fetch original code: {e} - will generate fresh code")
+    
     # Get iteration number from environment or default to 1
     iteration = int(os.environ.get('EXPERIMENT_ITERATION', '1'))
     

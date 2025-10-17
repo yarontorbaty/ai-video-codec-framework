@@ -838,6 +838,58 @@ def start_experiment_command():
         return {"success": False, "message": str(e)}
 
 
+def rerun_experiment_command(experiment_id):
+    """Rerun a specific experiment with its original code if available."""
+    try:
+        # Check if we have the original experiment's code
+        reasoning_table = boto3.resource('dynamodb', region_name='us-east-1').Table('ai-video-codec-reasoning')
+        
+        try:
+            reasoning_response = reasoning_table.query(
+                KeyConditionExpression='reasoning_id = :id',
+                ExpressionAttributeValues={':id': experiment_id}
+            )
+            has_code = False
+            if reasoning_response.get('Items'):
+                reasoning_item = reasoning_response['Items'][0]
+                generated_code = reasoning_item.get('generated_code')
+                if generated_code and generated_code != '{}':
+                    has_code = True
+                    logger.info(f"Found original code for {experiment_id}")
+        except Exception as e:
+            logger.warning(f"Could not check for original code: {e}")
+            has_code = False
+        
+        # Send SSM command to trigger rerun with experiment ID
+        response = ssm.send_command(
+            InstanceIds=[ORCHESTRATOR_INSTANCE_ID],
+            DocumentName='AWS-RunShellScript',
+            Parameters={
+                'commands': [
+                    'cd /home/ec2-user/ai-video-codec',
+                    f'export RERUN_EXPERIMENT_ID={experiment_id}',
+                    'python3 src/agents/procedural_experiment_runner.py'
+                ]
+            },
+            TimeoutSeconds=1800,
+            Comment=f'Rerun experiment {experiment_id}'
+        )
+        
+        message = f"Experiment rerun started. Command ID: {response['Command']['CommandId']}"
+        if not has_code:
+            message += " (Warning: Original code not found - will generate new code)"
+        
+        return {
+            "success": True,
+            "message": message,
+            "has_original_code": has_code
+        }
+    
+    except Exception as e:
+        logger.error(f"Error rerunning experiment: {e}")
+        return {"success": False, "message": str(e)}
+
+
 def stop_experiments_command():
     """Stop all running experiments."""
     try:
@@ -1035,18 +1087,26 @@ def get_experiments_list():
         return {"success": False, "error": str(e), "experiments": []}
 
 
-def handle_command(command):
+def handle_command(command, params=None):
     """Execute admin command."""
     command_map = {
         'start_experiment': start_experiment_command,
         'stop_experiments': stop_experiments_command,
         'pause_autonomous': pause_autonomous_command,
         'resume_autonomous': resume_autonomous_command,
+        'rerun_experiment': rerun_experiment_command,
     }
     
     handler = command_map.get(command.lower())
     if handler:
-        return handler()
+        # Check if command requires parameters
+        if command.lower() == 'rerun_experiment':
+            if params and 'experiment_id' in params:
+                return handler(params['experiment_id'])
+            else:
+                return {"success": False, "message": "experiment_id parameter required for rerun_experiment"}
+        else:
+            return handler()
     else:
         return {"success": False, "message": f"Unknown command: {command}"}
 
@@ -1162,11 +1222,11 @@ def lambda_handler(event, context):
         
         elif path == '/admin/command' and method == 'POST':
             command = body.get('command', '')
-            response_body = handle_command(command)
+            response_body = handle_command(command, body)
         
         elif path == '/admin/execute' and method == 'POST':
             command = body.get('command', '')
-            response_body = handle_command(command)
+            response_body = handle_command(command, body)
         
         else:
             response_body = {"error": "Not found"}
