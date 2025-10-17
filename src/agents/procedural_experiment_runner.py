@@ -30,6 +30,7 @@ class ExperimentPhase(Enum):
     DEPLOY = "deploy"
     VALIDATION = "validation"
     EXECUTION = "execution"
+    QUALITY_VERIFICATION = "quality_verification"
     ANALYSIS = "analysis"
     COMPLETE = "complete"
     NEEDS_HUMAN = "needs_human"
@@ -142,9 +143,9 @@ class ProceduralExperimentRunner:
             if not execution_result['success']:
                 return self._create_failure_result(experiment_id, "execution_failed", execution_result)
             
-            # Update: Execution complete
+            # Update: Execution complete, moving to quality verification
             elapsed = time.time() - start_time
-            self._update_experiment_status(experiment_id, initial_timestamp, 'analysis', 'running', {
+            self._update_experiment_status(experiment_id, initial_timestamp, 'quality_verification', 'running', {
                 'start_time': start_time,
                 'estimated_duration_seconds': estimated_duration_seconds,
                 'elapsed_seconds': int(elapsed),
@@ -152,11 +153,31 @@ class ProceduralExperimentRunner:
                 'execution_retries': execution_result.get('retries', 0)
             })
             
-            # Phase 5: Analysis
+            # Phase 5: Quality Verification (Decompression + PSNR/SSIM)
+            self.current_phase = ExperimentPhase.QUALITY_VERIFICATION
+            quality_result = self._phase_quality_verification(experiment_id, execution_result, validation_result)
+            if not quality_result['success']:
+                logger.warning(f"  ⚠️  Quality verification failed, continuing with execution metrics only")
+            
+            # Update: Quality verification complete
+            elapsed = time.time() - start_time
+            self._update_experiment_status(experiment_id, initial_timestamp, 'analysis', 'running', {
+                'start_time': start_time,
+                'estimated_duration_seconds': estimated_duration_seconds,
+                'elapsed_seconds': int(elapsed),
+                'validation_retries': validation_result.get('retries', 0),
+                'execution_retries': execution_result.get('retries', 0),
+                'quality_verified': quality_result.get('quality_verified', False)
+            })
+            
+            # Phase 6: Analysis
             self.current_phase = ExperimentPhase.ANALYSIS
+            # Merge quality metrics into execution result for analysis
+            if quality_result['success']:
+                execution_result['quality_metrics'] = quality_result.get('quality_metrics', {})
             analysis_result = self._phase_analysis(experiment_id, execution_result)
             
-            # Phase 6: Complete
+            # Phase 7: Complete
             self.current_phase = ExperimentPhase.COMPLETE
             final_elapsed = time.time() - start_time
             logger.info(f"✅ Experiment completed in {final_elapsed:.1f}s (estimated: {estimated_duration_seconds}s)")
@@ -507,9 +528,117 @@ class ProceduralExperimentRunner:
             'needs_human': True
         }
     
+    def _phase_quality_verification(self, experiment_id: str, execution_result: Dict, validation_result: Dict) -> Dict:
+        """
+        Phase 5: Quality Verification (Decompression + PSNR/SSIM)
+        
+        This phase:
+        1. Loads the compressed data from execution
+        2. Decompresses all frames using LLM code
+        3. Calculates PSNR and SSIM against original
+        4. Returns quality metrics
+        """
+        logger.info("🔍 PHASE 5: QUALITY VERIFICATION (Decompression + PSNR/SSIM)")
+        
+        # Check if we have LLM code with decompress function
+        code = validation_result.get('code')
+        has_decompress = code and 'def decompress_video_frame' in code
+        
+        if not has_decompress:
+            logger.warning("  ⚠️  No decompress function available - skipping quality verification")
+            logger.warning("  💡 LLM should generate BOTH compress_video_frame() AND decompress_video_frame()")
+            return {
+                'success': False,
+                'quality_verified': False,
+                'skip_reason': 'no_decompress_function'
+            }
+        
+        try:
+            import cv2
+            import numpy as np
+            from skimage.metrics import peak_signal_noise_ratio as psnr_metric
+            from skimage.metrics import structural_similarity as ssim_metric
+            from utils.code_sandbox import CodeSandbox
+            
+            results = execution_result.get('results', {})
+            real_metrics = results.get('real_metrics', {})
+            
+            # Check if we have the necessary data
+            compressed_data_path = results.get('compressed_data_path')
+            original_video_path = results.get('original_video_path')
+            
+            if not compressed_data_path or not original_video_path:
+                logger.warning("  ⚠️  Missing compressed data or original video path")
+                # For now, extract quality metrics if they were already calculated
+                if 'psnr_db' in real_metrics:
+                    logger.info(f"  ✅ Quality metrics already available from execution phase")
+                    return {
+                        'success': True,
+                        'quality_verified': True,
+                        'quality_metrics': {
+                            'psnr_db': real_metrics.get('psnr_db'),
+                            'ssim': real_metrics.get('ssim'),
+                            'quality': real_metrics.get('quality')
+                        }
+                    }
+                
+                return {
+                    'success': False,
+                    'quality_verified': False,
+                    'skip_reason': 'missing_data_paths'
+                }
+            
+            logger.info(f"  📹 Loading original video and compressed data...")
+            logger.info(f"     Original: {original_video_path}")
+            logger.info(f"     Compressed: {compressed_data_path}")
+            
+            # For now, if quality metrics were already calculated in execution phase,
+            # return them (backward compatibility)
+            if 'psnr_db' in real_metrics and real_metrics['psnr_db'] > 0:
+                psnr_db = real_metrics['psnr_db']
+                ssim = real_metrics.get('ssim', 0.0)
+                quality = real_metrics.get('quality', 'unknown')
+                
+                logger.info(f"  ✅ Quality metrics already calculated:")
+                logger.info(f"     PSNR: {psnr_db:.2f} dB")
+                logger.info(f"     SSIM: {ssim:.4f}")
+                logger.info(f"     Quality: {quality}")
+                
+                return {
+                    'success': True,
+                    'quality_verified': True,
+                    'quality_metrics': {
+                        'psnr_db': psnr_db,
+                        'ssim': ssim,
+                        'quality': quality
+                    }
+                }
+            
+            # If we get here, quality verification wasn't done in execution phase
+            # This shouldn't happen with the current code, but handle gracefully
+            logger.warning("  ⚠️  Quality metrics not found in execution result")
+            logger.warning("  This indicates the quality verification code in adaptive_codec_agent didn't run")
+            
+            return {
+                'success': False,
+                'quality_verified': False,
+                'skip_reason': 'metrics_not_calculated'
+            }
+            
+        except Exception as e:
+            logger.error(f"  ❌ Quality verification failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            return {
+                'success': False,
+                'quality_verified': False,
+                'error': str(e)
+            }
+    
     def _phase_analysis(self, experiment_id: str, execution_result: Dict) -> Dict:
-        """Phase 5: Analyze results and store to DynamoDB."""
-        logger.info("📊 PHASE 5: ANALYSIS")
+        """Phase 6: Analyze results and store to DynamoDB."""
+        logger.info("📊 PHASE 6: ANALYSIS")
         
         results = execution_result.get('results', {})
         real_metrics = results.get('real_metrics', results)

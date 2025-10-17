@@ -627,8 +627,9 @@ function renderExperimentsTable(experiments) {
             'deploy': { icon: 'fa-upload', color: '#8b5cf6', label: 'Deploy', order: 2 },
             'validation': { icon: 'fa-check-circle', color: '#f59e0b', label: 'Validate', order: 3 },
             'execution': { icon: 'fa-play-circle', color: '#10b981', label: 'Execute', order: 4 },
-            'analysis': { icon: 'fa-chart-line', color: '#06b6d4', label: 'Analyze', order: 5 },
-            'complete': { icon: 'fa-check-double', color: '#10b981', label: 'Complete', order: 6 },
+            'quality_verification': { icon: 'fa-eye', color: '#ec4899', label: 'Quality Check', order: 5 },
+            'analysis': { icon: 'fa-chart-line', color: '#06b6d4', label: 'Analyze', order: 6 },
+            'complete': { icon: 'fa-check-double', color: '#10b981', label: 'Complete', order: 7 },
             'unknown': { icon: 'fa-question', color: '#94a3b8', label: 'Unknown', order: 0 }
         };
         
