@@ -306,8 +306,9 @@ class ProceduralExperimentRunner:
             llm_analysis = self.planner.get_llm_analysis(recent_experiments)
             
             if not llm_analysis:
-                logger.warning("  LLM analysis not available - using fallback")
-                return {'success': True, 'llm_analysis': None, 'code': None}
+                logger.error("  ❌ LLM analysis not available - cannot proceed")
+                logger.error("  LLM is required for experiment design")
+                return {'success': False, 'llm_analysis': None, 'code': None, 'error': 'LLM unavailable'}
             
             # Generate code based on analysis
             code = llm_analysis.get('generated_code', {}).get('code')
@@ -338,8 +339,9 @@ class ProceduralExperimentRunner:
         llm_analysis = design_result.get('llm_analysis')
         
         if not code:
-            logger.warning("  ⚠️  No code to deploy - LLM code generation failed")
-            logger.warning("  This requires human intervention to fix LLM code generation")
+            logger.error("  ❌ No code to deploy - LLM code generation failed")
+            logger.error("  This requires human intervention to fix LLM code generation")
+            logger.error("  Cannot proceed without valid LLM-generated code")
             
             # Flag for human intervention
             self.human_intervention_reasons.append({
@@ -349,9 +351,8 @@ class ProceduralExperimentRunner:
                 'hypothesis': llm_analysis.get('hypothesis', 'N/A') if llm_analysis else 'N/A'
             })
             
-            # Continue with baseline but mark as needs human
-            logger.info("  Will continue with baseline codec to gather data, but flagged for review")
-            return {'success': True, 'code': None, 'deployed': False, 'needs_human': True}
+            # Stop experiment - no fallback
+            return {'success': False, 'code': None, 'deployed': False, 'needs_human': True}
         
         logger.info(f"  Deploying {len(code)} chars of code to sandbox...")
         
@@ -451,54 +452,37 @@ class ProceduralExperimentRunner:
             
             # Run actual experiment
             try:
-                if has_llm_code:
-                    # USE THE LLM CODE! Run with AdaptiveCodecAgent
-                    logger.info("  🧪 Running experiment with LLM code...")
-                    
-                    results = self.codec_agent.run_real_experiment_with_code(
-                        code=code,
-                        duration=10.0,
-                        fps=30.0,
-                        resolution=(1920, 1080)
-                    )
-                    
-                    logger.info(f"  📊 LLM code execution complete")
-                    
-                else:
-                    # Fallback: Use baseline procedural generator
-                    logger.info("  🔄 Running baseline procedural generator...")
-                    from agents.procedural_generator import ProceduralCompressionAgent
-                    
-                    agent = ProceduralCompressionAgent(resolution=(1920, 1080), config={})
-                    
-                    # Generate test video
-                    timestamp = int(time.time())
-                    output_path = f"/tmp/proc_exp_{timestamp}.mp4"
-                    
-                    results = agent.generate_procedural_video(
-                        output_path,
-                        duration=10.0,
-                        fps=30.0
-                    )
+                if not has_llm_code:
+                    # No LLM code - skip execution entirely
+                    logger.error("  ❌ No LLM code available - cannot run experiment")
+                    logger.error("  Experiment requires valid LLM-generated code")
+                    raise Exception("No LLM code available for execution")
+                
+                # USE THE LLM CODE! Run with AdaptiveCodecAgent
+                logger.info("  🧪 Running experiment with LLM code...")
+                
+                results = self.codec_agent.run_real_experiment_with_code(
+                    code=code,
+                    duration=10.0,
+                    fps=30.0,
+                    resolution=(1920, 1080)
+                )
+                
+                logger.info(f"  📊 LLM code execution complete")
                 
                 # Check if execution succeeded
                 if results.get('status') == 'completed':
                     logger.info(f"  ✅ Execution SUCCEEDED on attempt {attempt}")
                     bitrate = results.get('real_metrics', {}).get('bitrate_mbps', 0)
                     logger.info(f"  📈 Bitrate: {bitrate:.4f} Mbps")
-                    
-                    # Log if this is LLM code vs baseline
-                    if has_llm_code:
-                        logger.info(f"  🎯 Result from LLM-generated compression code")
-                    else:
-                        logger.info(f"  ⚠️  Result from baseline (no LLM code)")
+                    logger.info(f"  🎯 Result from LLM-generated compression code")
                     
                     return {
                         'success': True,
                         'executed': True,
                         'retries': attempt - 1,
                         'results': results,
-                        'used_llm_code': has_llm_code
+                        'used_llm_code': True
                     }
                 else:
                     logger.warning(f"  ❌ Execution returned non-completed status")
