@@ -404,14 +404,35 @@ class ProceduralExperimentRunner:
         logger.info("📊 PHASE 5: ANALYSIS")
         
         results = execution_result.get('results', {})
+        real_metrics = results.get('real_metrics', results)
         
-        # Store results
+        # Calculate comparison with HEVC baseline (10 Mbps)
+        hevc_baseline_mbps = 10.0
+        bitrate_mbps = real_metrics.get('bitrate_mbps', 0)
+        reduction_percent = ((hevc_baseline_mbps - bitrate_mbps) / hevc_baseline_mbps) * 100 if bitrate_mbps else -50.0
+        target_achieved = bitrate_mbps < 1.0 if bitrate_mbps else False
+        
+        # Format experiment data in the structure the blog expects
+        # The blog looks for experiments[].experiment_type == 'real_procedural_generation'
+        experiments_array = [{
+            'experiment_type': 'real_procedural_generation',
+            'status': 'completed',
+            'real_metrics': real_metrics,
+            'comparison': {
+                'hevc_baseline_mbps': hevc_baseline_mbps,
+                'reduction_percent': reduction_percent,
+                'target_achieved': target_achieved
+            }
+        }]
+        
+        # Store results in format compatible with blog
+        from datetime import datetime
         experiment_data = {
             'experiment_id': experiment_id,
             'timestamp': int(time.time()),
-            'experiment_type': 'llm_procedural_evolution',
+            'timestamp_iso': datetime.utcnow().isoformat() + 'Z',
             'status': 'completed',
-            'real_metrics': results.get('real_metrics', {}),
+            'experiments': json.dumps(experiments_array),  # Blog expects JSON string
             'validation_retries': 0,  # Will be filled from validation phase
             'execution_retries': execution_result.get('retries', 0),
             'phase_completed': 'analysis',
@@ -422,6 +443,7 @@ class ProceduralExperimentRunner:
         try:
             self.experiments_table.put_item(Item=experiment_data)
             logger.info(f"  ✅ Results stored to DynamoDB")
+            logger.info(f"  Bitrate: {bitrate_mbps:.2f} Mbps, Reduction: {reduction_percent:.1f}%")
         except Exception as e:
             logger.error(f"  ⚠️  Failed to store results: {e}")
         
