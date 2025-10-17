@@ -296,9 +296,134 @@ def verify_2fa_and_login(username, code):
         return {"success": False, "error": "Verification failed"}
 
 
+def track_llm_usage(input_tokens, output_tokens):
+    """Track LLM API usage for cost calculation."""
+    try:
+        # Get current usage stats
+        response = control_table.get_item(Key={'control_id': 'llm_usage_stats'})
+        item = response.get('Item', {})
+        
+        # Update totals
+        total_input = int(item.get('total_input_tokens', 0)) + input_tokens
+        total_output = int(item.get('total_output_tokens', 0)) + output_tokens
+        total_calls = int(item.get('total_calls', 0)) + 1
+        
+        # Claude Sonnet 4 pricing (per million tokens)
+        input_cost_per_m = 3.0  # $3 per 1M input tokens
+        output_cost_per_m = 15.0  # $15 per 1M output tokens
+        
+        input_cost = (total_input / 1000000) * input_cost_per_m
+        output_cost = (total_output / 1000000) * output_cost_per_m
+        total_cost = input_cost + output_cost
+        
+        # Store updated stats
+        control_table.put_item(Item={
+            'control_id': 'llm_usage_stats',
+            'total_input_tokens': total_input,
+            'total_output_tokens': total_output,
+            'total_calls': total_calls,
+            'total_cost_usd': round(total_cost, 4),
+            'input_cost_usd': round(input_cost, 4),
+            'output_cost_usd': round(output_cost, 4),
+            'last_updated': datetime.utcnow().isoformat(),
+            'last_call_input_tokens': input_tokens,
+            'last_call_output_tokens': output_tokens
+        })
+        
+        logger.info(f"LLM usage tracked: {input_tokens} in, {output_tokens} out. Total cost: ${total_cost:.4f}")
+        
+    except Exception as e:
+        logger.error(f"Failed to track LLM usage: {e}")
+
+
+def _load_system_prompt_for_chat():
+    """Load system prompt for admin chat - try S3 or use fallback"""
+    try:
+        # Try loading from S3
+        response = s3.get_object(
+            Bucket='ai-video-codec-artifacts-580473065386',
+            Key='system/LLM_SYSTEM_PROMPT.md'
+        )
+        prompt = response['Body'].read().decode('utf-8')
+        logger.info("✅ Loaded system prompt from S3 for admin chat")
+        return prompt
+    except Exception as e:
+        logger.warning(f"⚠️  Could not load system prompt from S3: {e}")
+        # Use comprehensive fallback
+        return """# AUTONOMOUS AI VIDEO CODEC SYSTEM
+
+You are an autonomous AI research system developing advanced video compression algorithms.
+
+You have full capabilities including:
+- Analyzing experiment results
+- Generating compression code
+- Using framework modification tools
+- Self-healing and self-improvement
+
+You can use tools to:
+- modify_framework_file - Fix bugs and improve code
+- run_shell_command - Execute system commands
+- install_python_package - Add dependencies
+- restart_orchestrator - Apply changes
+- rollback_file - Undo mistakes
+
+Be precise, data-driven, and autonomous."""
+
+
+def _get_experiments_context_for_chat():
+    """Fetch recent experiments for admin chat context"""
+    try:
+        # Scan and get latest experiments
+        all_items = []
+        scan_kwargs = {}
+        
+        while True:
+            response = experiments_table.scan(**scan_kwargs)
+            all_items.extend(response.get('Items', []))
+            
+            if 'LastEvaluatedKey' not in response:
+                break
+            scan_kwargs['ExclusiveStartKey'] = response['LastEvaluatedKey']
+        
+        if not all_items:
+            return "No experiments have been run yet."
+        
+        # Sort by timestamp
+        all_items.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        recent = all_items[:5]
+        
+        context = "## Recent Experiments:\n\n"
+        for exp in recent:
+            exp_id = exp.get('experiment_id', 'N/A')
+            status = exp.get('status', 'unknown')
+            timestamp = datetime.fromtimestamp(exp.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Get metrics
+            best_bitrate = None
+            experiments = exp.get('experiments', [])
+            if isinstance(experiments, str):
+                experiments = json.loads(experiments)
+            
+            for e in experiments:
+                metrics = e.get('real_metrics', {})
+                bitrate = metrics.get('bitrate_mbps')
+                if bitrate and (best_bitrate is None or bitrate < best_bitrate):
+                    best_bitrate = bitrate
+            
+            bitrate_str = f"{best_bitrate:.4f} Mbps" if best_bitrate else "N/A"
+            context += f"- **{exp_id}** ({timestamp}): {status}, Best Bitrate: {bitrate_str}\n"
+        
+        return context
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch experiments context: {e}")
+        return f"Error fetching experiments: {str(e)}"
+
+
 def call_llm_chat(message, history):
     """
-    Call governing LLM with admin message.
+    Call governing LLM with admin message - WITH FULL ORCHESTRATOR CONTEXT.
+    Includes tool calling capabilities.
     """
     try:
         import urllib.request
@@ -307,37 +432,56 @@ def call_llm_chat(message, history):
         if not ANTHROPIC_API_KEY:
             return {"error": "LLM API key not configured - check Secrets Manager"}
         
-        # Build conversation with system prompt
+        # Load full system prompt (same as orchestrator)
+        base_system_prompt = _load_system_prompt_for_chat()
+        
+        # Add admin chat context
+        admin_context = """
+
+## 🎧 ADMIN CHAT MODE
+
+You are in direct conversation with the human administrator.
+
+**You have full orchestrator capabilities:**
+- Complete system prompt (same as running experiments)
+- Recent experiments data (provided below)
+- Can use run_shell_command tool to check orchestrator logs/status via SSM
+
+**For this conversation:**
+- Answer questions about experiments
+- Use run_shell_command to check orchestrator logs when asked
+- Provide insights and recommendations
+- Explain your reasoning clearly
+- Be conversational but precise
+
+**Note**: You can execute shell commands on the orchestrator to check status!
+
+"""
+        system_prompt = base_system_prompt + admin_context
+        
+        # Get recent experiments context
+        experiments_context = _get_experiments_context_for_chat()
+        
+        # Build conversation
         messages = []
         
-        # Add history
+        # Add experiments context first
+        messages.append({
+            "role": "user",
+            "content": f"""Current System State:
+
+{experiments_context}
+
+The admin's message follows..."""
+        })
+        
+        # Add chat history
         for msg in history[-10:]:  # Last 10 messages
             role = "user" if msg['role'] == 'user' else "assistant"
             messages.append({"role": role, "content": msg['content']})
         
         # Add current message
         messages.append({"role": "user", "content": message})
-        
-        # System prompt
-        system_prompt = """You are the Governing LLM for the AiV1 autonomous video codec project. 
-You are chatting with the human administrator who can override your decisions.
-
-Your role:
-1. Answer questions about the current state of experiments
-2. Provide insights and suggestions for new approaches
-3. Explain your reasoning and hypotheses
-4. Accept guidance and suggestions from the admin
-5. Generate commands when requested (format: COMMAND: {command_name})
-
-Available commands:
-- START_EXPERIMENT: Start a new experiment
-- STOP_EXPERIMENTS: Stop all running experiments
-- PAUSE_AUTONOMOUS: Pause autonomous mode
-- RESUME_AUTONOMOUS: Resume autonomous mode
-- SUGGEST_CONFIG: Suggest a new configuration
-
-Current project status: Experiments running, parameter storage achieving 0.04 Mbps, 
-LLM code generation active. Latest insight: codec architecture is inverted."""
 
         url = "https://api.anthropic.com/v1/messages"
         headers = {
@@ -346,21 +490,173 @@ LLM code generation active. Latest insight: codec architecture is inverted."""
             "content-type": "application/json"
         }
         
-        data = json.dumps({
-            "model": "claude-sonnet-4-5",
-            "max_tokens": 2048,
-            "temperature": 0.7,
-            "system": system_prompt,
-            "messages": messages
-        }).encode('utf-8')
-        
-        req = urllib.request.Request(url, data=data, headers=headers)
-        with urllib.request.urlopen(req, timeout=120) as response:
-            result = json.loads(response.read().decode('utf-8'))
-            return {
-                "response": result['content'][0]['text'],
-                "commands": extract_commands(result['content'][0]['text'])
+        # Define simplified tools for admin chat (only run_shell_command)
+        admin_tools = [{
+            "name": "run_shell_command",
+            "description": "Execute a shell command on the orchestrator EC2 instance via AWS SSM. Use this to check logs, status, or system state.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "Shell command to execute (e.g., 'tail -50 /tmp/orch.log', 'pgrep -f autonomous')"
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why you need to run this command"
+                    }
+                },
+                "required": ["command", "reason"]
             }
+        }]
+        
+        # Tool calling loop (max 3 rounds for admin chat to ensure we get final response)
+        result = None
+        for round_num in range(3):
+            data = json.dumps({
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 4096,
+                "temperature": 0.7,
+                "system": system_prompt,
+                "messages": messages,
+                "tools": admin_tools
+            }).encode('utf-8')
+            
+            req = urllib.request.Request(url, data=data, headers=headers)
+            with urllib.request.urlopen(req, timeout=120) as response:
+                result = json.loads(response.read().decode('utf-8'))
+            
+            stop_reason = result.get('stop_reason')
+            
+            # If LLM wants to use tools
+            if stop_reason == 'tool_use':
+                logger.info(f"🛠️  Admin chat: LLM using tools (round {round_num + 1})")
+                
+                # Add assistant message
+                messages.append({"role": "assistant", "content": result['content']})
+                
+                # Execute tools
+                tool_results = []
+                for block in result['content']:
+                    if isinstance(block, dict) and block.get('type') == 'tool_use':
+                        tool_name = block.get('name')
+                        tool_input = block.get('input', {})
+                        tool_id = block.get('id')
+                        
+                        logger.info(f"   Tool: {tool_name}")
+                        logger.info(f"   Input: {json.dumps(tool_input)}")
+                        
+                        if tool_name == 'run_shell_command':
+                            # Execute via SSM
+                            command = tool_input.get('command', '')
+                            reason = tool_input.get('reason', '')
+                            
+                            try:
+                                # Send SSM command
+                                ssm_response = ssm.send_command(
+                                    InstanceIds=[ORCHESTRATOR_INSTANCE_ID],
+                                    DocumentName='AWS-RunShellScript',
+                                    Parameters={'commands': [command]},
+                                    TimeoutSeconds=30
+                                )
+                                
+                                command_id = ssm_response['Command']['CommandId']
+                                
+                                # Wait for result (up to 10 seconds)
+                                import time
+                                time.sleep(3)
+                                
+                                invocation = ssm.get_command_invocation(
+                                    CommandId=command_id,
+                                    InstanceId=ORCHESTRATOR_INSTANCE_ID
+                                )
+                                
+                                stdout = invocation.get('StandardOutputContent', '')
+                                stderr = invocation.get('StandardErrorContent', '')
+                                exit_code = invocation.get('ResponseCode', -1)
+                                
+                                result_text = f"Exit Code: {exit_code}\n\nOutput:\n{stdout}"
+                                if stderr:
+                                    result_text += f"\n\nErrors:\n{stderr}"
+                                
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_id,
+                                    "content": result_text
+                                })
+                                
+                                logger.info(f"   ✅ Command executed successfully")
+                                
+                            except Exception as e:
+                                logger.error(f"   ❌ Command failed: {e}")
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": tool_id,
+                                    "content": f"Error executing command: {str(e)}"
+                                })
+                        else:
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_id,
+                                "content": f"Tool '{tool_name}' not available in admin chat"
+                            })
+                
+                # Add tool results to conversation
+                messages.append({"role": "user", "content": tool_results})
+                continue
+            
+            # No more tools - extract final response
+            break
+        
+        # Extract response text (after loop)
+        response_text = None
+        if result:
+            for block in result.get('content', []):
+                if isinstance(block, dict) and block.get('type') == 'text':
+                    response_text = block.get('text', '')
+                    if response_text:  # Only break if we got actual text
+                        break
+                elif isinstance(block, str):
+                    response_text = block
+                    break
+            
+            # If still no text, try fallback extraction
+            if not response_text and result.get('content'):
+                try:
+                    content = result['content']
+                    if isinstance(content, list) and len(content) > 0:
+                        first = content[0]
+                        if isinstance(first, str):
+                            response_text = first
+                        elif isinstance(first, dict):
+                            response_text = first.get('text', '')
+                except:
+                    pass
+        
+        # Final fallback
+        if not response_text:
+            logger.warning(f"Failed to extract response text from LLM result. Content: {result.get('content') if result else 'No result'}")
+            response_text = "I apologize, I encountered an issue generating a response. Please try rephrasing your question."
+        
+        # Track token usage
+        try:
+            usage = result.get('usage', {})
+            input_tokens = usage.get('input_tokens', 0)
+            output_tokens = usage.get('output_tokens', 0)
+            
+            # Store usage in DynamoDB for cost tracking
+            track_llm_usage(input_tokens, output_tokens)
+            
+            logger.info(f"💬 Admin chat tokens: {input_tokens} in, {output_tokens} out")
+        except Exception as track_err:
+            logger.error(f"Failed to track LLM usage: {track_err}")
+        
+        return {
+            "response": response_text or "No response generated",
+            "has_context": True,
+            "experiments_loaded": experiments_context != "No experiments have been run yet.",
+            "tools_used": round_num > 0 if 'round_num' in locals() else False
+        }
     
     except Exception as e:
         logger.error(f"LLM call failed: {e}")
@@ -553,6 +849,122 @@ def resume_autonomous_command():
         return {"success": False, "message": str(e)}
 
 
+def get_experiments_list():
+    """Get list of recent experiments with details."""
+    try:
+        # Get all experiments and sort to get the latest ones
+        response = experiments_table.scan()
+        all_items = response.get('Items', [])
+        
+        # Handle pagination if there are more items
+        while 'LastEvaluatedKey' in response:
+            response = experiments_table.scan(
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            all_items.extend(response.get('Items', []))
+        
+        # Sort by timestamp (descending) and take the latest 50
+        all_items.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
+        total_count = len(all_items)  # Store total count before limiting
+        experiments = all_items[:50]  # Get latest 50 experiments
+        
+        # Also check SSM for running commands
+        ssm_commands = []
+        try:
+            cmd_response = ssm.list_commands(
+                InstanceId=ORCHESTRATOR_INSTANCE_ID,
+                MaxResults=10
+            )
+            ssm_commands = cmd_response.get('Commands', [])
+        except Exception as e:
+            logger.error(f"Error fetching SSM commands: {e}")
+        
+        # Format experiments for display (already sorted by timestamp descending)
+        exp_list = []
+        for exp in experiments:
+            exp_data = {
+                'id': exp.get('experiment_id'),
+                'timestamp': exp.get('timestamp'),
+                'status': exp.get('status', 'unknown'),
+                'duration': 0,
+                'best_bitrate': None,
+                'experiments_run': 0,
+                # Code evolution fields
+                'code_changed': False,
+                'version': 0,
+                'evolution_status': 'N/A',
+                'improvement': 'N/A',
+                'summary': '',
+                'deployment_status': 'not_deployed',
+                'github_committed': False,
+                'github_commit_hash': None,
+                # Human intervention tracking
+                'needs_human': exp.get('needs_human', False),
+                'human_intervention_reasons': exp.get('human_intervention_reasons', [])
+            }
+            
+            # Parse experiment details
+            try:
+                exp_details = exp.get('experiments', '[]')
+                if isinstance(exp_details, str):
+                    exp_details = json.loads(exp_details)
+                
+                exp_data['experiments_run'] = len(exp_details)
+                
+                # Extract code evolution data and best bitrate
+                for e in exp_details:
+                    # Check for code evolution experiment
+                    if e.get('experiment_type') == 'llm_generated_code_evolution':
+                        exp_data['code_changed'] = True
+                        
+                        # Get evolution info
+                        evolution = e.get('evolution', {})
+                        code_info = e.get('code_info', {})
+                        
+                        exp_data['version'] = code_info.get('version', 0)
+                        exp_data['evolution_status'] = evolution.get('status', 'unknown')
+                        exp_data['improvement'] = evolution.get('improvement', 'N/A')
+                        exp_data['summary'] = evolution.get('summary', evolution.get('reason', ''))
+                        exp_data['deployment_status'] = evolution.get('deployment_status', 'not_deployed')
+                        exp_data['github_committed'] = evolution.get('github_committed', False)
+                        exp_data['github_commit_hash'] = evolution.get('github_commit_hash', None)
+                        
+                        # Extract failure analysis if present
+                        failure_analysis = evolution.get('failure_analysis', {})
+                        if failure_analysis:
+                            exp_data['failure_analysis'] = {
+                                'category': failure_analysis.get('failure_category', 'unknown'),
+                                'root_cause': failure_analysis.get('root_cause', 'N/A'),
+                                'fix_suggestion': failure_analysis.get('fix_suggestion', 'N/A'),
+                                'severity': failure_analysis.get('severity', 'unknown')
+                            }
+                    
+                    # Find best bitrate
+                    metrics = e.get('real_metrics', {})
+                    bitrate = metrics.get('bitrate_mbps')
+                    if bitrate:
+                        if exp_data['best_bitrate'] is None or bitrate < exp_data['best_bitrate']:
+                            exp_data['best_bitrate'] = float(bitrate)
+            except Exception as e:
+                logger.error(f"Error parsing experiment {exp_data['id']}: {e}")
+            
+            exp_list.append(exp_data)
+        
+        # Check for any currently running commands
+        running_commands = [cmd for cmd in ssm_commands if cmd['Status'] == 'InProgress']
+        
+        return {
+            "success": True,
+            "total_count": total_count,
+            "experiments": exp_list,
+            "running_commands": len(running_commands)
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting experiments list: {e}")
+        return {"success": False, "error": str(e), "experiments": []}
+
+
 def handle_command(command):
     """Execute admin command."""
     command_map = {
@@ -596,8 +1008,9 @@ def lambda_handler(event, context):
         
         # Authentication check (except for login and 2FA verification endpoints)
         if path not in ['/admin/login', '/admin/verify-2fa']:
-            # Check for Authorization header
-            auth_header = event.get('headers', {}).get('Authorization', '')
+            # Check for Authorization header (case-insensitive for API Gateway compatibility)
+            headers_dict = event.get('headers', {})
+            auth_header = headers_dict.get('Authorization', '') or headers_dict.get('authorization', '')
             if not auth_header.startswith('Bearer '):
                 return {
                     'statusCode': 401,
@@ -628,10 +1041,54 @@ def lambda_handler(event, context):
         elif path == '/admin/status':
             response_body = get_system_status()
         
+        elif path == '/admin/experiments':
+            response_body = get_experiments_list()
+        
         elif path == '/admin/chat' and method == 'POST':
             message = body.get('message', '')
+            # Get chat history from DynamoDB if not provided
             history = body.get('history', [])
-            response_body = call_llm_chat(message, history)
+            if not history:
+                try:
+                    history_response = control_table.get_item(Key={'control_id': 'chat_history'})
+                    history_item = history_response.get('Item', {})
+                    history = json.loads(history_item.get('messages', '[]'))
+                except Exception as e:
+                    logger.error(f"Failed to load chat history: {e}")
+                    history = []
+            
+            # Call LLM
+            llm_response = call_llm_chat(message, history)
+            
+            # Store chat message in history only if LLM call succeeded
+            if 'response' in llm_response and 'error' not in llm_response:
+                try:
+                    history.append({'role': 'user', 'content': message, 'timestamp': datetime.utcnow().isoformat()})
+                    history.append({'role': 'assistant', 'content': llm_response['response'], 'timestamp': datetime.utcnow().isoformat()})
+                    
+                    # Keep only last 50 messages
+                    history = history[-50:]
+                    
+                    control_table.put_item(Item={
+                        'control_id': 'chat_history',
+                        'messages': json.dumps(history, default=str),
+                        'updated_at': datetime.utcnow().isoformat()
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to store chat history: {e}")
+            
+            response_body = llm_response
+        
+        elif path == '/admin/chat' and method == 'GET':
+            # Return chat history
+            try:
+                chat_history_response = control_table.get_item(Key={'control_id': 'chat_history'})
+                chat_history_item = chat_history_response.get('Item', {})
+                messages = json.loads(chat_history_item.get('messages', '[]'))
+                response_body = {'messages': messages}
+            except Exception as e:
+                logger.error(f"Failed to load chat history: {e}")
+                response_body = {'messages': []}
         
         elif path == '/admin/command' and method == 'POST':
             command = body.get('command', '')

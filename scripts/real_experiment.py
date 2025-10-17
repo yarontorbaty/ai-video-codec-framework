@@ -74,16 +74,19 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
             bitrate_mbps = results.get('bitrate_mbps', 15.0)
             file_size_kb = results.get('params_size_kb', 0)
             compression_method = 'parameter_storage'
+            parameter_file = results.get('parameter_file', f"/tmp/params_{timestamp}.json")
+            output_file = parameter_file
             
-            logger.info(f"🎯 PARAMETER STORAGE: {file_size_kb:.2f} KB, {bitrate_mbps:.4f} Mbps")
+            logger.info(f"🎯 PARAMETER STORAGE: {parameter_file} ({file_size_kb:.2f} KB, {bitrate_mbps:.4f} Mbps)")
         else:
             # Old mode: rendered video file - use the actual output path
             file_size = os.path.getsize(output_path)
             bitrate_mbps = (file_size * 8) / (10.0 * 1_000_000)
             file_size_kb = file_size / 1024
             compression_method = 'procedural_demoscene'
+            output_file = output_path
             
-            logger.info(f"📹 RENDERED VIDEO: {file_size_kb:.2f} KB, {bitrate_mbps:.2f} Mbps")
+            logger.info(f"📹 RENDERED VIDEO: {output_path} ({file_size_kb:.2f} KB, {bitrate_mbps:.2f} Mbps)")
         
         real_results = {
             'timestamp': datetime.utcnow().isoformat(),
@@ -98,7 +101,9 @@ def run_real_procedural_experiment(llm_config: Optional[Dict] = None):
                 'fps': 30.0,
                 'resolution': '1920x1080',
                 'compression_method': compression_method,
-                'parameter_storage': results.get('mode') == 'parameter_storage'
+                'parameter_storage': results.get('mode') == 'parameter_storage',
+                'output_path': output_file,
+                'unique_file_id': f"{timestamp}_{os.path.basename(output_file)}"
             },
             'comparison': {
                 'hevc_baseline_mbps': 10.0,
@@ -125,8 +130,23 @@ def run_llm_generated_experiment(llm_config: Optional[Dict] = None):
     
     try:
         from agents.adaptive_codec_agent import AdaptiveCodecAgent
+        from agents.llm_self_debugger import LLMSelfDebugger
         import numpy as np
         import cv2
+        
+        # SELF-GOVERNANCE: Analyze previous failures first
+        debugger = LLMSelfDebugger()
+        failure_analysis = debugger.analyze_recent_failures(lookback_hours=1)
+        
+        if failure_analysis['total_failures'] > 5:
+            logger.warning(f"⚠️  Detected {failure_analysis['total_failures']} recent failures")
+            logger.warning("🔧 Generating self-governance report...")
+            
+            governance_report = debugger.create_self_governance_report()
+            
+            # Log recommendations
+            for rec in governance_report['failure_analysis'].get('recommendations', []):
+                logger.warning(f"   💡 {rec['description']}: {rec['fix']}")
         
         # Check if LLM generated code
         if not llm_config or 'generated_code' not in llm_config:
@@ -135,7 +155,8 @@ def run_llm_generated_experiment(llm_config: Optional[Dict] = None):
                 'timestamp': datetime.utcnow().isoformat(),
                 'experiment_type': 'llm_generated_code',
                 'status': 'skipped',
-                'reason': 'no_generated_code'
+                'reason': 'no_generated_code',
+                'debug_info': failure_analysis
             }
         
         # Create adaptive agent
@@ -253,18 +274,55 @@ def upload_real_results(results):
         s3.upload_file(results_file, bucket, key)
         logger.info(f"Real results uploaded to s3://{bucket}/{key}")
         
+        # Extract code evolution info from experiments
+        code_evolution_info = None
+        for exp in results['experiments']:
+            if exp.get('experiment_type') == 'llm_generated_code_evolution' and exp.get('status') == 'completed':
+                evolution = exp.get('evolution', {})
+                code_evolution_info = {
+                    'code_changed': evolution.get('adopted', False),
+                    'version': evolution.get('version', 0),
+                    'status': evolution.get('status', 'unknown'),
+                    'improvement': evolution.get('improvement', 'N/A'),
+                    'summary': evolution.get('summary', 'No changes'),
+                    'deployment_status': evolution.get('deployment_status', 'not_deployed'),
+                    'github_committed': evolution.get('github_committed', False),
+                    'github_commit_hash': evolution.get('github_commit_hash', None)
+                }
+                break
+        
+        # If no successful evolution, check for attempts/failures
+        if not code_evolution_info:
+            for exp in results['experiments']:
+                if 'llm' in exp.get('experiment_type', '').lower():
+                    code_evolution_info = {
+                        'code_changed': False,
+                        'version': 0,
+                        'status': exp.get('status', 'skipped'),
+                        'improvement': 'N/A',
+                        'summary': exp.get('reason', 'No code generation attempted'),
+                        'deployment_status': 'not_deployed',
+                        'github_committed': False,
+                        'github_commit_hash': None
+                    }
+                    break
+        
         # Write to DynamoDB experiments table
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
-        experiments_table.put_item(
-            Item={
-                'experiment_id': results['experiment_id'],
-                'timestamp': int(time.time()),  # Unix timestamp as number
-                'timestamp_iso': results['timestamp'],  # ISO format for readability
-                'experiments': json.dumps(results['experiments']),
-                'status': 'completed',
-                's3_key': key
-            }
-        )
+        item_data = {
+            'experiment_id': results['experiment_id'],
+            'timestamp': int(time.time()),  # Unix timestamp as number
+            'timestamp_iso': results['timestamp'],  # ISO format for readability
+            'experiments': json.dumps(results['experiments']),
+            'status': 'completed',
+            's3_key': key
+        }
+        
+        # Add code evolution info if available
+        if code_evolution_info:
+            item_data['code_evolution'] = json.dumps(code_evolution_info)
+        
+        experiments_table.put_item(Item=item_data)
         logger.info(f"Experiment logged to DynamoDB: {results['experiment_id']}")
         
         # Write individual metrics to DynamoDB metrics table
@@ -417,26 +475,22 @@ def main():
             all_results['pre_analysis'] = pre_analysis
         
         logger.info("=" * 50)
-        # Run LLM-GENERATED CODE experiment FIRST (if available)
+        # OPTION C: Run ONLY LLM-GENERATED CODE experiment
+        # Compare against: (1) HEVC baseline (2) Previous LLM iteration
         logger.info("=" * 50)
-        logger.info("EXPERIMENT 1: LLM-Generated Code")
+        logger.info("LLM AUTONOMOUS CODE EVOLUTION")
         logger.info("=" * 50)
         llm_code_results = run_llm_generated_experiment(llm_config=pre_analysis)
         all_results['experiments'].append(llm_code_results)
         
-        # Run procedural generation experiment WITH LLM CONFIG
-        logger.info("=" * 50)
-        logger.info("EXPERIMENT 2: Procedural Generation")
-        logger.info("=" * 50)
-        procedural_results = run_real_procedural_experiment(llm_config=pre_analysis)
-        all_results['experiments'].append(procedural_results)
-        
-        # Run AI neural networks experiment
-        logger.info("=" * 50)
-        logger.info("EXPERIMENT 3: AI Neural Networks")
-        logger.info("=" * 50)
-        ai_results = run_real_ai_experiment()
-        all_results['experiments'].append(ai_results)
+        # Add baseline comparison metadata
+        # The LLM can use neural networks (torch) in its generated code
+        # The adaptive_codec_agent will compare performance against previous iterations
+        logger.info("📊 Baseline: HEVC 10 Mbps (1080p@30fps)")
+        logger.info("📈 Previous best: " + 
+                   (f"{llm_code_results.get('evolution', {}).get('metrics', {}).get('bitrate_mbps', 'N/A')} Mbps"
+                    if llm_code_results.get('evolution', {}).get('adopted') 
+                    else "No previous version"))
         
         # Upload results FIRST
         logger.info("=" * 50)

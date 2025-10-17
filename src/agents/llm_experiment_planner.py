@@ -18,6 +18,11 @@ except ImportError:
     logger_temp = logging.getLogger(__name__)
     logger_temp.warning("anthropic library not available - will try direct API calls")
 
+# Import framework modifier for tool calling
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.framework_modifier import FrameworkModifier, FRAMEWORK_TOOLS
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -57,6 +62,98 @@ class LLMExperimentPlanner:
         # Enable direct API calls as fallback
         self.api_key = api_key
         self.use_direct_api = (not ANTHROPIC_AVAILABLE and api_key)
+        
+        # Load system prompt from file
+        self.system_prompt = self._load_system_prompt()
+        
+        # Initialize framework modifier for tool calling
+        self.framework_modifier = FrameworkModifier()
+        self.tool_calling_enabled = True  # Enable meta-level autonomy
+    
+    def _load_system_prompt(self) -> str:
+        """Load the comprehensive system prompt from LLM_SYSTEM_PROMPT.md"""
+        try:
+            # Try multiple possible paths
+            possible_paths = [
+                'LLM_SYSTEM_PROMPT.md',  # From project root
+                '../LLM_SYSTEM_PROMPT.md',  # From src/agents/
+                '../../LLM_SYSTEM_PROMPT.md',  # From deeper
+                '/home/ec2-user/ai-video-codec/LLM_SYSTEM_PROMPT.md',  # Absolute on EC2
+            ]
+            
+            for path in possible_paths:
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        prompt = f.read()
+                    logger.info(f"✅ Loaded system prompt from {path} ({len(prompt)} chars)")
+                    return prompt
+            
+            logger.warning("⚠️  Could not find LLM_SYSTEM_PROMPT.md - using basic prompt")
+            return ""
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Error loading system prompt: {e}")
+            return ""
+    
+    def _execute_tool(self, tool_name: str, tool_input: Dict) -> Dict:
+        """
+        Execute a tool call from the LLM.
+        
+        Args:
+            tool_name: Name of the tool to execute
+            tool_input: Parameters for the tool
+            
+        Returns:
+            Tool execution result
+        """
+        logger.info(f"🛠️  LLM requested tool: {tool_name}")
+        logger.info(f"   Input: {json.dumps(tool_input, indent=2)}")
+        
+        try:
+            if tool_name == "modify_framework_file":
+                result = self.framework_modifier.modify_file(
+                    file_path=tool_input['file_path'],
+                    modification_type=tool_input['modification_type'],
+                    content=tool_input['content'],
+                    reason=tool_input['reason']
+                )
+                
+            elif tool_name == "run_shell_command":
+                result = self.framework_modifier.run_command(
+                    command=tool_input['command'],
+                    reason=tool_input['reason']
+                )
+                
+            elif tool_name == "install_python_package":
+                result = self.framework_modifier.install_package(
+                    package=tool_input['package'],
+                    reason=tool_input['reason']
+                )
+                
+            elif tool_name == "restart_orchestrator":
+                result = self.framework_modifier.restart_orchestrator()
+                
+            elif tool_name == "rollback_file":
+                result = self.framework_modifier.rollback_file(
+                    file_path=tool_input['file_path']
+                )
+                
+            else:
+                result = {
+                    'success': False,
+                    'error': f"Unknown tool: {tool_name}"
+                }
+            
+            logger.info(f"✅ Tool result: {json.dumps(result, indent=2)}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Tool execution error: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'tool': tool_name
+            }
     
     def _call_claude_direct(self, prompt: str) -> Optional[str]:
         """
@@ -237,19 +334,54 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
         try:
             prompt = self.generate_analysis_prompt(experiments)
             
-            logger.info("Requesting LLM analysis via anthropic library...")
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=4096,
-                temperature=0.7,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
+            logger.info("Requesting LLM analysis via anthropic library (with tool calling)...")
             
-            # Extract JSON from response
-            response_text = message.content[0].text
+            # Tool calling loop
+            messages = [{"role": "user", "content": prompt}]
+            
+            for round_num in range(5):  # Max 5 tool-use rounds
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4096,
+                    temperature=0.7,
+                    messages=messages,
+                    tools=FRAMEWORK_TOOLS if self.tool_calling_enabled else None
+                )
+                
+                # Check if LLM wants to use tools
+                if message.stop_reason == "tool_use":
+                    logger.info(f"🛠️  LLM using tools (round {round_num + 1}/5)")
+                    
+                    # Add assistant message
+                    messages.append({"role": "assistant", "content": message.content})
+                    
+                    # Execute all tool calls
+                    tool_results = []
+                    for block in message.content:
+                        if block.type == "tool_use":
+                            result = self._execute_tool(block.name, block.input)
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": json.dumps(result)
+                            })
+                    
+                    # Add tool results
+                    messages.append({"role": "user", "content": tool_results})
+                    continue
+                
+                # No more tools - extract final response
+                response_text = None
+                for block in message.content:
+                    if hasattr(block, 'text'):
+                        response_text = block.text
+                        break
+                
+                break
+            
+            if not response_text:
+                logger.warning("No text response after tool calling")
+                return None
             
             # Try to parse JSON (handle markdown code blocks)
             if "```json" in response_text:
@@ -261,7 +393,7 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             
             analysis = json.loads(json_str)
             
-            logger.info("LLM analysis received successfully")
+            logger.info("✅ LLM analysis received successfully")
             return analysis
             
         except Exception as e:
@@ -407,7 +539,31 @@ Format your response as JSON with these keys: root_cause, insights, hypothesis, 
             return None
         
         try:
-            prompt = f"""Based on this video compression experiment analysis, generate a NEW Python compression function.
+            # Build prompt with system context
+            if self.system_prompt:
+                # Use full system prompt
+                prompt = f"""{self.system_prompt}
+
+---
+
+## CURRENT EXPERIMENT CONTEXT
+
+Based on your analysis of past experiments, generate a NEW compression algorithm.
+
+**Your Analysis:**
+- Root Cause: {analysis.get('root_cause', '')}
+- Hypothesis: {analysis.get('hypothesis', '')}
+- Key Insights: {json.dumps(analysis.get('insights', []), indent=2)}
+
+**Your Task:**
+Generate the `compress_video_frame` function that implements your hypothesis.
+Focus on continuous improvement - beat your previous iteration!
+
+Generate ONLY the Python code (imports + function), no markdown explanations.
+"""
+            else:
+                # Fallback to basic prompt if system prompt not loaded
+                prompt = f"""Generate a Python video compression function based on this analysis.
 
 ANALYSIS:
 Root Cause: {analysis.get('root_cause', '')}
@@ -418,7 +574,7 @@ REQUIREMENTS:
 1. Function signature: def compress_video_frame(frame: np.ndarray, frame_index: int, config: dict) -> bytes
 2. Input: frame is numpy array (H, W, 3) uint8 RGB, frame_index is int, config has parameters
 3. Output: compressed bytes for this frame
-4. Use only: numpy, cv2, math, json, struct, base64
+4. Use only: numpy, cv2, math, json, struct, base64, torch, torchvision
 5. NO imports of: os, sys, subprocess, socket, requests, urllib
 6. Focus on the hypothesis from the analysis
 7. Be creative but practical - this will run on real video

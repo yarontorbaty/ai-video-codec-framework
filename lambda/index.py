@@ -51,6 +51,54 @@ def handler(event, context):
     elif path in ['/index.html', '/index']:
         return serve_static_file('index.html')
     
+    # Admin interface
+    elif path in ['/admin', '/admin.html']:
+        return serve_static_file('admin.html')
+    
+    # Admin API proxy
+    elif path.startswith('/admin/'):
+        # Proxy to admin API Gateway
+        import urllib.request
+        import urllib.parse
+        
+        admin_api_endpoint = 'https://mrjjwxaxma.execute-api.us-east-1.amazonaws.com/production'
+        # Keep the full path including /admin
+        
+        try:
+            # Forward the request
+            if event.get('httpMethod') == 'POST':
+                body = event.get('body', '{}')
+                req = urllib.request.Request(
+                    f"{admin_api_endpoint}{path}",
+                    data=body.encode('utf-8'),
+                    headers={'Content-Type': 'application/json'}
+                )
+                with urllib.request.urlopen(req) as response:
+                    return {
+                        'statusCode': response.status,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': response.read().decode('utf-8')
+                    }
+            else:
+                with urllib.request.urlopen(f"{admin_api_endpoint}{path}") as response:
+                    return {
+                        'statusCode': response.status,
+                        'headers': {
+                            'Content-Type': 'application/json',
+                            'Access-Control-Allow-Origin': '*'
+                        },
+                        'body': response.read().decode('utf-8')
+                    }
+        except Exception as e:
+            return {
+                'statusCode': 500,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({'error': str(e)})
+            }
+    
     # Blog - server-side rendered
     elif path in ['/blog', '/blog.html']:
         return render_blog_page()
@@ -137,6 +185,7 @@ def render_dashboard_page():
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
+            llm_code = next((e for e in experiments_data if e.get('experiment_type') in ['llm_generated_code', 'llm_generated_code_evolution']), {})
             
             metrics = procedural.get('real_metrics', {})
             comparison = procedural.get('comparison', {})
@@ -149,13 +198,39 @@ def render_dashboard_page():
                 methods.append('Neural Network')
             methods_str = ' + '.join(methods) if methods else 'Hybrid'
             
+            # Extract LLM evolution info
+            evolution_info = None
+            if llm_code:
+                evolution = llm_code.get('evolution', {})
+                if evolution:
+                    evolution_info = {
+                        'status': evolution.get('status', 'unknown'),
+                        'adopted': evolution.get('adopted', False),
+                        'version': evolution.get('version', 0),
+                        'metrics': evolution.get('metrics', {}),
+                        'reason': evolution.get('reason', '')
+                    }
+            
+            # Parse timestamp for time of day
+            timestamp_str = item.get('timestamp_iso', '')
+            time_of_day = ''
+            if timestamp_str:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    time_of_day = dt.strftime('%I:%M %p')
+                except:
+                    time_of_day = timestamp_str[11:16] if len(timestamp_str) > 16 else ''
+            
             experiments.append({
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
                 'compression': comparison.get('reduction_percent', 0),
                 'bitrate': metrics.get('bitrate_mbps', 0),
                 'timestamp': item.get('timestamp_iso', ''),
+                'time_of_day': time_of_day,
                 'methods': methods_str,
+                'evolution': evolution_info,
                 'full_data': experiments_data  # Keep full data for blog linking
             })
         
@@ -260,11 +335,23 @@ def render_dashboard_page():
             else:
                 compression_display = f'{compression:.1f}%'
             
+            # Evolution badge
+            evolution_badge = ''
+            if exp.get('evolution'):
+                evo = exp['evolution']
+                if evo.get('adopted'):
+                    version = evo.get('version', 0)
+                    evolution_badge = f'<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="Code v{version} adopted">🎉 v{version}</span>'
+                elif evo.get('status') == 'rejected':
+                    reason = evo.get('reason', 'Not better')
+                    evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{reason}">⏭️</span>'
+            
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
-                    <div class="col">{exp['id'][:20]}...</div>
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                    <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
-                    <div class="col">{exp['methods']}</div>
+                    <div class="col">{exp.get('time_of_day', 'N/A')}</div>
+                    <div class="col">{exp['methods']}{evolution_badge}</div>
                     <div class="col">{compression_display}</div>
                     <div class="col">95.0%</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
@@ -368,10 +455,11 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1.5fr 0.8fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.5fr;">
+                    <div class="table-header" style="grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
-                        <div>Methods</div>
+                        <div>Time</div>
+                        <div>Methods / Evolution</div>
                         <div>Compression</div>
                         <div>Quality</div>
                         <div>Bitrate</div>
@@ -411,6 +499,44 @@ def render_dashboard_page():
             'body': f'<h1>Error rendering dashboard</h1><pre>{str(e)}</pre>'
         }
 
+def generate_next_steps_html(next_experiment):
+    """Generate HTML for next steps section."""
+    if not next_experiment or not isinstance(next_experiment, dict):
+        return ""
+    
+    approach = next_experiment.get('approach', '')
+    changes = next_experiment.get('changes', [])
+    expected_improvement = next_experiment.get('expected_improvement', '')
+    
+    if not approach and not changes:
+        return ""
+    
+    # Parse changes if it's a string
+    if isinstance(changes, str):
+        try:
+            changes = json.loads(changes)
+        except:
+            changes = [changes] if changes else []
+    
+    changes_html = ""
+    for change in changes:
+        changes_html += f"<li><i class='fas fa-arrow-right'></i> {change}</li>"
+    
+    html = '<div class="blog-section next-steps">'
+    html += '<h3><i class="fas fa-arrow-circle-right"></i> Next Steps</h3>'
+    
+    if approach:
+        html += f'<p><strong>Approach:</strong> {approach}</p>'
+    
+    if changes_html:
+        html += f'<p><strong>Planned Changes:</strong></p><ul>{changes_html}</ul>'
+    
+    if expected_improvement:
+        html += f'<p><strong>Expected Improvement:</strong> {expected_improvement}</p>'
+    
+    html += '</div>'
+    return html
+
 def render_blog_page():
     """Server-side render the blog page with data from DynamoDB"""
     try:
@@ -437,7 +563,9 @@ def render_blog_page():
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'text/html',
-                'Cache-Control': 'public, max-age=60, s-maxage=60'  # Cache for 1 minute
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             },
             'body': html
         }
@@ -458,13 +586,19 @@ def generate_blog_html(experiments, reasoning_items):
         exp_id = exp.get('experiment_id', '')
         exp_timestamp = exp.get('timestamp', 0)
         
-        # Find matching reasoning
+        # Find matching reasoning by experiment_id (most reliable)
         matching_reasoning = None
         for reasoning in reasoning_items:
-            if (reasoning.get('experiment_id') == exp_id or 
-                abs(int(reasoning.get('timestamp', 0)) - int(exp_timestamp)) < 3600):
+            if reasoning.get('experiment_id') == exp_id:
                 matching_reasoning = reasoning
                 break
+        
+        # Fallback: find by timestamp if experiment_id doesn't match (within 60 seconds)
+        if not matching_reasoning:
+            for reasoning in reasoning_items:
+                if abs(int(reasoning.get('timestamp', 0)) - int(exp_timestamp)) < 60:
+                    matching_reasoning = reasoning
+                    break
         
         # Parse experiment data
         experiments_data = json.loads(exp.get('experiments', '[]'))
@@ -570,6 +704,8 @@ def generate_blog_html(experiments, reasoning_items):
                 {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
                 
                 {f'<div class="blog-section"><h3><i class="fas fa-lightbulb"></i> Key Insights</h3><ul>{insights_html}</ul></div>' if insights_html else ''}
+                
+                {generate_next_steps_html(next_experiment) if next_experiment else ''}
             </div>
             '''
     
@@ -579,6 +715,7 @@ def generate_blog_html(experiments, reasoning_items):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="60">
     <title>AI Codec Research Blog - Server-Side Rendered</title>
     <link rel="stylesheet" href="/styles.css">
     <style>
@@ -598,6 +735,11 @@ def generate_blog_html(experiments, reasoning_items):
         .metric-value {{ font-size: 2em; font-weight: bold; color: #667eea; }}
         .metric-label {{ font-size: 0.9em; color: #666; margin-top: 5px; }}
         .back-link {{ display: inline-block; margin-bottom: 30px; color: #667eea; text-decoration: none; font-weight: 600; }}
+        .next-steps {{ background: #f0f7ff; border-left: 4px solid #4CAF50; padding: 20px; border-radius: 8px; }}
+        .next-steps h3 {{ color: #4CAF50; }}
+        .next-steps ul {{ list-style: none; padding-left: 0; }}
+        .next-steps li {{ padding: 8px 0; }}
+        .next-steps .fa-arrow-right {{ color: #4CAF50; margin-right: 10px; }}
     </style>
 </head>
 <body>

@@ -1,20 +1,25 @@
 #!/bin/bash
-# Real-Time Autonomous Orchestrator with LLM Planning
-# Continuously monitors health and reacts to experiment results in real-time
+# Procedural Autonomous Orchestrator with LLM Planning and Self-Healing
+# No time windows - experiments run through complete validation/execution/fix cycles
 
-LOG_FILE="/var/log/ai-codec-orchestrator.log"
-EXPERIMENT_SCRIPT="/opt/scripts/real_experiment.py"
-PLANNER_SCRIPT="/opt/src/agents/llm_experiment_planner.py"
-DELAY_BETWEEN_EXPERIMENTS=60  # 1 minute between experiments for real-time monitoring
-MAX_EXPERIMENT_DURATION=600    # 10 minutes timeout per experiment
+BASE_DIR="/home/ec2-user/ai-video-codec"
+LOG_FILE="/tmp/orch.log"
+EXPERIMENT_SCRIPT="$BASE_DIR/src/agents/procedural_experiment_runner.py"
+PLANNER_SCRIPT="$BASE_DIR/src/agents/llm_experiment_planner.py"
+# No delays - each experiment runs to completion (validation + fixes + execution)
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-log "=== Real-Time AI Video Codec Orchestrator Started ==="
-log "Continuously running experiments with real-time LLM planning"
-log "Delay between experiments: ${DELAY_BETWEEN_EXPERIMENTS}s"
+log "=== Procedural AI Video Codec Orchestrator Started ==="
+log "Running experiments through complete procedural cycles:"
+log "  1. Design experiment and code"
+log "  2. Deploy to sandbox"
+log "  3. Validate (retry with fixes)"
+log "  4. Execute (retry with fixes)"
+log "  5. Analyze results"
+log "  6. Design next experiment"
 
 # Fetch API key from AWS Secrets Manager
 if [ -z "$ANTHROPIC_API_KEY" ]; then
@@ -22,7 +27,11 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id ai-video-codec/anthropic-api-key --region us-east-1 --query SecretString --output text 2>/dev/null)
     
     if [ $? -eq 0 ] && [ -n "$SECRET_JSON" ]; then
-        export ANTHROPIC_API_KEY=$(echo "$SECRET_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['ANTHROPIC_API_KEY'])")
+        export ANTHROPIC_API_KEY=$(echo "$SECRET_JSON" | python3 -c "import sys, json; data = json.loads(sys.stdin.read()); print(data['ANTHROPIC_API_KEY'])" 2>/dev/null)
+        if [ -z "$ANTHROPIC_API_KEY" ]; then
+            # Fallback: try treating it as plain text
+            export ANTHROPIC_API_KEY="$SECRET_JSON"
+        fi
         log "✅ API key retrieved from Secrets Manager"
     else
         log "⚠️  WARNING: Could not retrieve API key from Secrets Manager"
@@ -56,8 +65,8 @@ check_health() {
     log "Health: CPU=${CPU}%, Memory=${MEMORY}%, Disk=${DISK}%"
 }
 
-# Run experiment with timeout and health monitoring
-run_experiment_with_monitoring() {
+# Run experiment with procedural validation/execution/fix cycle
+run_procedural_experiment() {
     local ITERATION=$1
     
     log "=========================================="
@@ -67,31 +76,22 @@ run_experiment_with_monitoring() {
     # Pre-experiment health check
     check_health
     
-    # Run experiment with timeout
-    log "🔬 Running experiment $ITERATION..."
-    cd /opt
-    timeout $MAX_EXPERIMENT_DURATION python3 "$EXPERIMENT_SCRIPT" >> "$LOG_FILE" 2>&1 &
-    EXPERIMENT_PID=$!
+    # Run experiment - no timeout, runs until complete or max retries
+    log "🔬 Running procedural experiment $ITERATION..."
+    log "  This may take a while as it validates, executes, and fixes issues..."
     
-    # Monitor experiment in real-time
-    ELAPSED=0
-    while kill -0 $EXPERIMENT_PID 2>/dev/null; do
-        sleep 10
-        ELAPSED=$((ELAPSED + 10))
-        if [ $((ELAPSED % 60)) -eq 0 ]; then
-            log "Experiment $ITERATION running for ${ELAPSED}s..."
-        fi
-    done
+    cd "$BASE_DIR"
+    export EXPERIMENT_ITERATION=$ITERATION
     
-    wait $EXPERIMENT_PID
-    EXPERIMENT_EXIT_CODE=$?
+    # Run without timeout - procedural runner handles its own retry logic
+    python3 "$EXPERIMENT_SCRIPT" 2>&1 | tee -a "$LOG_FILE"
+    EXPERIMENT_EXIT_CODE=${PIPESTATUS[0]}
     
     if [ $EXPERIMENT_EXIT_CODE -eq 0 ]; then
         log "✅ Experiment $ITERATION completed successfully"
-    elif [ $EXPERIMENT_EXIT_CODE -eq 124 ]; then
-        log "⏱️  Experiment $ITERATION timed out after ${MAX_EXPERIMENT_DURATION}s"
     else
         log "❌ Experiment $ITERATION failed with exit code $EXPERIMENT_EXIT_CODE"
+        log "  Check logs above for human intervention requirements"
     fi
     
     # Post-experiment health check
@@ -110,8 +110,8 @@ CONSECUTIVE_FAILURES=0
 MAX_CONSECUTIVE_FAILURES=5
 
 while true; do
-    # Run experiment with real-time monitoring
-    run_experiment_with_monitoring $ITERATION
+    # Run procedural experiment (no timeout, handles own retry logic)
+    run_procedural_experiment $ITERATION
     RESULT=$?
     
     # Track failures
@@ -120,18 +120,22 @@ while true; do
         log "⚠️  Consecutive failures: $CONSECUTIVE_FAILURES"
         
         if [ $CONSECUTIVE_FAILURES -ge $MAX_CONSECUTIVE_FAILURES ]; then
-            log "🚨 CRITICAL: $MAX_CONSECUTIVE_FAILURES consecutive failures. Entering recovery mode..."
-            log "Waiting 5 minutes before resuming..."
+            log "🚨 CRITICAL: $MAX_CONSECUTIVE_FAILURES consecutive failures detected"
+            log "🚨 HUMAN INTERVENTION MAY BE REQUIRED"
+            log "Entering recovery mode - waiting 5 minutes..."
             sleep 300
             CONSECUTIVE_FAILURES=0
+        else
+            # Brief pause between failed attempts
+            log "Pausing 30s before retry..."
+            sleep 30
         fi
     else
         CONSECUTIVE_FAILURES=0
+        # Brief pause between successful experiments (for monitoring)
+        log "Pausing 10s before next experiment..."
+        sleep 10
     fi
-    
-    # Short delay before next experiment for real-time operation
-    log "Waiting ${DELAY_BETWEEN_EXPERIMENTS}s before next experiment..."
-    sleep $DELAY_BETWEEN_EXPERIMENTS
     
     ITERATION=$((ITERATION + 1))
 done

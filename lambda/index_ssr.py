@@ -65,13 +65,22 @@ def handler(event, context):
         # Keep the full path including /admin
         
         try:
+            # Get headers from original request (case-insensitive)
+            incoming_headers = event.get('headers', {})
+            proxy_headers = {'Content-Type': 'application/json'}
+            
+            # Forward Authorization header if present (check both cases)
+            auth_header = incoming_headers.get('Authorization') or incoming_headers.get('authorization')
+            if auth_header:
+                proxy_headers['Authorization'] = auth_header
+            
             # Forward the request
             if event.get('httpMethod') == 'POST':
                 body = event.get('body', '{}')
                 req = urllib.request.Request(
                     f"{admin_api_endpoint}{path}",
                     data=body.encode('utf-8'),
-                    headers={'Content-Type': 'application/json'}
+                    headers=proxy_headers
                 )
                 with urllib.request.urlopen(req) as response:
                     return {
@@ -83,7 +92,11 @@ def handler(event, context):
                         'body': response.read().decode('utf-8')
                     }
             else:
-                with urllib.request.urlopen(f"{admin_api_endpoint}{path}") as response:
+                req = urllib.request.Request(
+                    f"{admin_api_endpoint}{path}",
+                    headers=proxy_headers
+                )
+                with urllib.request.urlopen(req) as response:
                     return {
                         'statusCode': response.status,
                         'headers': {
@@ -92,6 +105,12 @@ def handler(event, context):
                         },
                         'body': response.read().decode('utf-8')
                     }
+        except urllib.error.HTTPError as e:
+            return {
+                'statusCode': e.code,
+                'headers': {'Content-Type': 'application/json'},
+                'body': e.read().decode('utf-8')
+            }
         except Exception as e:
             return {
                 'statusCode': 500,
@@ -175,13 +194,28 @@ def render_dashboard_page():
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     
     try:
-        # Fetch all data in parallel (conceptually - boto3 is synchronous)
+        # Fetch all experiments and sort to get the latest ones
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
-        experiments_response = experiments_table.scan(Limit=50)  # Show more experiments
+        
+        # Scan all items (DynamoDB scan limit is per page, not total)
+        experiments_response = experiments_table.scan()
+        all_items = experiments_response.get('Items', [])
+        
+        # Handle pagination if there are more items
+        while 'LastEvaluatedKey' in experiments_response:
+            experiments_response = experiments_table.scan(
+                ExclusiveStartKey=experiments_response['LastEvaluatedKey']
+            )
+            all_items.extend(experiments_response.get('Items', []))
+        
+        # Sort by timestamp (descending) and take the latest 50
+        all_items.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
+        total_count = len(all_items)  # Store total count before limiting
+        latest_items = all_items[:50]  # Get latest 50 experiments
         
         # Process experiments with more details
         experiments = []
-        for item in experiments_response.get('Items', []):
+        for item in latest_items:
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
@@ -258,7 +292,17 @@ def render_dashboard_page():
         # Fetch costs from Cost Explorer
         ce = boto3.client('ce', region_name='us-east-1')
         monthly_cost = 0
-        cost_breakdown = {'EC2': 0, 'S3': 0, 'Lambda': 0, 'Other': 0}
+        cost_breakdown = {'EC2': 0, 'S3': 0, 'Lambda': 0, 'Claude': 0, 'Other': 0}
+        
+        # Get Claude API usage costs
+        try:
+            control_table = dynamodb.Table('ai-video-codec-control')
+            llm_stats = control_table.get_item(Key={'control_id': 'llm_usage_stats'}).get('Item', {})
+            claude_cost = float(llm_stats.get('total_cost_usd', 0))
+            cost_breakdown['Claude'] = round(claude_cost, 2)
+        except Exception as e:
+            print(f"Failed to get Claude costs: {e}")
+            cost_breakdown['Claude'] = 0
         
         try:
             from datetime import timedelta
@@ -300,9 +344,15 @@ def render_dashboard_page():
             
             monthly_cost = (total_cost / 7) * 30 if total_cost > 0 else 0
             
-            # Scale breakdown to monthly
+            # Scale breakdown to monthly (except Claude which is already total)
+            claude_total = cost_breakdown['Claude']
             for key in cost_breakdown:
-                cost_breakdown[key] = round((cost_breakdown[key] / 7) * 30, 2)
+                if key != 'Claude':
+                    cost_breakdown[key] = round((cost_breakdown[key] / 7) * 30, 2)
+            cost_breakdown['Claude'] = claude_total  # Restore Claude total
+            
+            # Add Claude to monthly total
+            monthly_cost += claude_total
                 
         except Exception as e:
             print(f"Cost fetch error: {e}")
@@ -314,10 +364,16 @@ def render_dashboard_page():
             }
             for itype in instance_types:
                 monthly_cost += ec2_hourly_rates.get(itype, 0.1) * 730  # hours per month
+            
+            # Add Claude costs to the estimate
+            claude_cost_estimate = cost_breakdown.get('Claude', 0)
+            monthly_cost += claude_cost_estimate
+            
             cost_breakdown = {
-                'EC2': round(monthly_cost * 0.85, 2),
+                'EC2': round(monthly_cost * 0.80, 2),
                 'S3': round(monthly_cost * 0.08, 2),
                 'Lambda': round(monthly_cost * 0.05, 2),
+                'Claude': claude_cost_estimate,
                 'Other': round(monthly_cost * 0.02, 2)
             }
         
@@ -335,27 +391,60 @@ def render_dashboard_page():
             else:
                 compression_display = f'{compression:.1f}%'
             
-            # Evolution badge
-            evolution_badge = ''
-            if exp.get('evolution'):
-                evo = exp['evolution']
-                if evo.get('adopted'):
-                    version = evo.get('version', 0)
-                    evolution_badge = f'<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="Code v{version} adopted">🎉 v{version}</span>'
-                elif evo.get('status') == 'rejected':
-                    reason = evo.get('reason', 'Not better')
-                    evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{reason}">⏭️</span>'
+            # Code Evolution Fields
+            code_changed = exp.get('code_changed', False)
+            version = exp.get('version', 0)
+            evo_status = exp.get('status', 'N/A')  # adopted, rejected, test_failed, skipped
+            improvement = exp.get('improvement', 'N/A')
+            deployment_status = exp.get('deployment_status', 'not_deployed')
+            github_committed = exp.get('github_committed', False)
+            github_hash = exp.get('github_commit_hash', '')
+            
+            # Code changed indicator
+            code_badge = ''
+            if code_changed:
+                code_badge = '<span style="background: #667eea; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75em;" title="LLM generated new code">✨ LLM</span>'
+            else:
+                code_badge = '<span style="color: #999; font-size: 0.75em;">—</span>'
+            
+            # Version display
+            version_display = f'<span style="font-weight: 600; color: #667eea;">v{version}</span>' if code_changed else '<span style="color: #999;">—</span>'
+            
+            # Status badge with colors
+            status_colors = {
+                'adopted': ('#28a745', '✓ Adopted', 'Code successfully adopted and deployed'),
+                'rejected': ('#dc3545', '✗ Rejected', 'Code rejected - no improvement'),
+                'test_failed': ('#ffc107', '⚠ Failed', 'Testing failed'),
+                'skipped': ('#6c757d', '⊘ Skipped', 'Evolution skipped')
+            }
+            status_info = status_colors.get(evo_status, ('#999', evo_status, ''))
+            adoption_badge = f'<span style="background: {status_info[0]}; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75em;" title="{status_info[2]}">{status_info[1]}</span>' if code_changed else '<span style="color: #999;">—</span>'
+            
+            # GitHub status
+            github_display = ''
+            if github_committed and github_hash:
+                short_hash = github_hash[:7] if github_hash else ''
+                github_display = f'<a href="https://github.com/your-repo/commit/{github_hash}" target="_blank" style="color: #28a745; text-decoration: none;" title="Committed: {short_hash}"><i class="fab fa-github"></i> {short_hash}</a>'
+            elif deployment_status == 'deployed':
+                github_display = '<span style="color: #28a745; font-size: 0.75em;" title="Deployed locally">📦 Local</span>'
+            else:
+                github_display = '<span style="color: #999;">—</span>'
+            
+            # Improvement tooltip
+            improvement_tooltip = f'title="{improvement}"' if improvement != 'N/A' else ''
             
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1fr 0.6fr 0.5fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
                     <div class="col">{exp.get('time_of_day', 'N/A')}</div>
-                    <div class="col">{exp['methods']}{evolution_badge}</div>
-                    <div class="col">{compression_display}</div>
-                    <div class="col">95.0%</div>
+                    <div class="col">{exp['methods']}</div>
+                    <div class="col" {improvement_tooltip}>{compression_display}</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
-                    <div class="col">{exp['timestamp'][:10]}</div>
+                    <div class="col">{code_badge}</div>
+                    <div class="col">{version_display}</div>
+                    <div class="col">{adoption_badge}</div>
+                    <div class="col">{github_display}</div>
                     <div class="col"><a href="/blog.html#exp-{i+1}" style="color: #667eea; text-decoration: none;"><i class="fas fa-arrow-right"></i></a></div>
                 </div>
             '''
@@ -401,7 +490,8 @@ def render_dashboard_page():
                             <h3>Total Experiments</h3>
                         </div>
                         <div class="card-content">
-                            <div class="metric-value">{len(experiments)}</div>
+                            <div class="metric-value">{total_count}</div>
+                            <div class="metric-label" style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;">Showing latest {len(experiments)}</div>
                             <div class="metric-label">AI Codec Iterations</div>
                         </div>
                     </div>
@@ -446,6 +536,10 @@ def render_dashboard_page():
                                     <span><i class="fas fa-bolt"></i> Lambda:</span>
                                     <strong>${cost_breakdown['Lambda']:.2f}</strong>
                                 </div>
+                                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
+                                    <span><i class="fas fa-brain"></i> Claude:</span>
+                                    <strong>${cost_breakdown['Claude']:.2f}</strong>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -455,15 +549,17 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;">
+                    <div class="table-header" style="grid-template-columns: 1fr 0.6fr 0.5fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr 0.8fr 0.5fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
                         <div>Time</div>
-                        <div>Methods / Evolution</div>
+                        <div>Methods</div>
                         <div>Compression</div>
-                        <div>Quality</div>
                         <div>Bitrate</div>
-                        <div>Date</div>
+                        <div><i class="fas fa-code"></i> Code</div>
+                        <div><i class="fas fa-code-branch"></i> Version</div>
+                        <div><i class="fas fa-check-circle"></i> Adopted</div>
+                        <div><i class="fab fa-github"></i> GitHub</div>
                         <div>Details</div>
                     </div>
                     <div class="table-body">
@@ -485,7 +581,9 @@ def render_dashboard_page():
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'text/html',
-                'Cache-Control': 'public, max-age=30, s-maxage=30'  # Cache for 30 seconds only
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             },
             'body': html
         }
@@ -546,18 +644,29 @@ def render_blog_page():
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
         reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
         
-        experiments_res = experiments_table.scan(Limit=50)
-        reasoning_res = reasoning_table.scan(Limit=50)
+        # Scan all experiments (with pagination)
+        experiments_res = experiments_table.scan()
+        all_experiments = experiments_res.get('Items', [])
         
-        experiments = experiments_res.get('Items', [])
+        # Handle pagination for experiments
+        while 'LastEvaluatedKey' in experiments_res:
+            experiments_res = experiments_table.scan(
+                ExclusiveStartKey=experiments_res['LastEvaluatedKey']
+            )
+            all_experiments.extend(experiments_res.get('Items', []))
+        
+        # Sort by timestamp and get total count
+        all_experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        total_count = len(all_experiments)
+        experiments = all_experiments[:50]  # Get latest 50 for display
+        
+        # Fetch reasoning (just get recent ones)
+        reasoning_res = reasoning_table.scan(Limit=100)
         reasoning_items = reasoning_res.get('Items', [])
-        
-        # Sort by timestamp
-        experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
         reasoning_items.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
         
         # Generate HTML
-        html = generate_blog_html(experiments, reasoning_items)
+        html = generate_blog_html(experiments, reasoning_items, total_count)
         
         return {
             'statusCode': 200,
@@ -577,7 +686,7 @@ def render_blog_page():
             'body': f'<h1>Error</h1><p>{str(e)}</p>'
         }
 
-def generate_blog_html(experiments, reasoning_items):
+def generate_blog_html(experiments, reasoning_items, total_count):
     """Generate blog HTML with embedded data"""
     
     # Match experiments with reasoning
@@ -673,7 +782,7 @@ def generate_blog_html(experiments, reasoning_items):
             
             posts_html += f'''
             <div class="blog-post" id="exp-{i+1}">
-                <h2><i class="fas fa-flask"></i> Iteration {len(blog_posts) - i}: {hypothesis}</h2>
+                <h2><i class="fas fa-flask"></i> Iteration {total_count - i}: {hypothesis}</h2>
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar"></i> {exp.get('timestamp_iso', '')[:10]}</span>
                     <span><i class="fas fa-microscope"></i> {exp.get('experiment_id', '')}</span>
