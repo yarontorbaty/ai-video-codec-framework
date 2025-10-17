@@ -75,6 +75,45 @@ class CodeSandbox:
         self.timeout = timeout
         self.max_memory_mb = max_memory_mb
     
+    @staticmethod
+    def requires_gpu(code: str) -> bool:
+        """
+        Detect if code requires GPU execution (uses PyTorch/neural networks).
+        
+        Args:
+            code: Python code to analyze
+            
+        Returns:
+            True if code should run on GPU, False otherwise
+        """
+        # Indicators that code benefits from GPU
+        gpu_indicators = [
+            'import torch',
+            'from torch',
+            'torch.nn',
+            'torch.cuda',
+            'torch.device',
+            'nn.Module',
+            'nn.Conv',
+            'nn.Linear',
+            'model.train()',
+            'model.eval()',
+            'backward()',
+            'optimizer',
+            '.cuda()',
+            'device=',
+        ]
+        
+        code_lower = code.lower()
+        
+        # Check for PyTorch usage
+        for indicator in gpu_indicators:
+            if indicator.lower() in code_lower:
+                logger.info(f"  🎮 GPU-compatible code detected (found: {indicator})")
+                return True
+        
+        return False
+    
     def validate_code(self, code: str, save_attempt: bool = True) -> Tuple[bool, Optional[str]]:
         """
         Validate code for safety using AST analysis.

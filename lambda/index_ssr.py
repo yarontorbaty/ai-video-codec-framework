@@ -813,6 +813,10 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             ssim = metrics.get('ssim', None)
             quality = metrics.get('quality', None)
             
+            # Extract video and decoder info (NEW!)
+            video_url = procedural.get('video_url', None)
+            decoder_s3_key = procedural.get('decoder_s3_key', None)
+            
             status = exp.get('status', 'unknown')
             if status == 'completed':
                 status_class = 'status-success'
@@ -874,6 +878,10 @@ def generate_blog_html(experiments, reasoning_items, total_count):
                     {f'<p style="color: #9e9e9e; font-style: italic;">No results available - experiment was abandoned before completion.</p>' if is_timed_out else ''}
                     {_generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out, psnr, ssim, quality)}
                 </div>
+                
+                {f'<div class="blog-section" style="background: linear-gradient(135deg, #667eea22 0%, #764ba222 100%); border-left: 4px solid #667eea;"><h3><i class="fas fa-video"></i> Reconstructed Video</h3><p style="margin-bottom: 15px;">View the decompressed video output from this experiment:</p><a href="{video_url}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: transform 0.2s;"><i class="fas fa-play-circle"></i> View Reconstructed Video</a><p style="font-size: 0.85em; color: #666; margin-top: 15px;"><i class="fas fa-info-circle"></i> Presigned URL expires in 7 days. Video shows the decoded output after compression.</p></div>' if video_url else ''}
+                
+                {f'<div class="blog-section" style="background: #f0f9ff; border-left: 4px solid #0ea5e9;"><h3><i class="fas fa-code"></i> Decoder Code</h3><p style="margin-bottom: 15px;">Download the Python decoder used to reconstruct frames from compressed data:</p><a href="https://ai-video-codec-videos-580473065386.s3.amazonaws.com/{decoder_s3_key}" target="_blank" style="display: inline-block; background: #0ea5e9; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: transform 0.2s;"><i class="fas fa-download"></i> Download Decoder (.py)</a><p style="font-size: 0.85em; color: #666; margin-top: 15px;"><i class="fas fa-code-branch"></i> Use this decoder to reconstruct video frames from the compressed data format.</p></div>' if decoder_s3_key else ''}
                 
                 {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
                 

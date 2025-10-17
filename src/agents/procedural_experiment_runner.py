@@ -20,8 +20,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agents.llm_experiment_planner import LLMExperimentPlanner
 from agents.adaptive_codec_agent import AdaptiveCodecAgent
 from utils.framework_modifier import FrameworkModifier
+from utils.code_sandbox import CodeSandbox
 
 logger = logging.getLogger(__name__)
+
+# S3 bucket for videos
+VIDEO_BUCKET = 'ai-video-codec-videos-580473065386'
+
+# SQS queue for GPU jobs
+TRAINING_QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/580473065386/ai-video-codec-training-queue'
 
 
 class ExperimentPhase(Enum):
@@ -435,6 +442,72 @@ class ProceduralExperimentRunner:
             'failure_analysis': failure_analysis
         }
     
+    def _dispatch_to_gpu(self, experiment_id: str, code: str, config: Dict) -> Dict:
+        """Dispatch experiment to GPU workers via SQS."""
+        logger.info("  🎮 Dispatching experiment to GPU workers...")
+        
+        try:
+            sqs = boto3.client('sqs', region_name='us-east-1')
+            
+            # Prepare job payload
+            job_payload = {
+                'experiment_id': experiment_id,
+                'code': code,
+                'config': config,
+                'dispatched_at': datetime.utcnow().isoformat()
+            }
+            
+            # Send to SQS
+            response = sqs.send_message(
+                QueueUrl=TRAINING_QUEUE_URL,
+                MessageBody=json.dumps(job_payload)
+            )
+            
+            logger.info(f"  ✅ Job dispatched to GPU queue (Message ID: {response['MessageId']})")
+            logger.info(f"  ⏳ Waiting for GPU worker to process...")
+            
+            # Wait for GPU worker to complete (poll DynamoDB for results)
+            max_wait_time = 1800  # 30 minutes
+            poll_interval = 10  # 10 seconds
+            elapsed = 0
+            
+            while elapsed < max_wait_time:
+                time.sleep(poll_interval)
+                elapsed += poll_interval
+                
+                # Check if GPU worker updated the experiment
+                response = self.experiments_table.query(
+                    KeyConditionExpression='experiment_id = :id',
+                    ExpressionAttributeValues={':id': experiment_id}
+                )
+                
+                if response.get('Items'):
+                    item = response['Items'][0]
+                    gpu_results = item.get('gpu_execution_results')
+                    
+                    if gpu_results:
+                        logger.info(f"  ✅ GPU execution completed!")
+                        results = json.loads(gpu_results) if isinstance(gpu_results, str) else gpu_results
+                        return results
+                
+                if elapsed % 60 == 0:
+                    logger.info(f"  ⏳ Still waiting for GPU... ({elapsed}s / {max_wait_time}s)")
+            
+            logger.error(f"  ❌ GPU execution timed out after {max_wait_time}s")
+            return {
+                'success': False,
+                'error': 'GPU execution timeout'
+            }
+            
+        except Exception as e:
+            logger.error(f"  ❌ Failed to dispatch to GPU: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'success': False,
+                'error': f'GPU dispatch failed: {str(e)}'
+            }
+    
     def _phase_execution_with_retry(self, experiment_id: str, validation_result: Dict) -> Dict:
         """Phase 4: Execute code, retry with fixes if needed."""
         logger.info("▶️  PHASE 4: EXECUTION (with intelligent retry)")
@@ -447,6 +520,12 @@ class ProceduralExperimentRunner:
         else:
             logger.info(f"  ✅ Using LLM-generated code ({len(code)} chars)")
         
+        # Check if code requires GPU
+        requires_gpu = CodeSandbox.requires_gpu(code) if code else False
+        
+        if requires_gpu:
+            logger.info("  🎮 GPU-compatible code detected - will use GPU workers")
+        
         for attempt in range(1, self.max_execution_retries + 1):
             logger.info(f"  Execution attempt {attempt}/{self.max_execution_retries}")
             
@@ -458,15 +537,35 @@ class ProceduralExperimentRunner:
                     logger.error("  Experiment requires valid LLM-generated code")
                     raise Exception("No LLM code available for execution")
                 
-                # USE THE LLM CODE! Run with AdaptiveCodecAgent
-                logger.info("  🧪 Running experiment with LLM code...")
-                
-                results = self.codec_agent.run_real_experiment_with_code(
-                    code=code,
-                    duration=10.0,
-                    fps=30.0,
-                    resolution=(1920, 1080)
-                )
+                # Choose execution path based on GPU requirements
+                if requires_gpu:
+                    logger.info("  🎮 Running experiment on GPU workers...")
+                    gpu_result = self._dispatch_to_gpu(
+                        experiment_id=experiment_id,
+                        code=code,
+                        config={
+                            'duration': 10.0,
+                            'fps': 30.0,
+                            'resolution': [1920, 1080]
+                        }
+                    )
+                    
+                    if gpu_result.get('success'):
+                        results = gpu_result.get('metrics', {})
+                        results['status'] = 'completed'
+                        results['execution_device'] = 'GPU'
+                    else:
+                        raise Exception(gpu_result.get('error', 'GPU execution failed'))
+                else:
+                    # USE THE LLM CODE! Run with AdaptiveCodecAgent on CPU
+                    logger.info("  🧪 Running experiment with LLM code (CPU)...")
+                    
+                    results = self.codec_agent.run_real_experiment_with_code(
+                        code=code,
+                        duration=10.0,
+                        fps=30.0,
+                        resolution=(1920, 1080)
+                    )
                 
                 logger.info(f"  📊 LLM code execution complete")
                 
@@ -620,6 +719,96 @@ class ProceduralExperimentRunner:
                 'error': str(e)
             }
     
+    def _upload_reconstructed_video(self, video_path: str, experiment_id: str) -> Optional[str]:
+        """
+        Upload reconstructed video to S3 and return presigned URL.
+        
+        Args:
+            video_path: Local path to reconstructed video
+            experiment_id: Experiment ID for naming
+            
+        Returns:
+            Presigned URL (valid for 7 days) or None if upload fails
+        """
+        if not os.path.exists(video_path):
+            logger.warning(f"  ⚠️  Video file not found: {video_path}")
+            return None
+        
+        try:
+            s3 = boto3.client('s3', region_name='us-east-1')
+            key = f"reconstructed/{experiment_id}.mp4"
+            
+            logger.info(f"  📤 Uploading video to S3: {key}")
+            file_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            logger.info(f"     File size: {file_size_mb:.2f} MB")
+            
+            # Upload file
+            s3.upload_file(video_path, VIDEO_BUCKET, key)
+            logger.info(f"  ✅ Video uploaded successfully")
+            
+            # Generate presigned URL (valid for 7 days)
+            url = s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': VIDEO_BUCKET, 'Key': key},
+                ExpiresIn=604800  # 7 days in seconds
+            )
+            
+            logger.info(f"  🔗 Presigned URL generated (expires in 7 days)")
+            return url
+            
+        except Exception as e:
+            logger.error(f"  ❌ Failed to upload video: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
+    def _save_decoder_code(self, decoder_code: str, experiment_id: str) -> Optional[str]:
+        """
+        Save decoder code to S3 for easy retrieval.
+        
+        Args:
+            decoder_code: Python code for the decoder
+            experiment_id: Experiment ID for naming
+            
+        Returns:
+            S3 key where decoder is stored
+        """
+        if not decoder_code:
+            return None
+        
+        try:
+            s3 = boto3.client('s3', region_name='us-east-1')
+            key = f"decoders/{experiment_id}_decoder.py"
+            
+            logger.info(f"  💾 Saving decoder code to S3: {key}")
+            
+            # Add header comment to the code
+            code_with_header = f"""#!/usr/bin/env python3
+\"\"\"
+Decoder for experiment: {experiment_id}
+Generated: {datetime.utcnow().isoformat()}Z
+
+This decoder can reconstruct video frames from compressed data.
+\"\"\"
+
+{decoder_code}
+"""
+            
+            # Upload decoder code
+            s3.put_object(
+                Bucket=VIDEO_BUCKET,
+                Key=key,
+                Body=code_with_header.encode('utf-8'),
+                ContentType='text/x-python'
+            )
+            
+            logger.info(f"  ✅ Decoder code saved")
+            return key
+            
+        except Exception as e:
+            logger.error(f"  ❌ Failed to save decoder code: {e}")
+            return None
+    
     def _phase_analysis(self, experiment_id: str, execution_result: Dict) -> Dict:
         """Phase 6: Analyze results and store to DynamoDB."""
         logger.info("📊 PHASE 6: ANALYSIS")
@@ -651,6 +840,20 @@ class ProceduralExperimentRunner:
         except Exception as e:
             logger.debug(f"Could not fetch existing approach: {e}")
         
+        # Upload reconstructed video if available
+        video_url = None
+        reconstructed_path = results.get('reconstructed_video_path')
+        if reconstructed_path and target_achieved:  # Only upload for successful experiments
+            logger.info(f"  🎬 Uploading reconstructed video for successful experiment...")
+            video_url = self._upload_reconstructed_video(reconstructed_path, experiment_id)
+        
+        # Save decoder code for successful experiments
+        decoder_s3_key = None
+        decoder_code = results.get('decoder_code')
+        if decoder_code and target_achieved:
+            logger.info(f"  💾 Saving decoder code for successful experiment...")
+            decoder_s3_key = self._save_decoder_code(decoder_code, experiment_id)
+        
         experiments_array = [{
             'experiment_type': 'real_procedural_generation',
             'status': 'completed',
@@ -660,7 +863,9 @@ class ProceduralExperimentRunner:
                 'hevc_baseline_mbps': hevc_baseline_mbps,
                 'reduction_percent': reduction_percent,
                 'target_achieved': target_achieved
-            }
+            },
+            'video_url': video_url if video_url else None,
+            'decoder_s3_key': decoder_s3_key if decoder_s3_key else None
         }]
         
         # Store results in format compatible with blog
