@@ -760,12 +760,17 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             bitrate = metrics.get('bitrate_mbps', 0)
             reduction = comparison.get('reduction_percent', 0)
             
-            status_class = 'status-success' if exp.get('status') == 'completed' else 'status-failed'
+            status_class = 'status-success' if exp.get('status') == 'completed' else ('status-running' if exp.get('status') == 'running' else 'status-failed')
             
-            hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else 'Baseline Measurement'
+            # Get hypothesis from reasoning or from experiment approach field
+            hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else (procedural.get('approach', 'Baseline Measurement'))
             root_cause = reasoning.get('root_cause', '') if reasoning else ''
             insights = reasoning.get('insights', []) if reasoning else []
             next_experiment = reasoning.get('next_experiment', {}) if reasoning else {}
+            
+            # For running experiments, show expected results
+            expected_bitrate = procedural.get('expected_bitrate', 0)
+            is_running = exp.get('status') == 'running'
             
             # Generate insights HTML
             insights_html = ""
@@ -795,18 +800,14 @@ def generate_blog_html(experiments, reasoning_items, total_count):
                 </div>
                 
                 <div class="blog-section">
-                    <h3><i class="fas fa-chart-bar"></i> Results</h3>
+                    <h3><i class="fas fa-chart-bar"></i> {'Expected Results' if is_running else 'Results'}</h3>
+                    {f'<p style="color: #f59e0b; font-weight: 600;"><i class="fas fa-spinner fa-spin"></i> Experiment in progress... Results will appear here when execution completes.</p>' if is_running else ''}
                     <div class="metrics-grid">
                         <div class="metric-card">
-                            <div class="metric-value">{bitrate:.2f}</div>
-                            <div class="metric-label">Mbps</div>
+                            <div class="metric-value">{expected_bitrate if is_running and not bitrate else bitrate:.2f}</div>
+                            <div class="metric-label">{'Expected' if is_running and not bitrate else ''} Mbps</div>
                         </div>
-                        <div class="metric-card">
-                            <div class="metric-value" style="color: {'#dc3545' if reduction < 0 else '#28a745'}">
-                                {'+' if reduction < 0 else ''}{reduction:.1f}%
-                            </div>
-                            <div class="metric-label">vs HEVC Baseline</div>
-                        </div>
+                        {'' if is_running and not bitrate else f'<div class="metric-card"><div class="metric-value" style="color: {"#dc3545" if reduction < 0 else "#28a745"}">{"+\" if reduction < 0 else \"\"}{reduction:.1f}%</div><div class="metric-label">vs HEVC Baseline</div></div>'}
                     </div>
                 </div>
                 
@@ -837,6 +838,7 @@ def generate_blog_html(experiments, reasoning_items, total_count):
         .status-badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }}
         .status-success {{ background: #d4edda; color: #155724; }}
         .status-failed {{ background: #f8d7da; color: #721c24; }}
+        .status-running {{ background: #fff3cd; color: #856404; }}
         .blog-section {{ margin: 30px 0; }}
         .blog-section h3 {{ font-size: 1.3em; margin-bottom: 15px; color: #667eea; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
         .metrics-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}

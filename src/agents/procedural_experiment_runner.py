@@ -204,6 +204,62 @@ class ProceduralExperimentRunner:
         except Exception as e:
             logger.warning(f"  Failed to update experiment status: {e}")
     
+    def _write_blog_post_design(self, experiment_id: str, llm_analysis: Dict):
+        """
+        Write initial blog post after design phase completes.
+        This creates a blog entry with the approach/hypothesis before execution.
+        """
+        from datetime import datetime
+        from decimal import Decimal
+        
+        try:
+            # Create placeholder experiments array with approach but no results yet
+            experiments_array = [{
+                'experiment_type': 'real_procedural_generation',
+                'status': 'running',
+                'real_metrics': {},  # Empty until execution completes
+                'comparison': {},
+                'approach': llm_analysis.get('hypothesis', 'Exploring new compression approach'),
+                'expected_bitrate': llm_analysis.get('expected_bitrate_mbps', 0)
+            }]
+            
+            def convert_floats(obj):
+                if isinstance(obj, dict):
+                    return {k: convert_floats(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_floats(item) for item in obj]
+                elif isinstance(obj, float):
+                    return Decimal(str(obj))
+                return obj
+            
+            blog_data = {
+                'experiment_id': experiment_id,
+                'timestamp': int(time.time()),
+                'timestamp_iso': datetime.utcnow().isoformat() + 'Z',
+                'status': 'running',
+                'experiments': json.dumps(experiments_array),
+                'phase_completed': 'design',
+            }
+            
+            self.experiments_table.put_item(Item=convert_floats(blog_data))
+            logger.info(f"  📝 Blog post created with approach")
+            
+            # Also write to reasoning table for blog context
+            reasoning_table = boto3.resource('dynamodb', region_name='us-east-1').Table('ai-video-codec-reasoning')
+            reasoning_data = {
+                'experiment_id': experiment_id,
+                'timestamp': int(time.time()),
+                'hypothesis': llm_analysis.get('hypothesis', ''),
+                'root_cause': llm_analysis.get('root_cause', ''),
+                'insights': json.dumps(llm_analysis.get('insights', [])),
+                'next_experiment': llm_analysis.get('next_experiment', {}),
+                'confidence_score': llm_analysis.get('confidence_score', 0.0)
+            }
+            reasoning_table.put_item(Item=convert_floats(reasoning_data))
+            logger.info(f"  📝 Reasoning data stored")
+        except Exception as e:
+            logger.warning(f"  Failed to write blog post design: {e}")
+    
     def _phase_design(self, experiment_id: str) -> Dict:
         """Phase 1: Design experiment and generate code."""
         logger.info("📐 PHASE 1: DESIGN")
@@ -227,6 +283,9 @@ class ProceduralExperimentRunner:
             logger.info(f"  Root cause identified: {llm_analysis.get('root_cause', 'N/A')[:100]}...")
             logger.info(f"  Hypothesis: {llm_analysis.get('hypothesis', 'N/A')[:100]}...")
             logger.info(f"  Code generated: {len(code) if code else 0} characters")
+            
+            # Write initial blog post with hypothesis (before execution)
+            self._write_blog_post_design(experiment_id, llm_analysis)
             
             return {
                 'success': True,
@@ -451,12 +510,22 @@ class ProceduralExperimentRunner:
                 return Decimal(str(obj))
             return obj
         
+        try:
+            # Get existing blog post to preserve original timestamp
+            existing = self.experiments_table.get_item(Key={'experiment_id': experiment_id})
+            original_timestamp = existing.get('Item', {}).get('timestamp', int(time.time()))
+            original_timestamp_iso = existing.get('Item', {}).get('timestamp_iso', datetime.utcnow().isoformat() + 'Z')
+        except:
+            original_timestamp = int(time.time())
+            original_timestamp_iso = datetime.utcnow().isoformat() + 'Z'
+        
+        # Update blog post with results (preserving original timestamp)
         experiment_data = {
             'experiment_id': experiment_id,
-            'timestamp': int(time.time()),
-            'timestamp_iso': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': original_timestamp,  # Preserve original timestamp from design phase
+            'timestamp_iso': original_timestamp_iso,
             'status': 'completed',
-            'experiments': json.dumps(experiments_array),  # Blog expects JSON string
+            'experiments': json.dumps(experiments_array),  # Blog expects JSON string with results
             'validation_retries': 0,  # Will be filled from validation phase
             'execution_retries': execution_result.get('retries', 0),
             'phase_completed': 'analysis',
@@ -468,10 +537,10 @@ class ProceduralExperimentRunner:
             # Convert any float values to Decimal for DynamoDB
             experiment_data_converted = convert_floats(experiment_data)
             self.experiments_table.put_item(Item=experiment_data_converted)
-            logger.info(f"  ✅ Results stored to DynamoDB")
+            logger.info(f"  ✅ Blog post updated with results")
             logger.info(f"  Bitrate: {bitrate_mbps:.2f} Mbps, Reduction: {reduction_percent:.1f}%")
         except Exception as e:
-            logger.error(f"  ⚠️  Failed to store results: {e}")
+            logger.error(f"  ⚠️  Failed to update blog post: {e}")
         
         logger.info("  ✅ Analysis complete")
         
