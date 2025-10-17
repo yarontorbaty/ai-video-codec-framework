@@ -730,22 +730,27 @@ def generate_blog_html(experiments, reasoning_items):
            p['metrics'].get('psnr_db', 0) > 0  # Must have PSNR measurement
     ]
     
-    # Best bitrate from quality-verified experiments only
-    valid_bitrates = [p['metrics'].get('bitrate_mbps') for p in quality_verified_experiments if p['metrics'].get('bitrate_mbps', 0) > 0]
-    best_bitrate = min(valid_bitrates) if valid_bitrates else 10.0
-    
     # Count tier achievements - only from quality-verified experiments
     tier90_count = sum(1 for p in quality_verified_experiments if p['metrics'].get('bitrate_mbps', 999) <= 1.0)
     tier70_count = sum(1 for p in quality_verified_experiments if 1.0 < p['metrics'].get('bitrate_mbps', 999) <= 3.0)
     tier50_count = sum(1 for p in quality_verified_experiments if 3.0 < p['metrics'].get('bitrate_mbps', 999) <= 5.0)
     
+    # Best bitrate from experiments that meet goals (at least 50% reduction = ≤ 5.0 Mbps)
+    experiments_meeting_goals = [
+        p for p in quality_verified_experiments 
+        if p['metrics'].get('bitrate_mbps', 999) <= 5.0  # At least 50% reduction tier
+    ]
+    valid_bitrates = [p['metrics'].get('bitrate_mbps') for p in experiments_meeting_goals if p['metrics'].get('bitrate_mbps', 0) > 0]
+    best_bitrate = min(valid_bitrates) if valid_bitrates else None
+    
     quality_verified_count = len(quality_verified_experiments)
+    goals_met_count = len(experiments_meeting_goals)
     
     # Generate summary section
     summary_html = f'''
     <div class="summary-section">
         <h2>🎯 Research Progress Summary</h2>
-        <p>Our autonomous AI system has conducted {total_experiments} compression experiments, with {quality_verified_count} successfully completing quality verification (PSNR/SSIM measured). These verified experiments demonstrate systematic progress toward significant bitrate reductions while maintaining video quality.</p>
+        <p>Our autonomous AI system has conducted {total_experiments} compression experiments, with {quality_verified_count} successfully completing quality verification (PSNR/SSIM measured). Of these, {goals_met_count} experiments achieved meaningful compression goals (≥50% reduction vs HEVC baseline).</p>
         <div class="summary-stats">
             <div class="summary-stat">
                 <div class="value">{total_experiments}</div>
@@ -756,12 +761,16 @@ def generate_blog_html(experiments, reasoning_items):
                 <div class="label">Quality Verified</div>
             </div>
             <div class="summary-stat">
-                <div class="value">{best_bitrate:.2f} Mbps</div>
-                <div class="label">Best Verified Bitrate</div>
+                <div class="value">{goals_met_count}</div>
+                <div class="label">Goals Achieved</div>
+            </div>
+            <div class="summary-stat">
+                <div class="value">{f'{best_bitrate:.2f} Mbps' if best_bitrate else 'N/A'}</div>
+                <div class="label">Best Achievement</div>
             </div>
             <div class="summary-stat">
                 <div class="value">🏆 {tier90_count} | 🥇 {tier70_count} | 🥈 {tier50_count}</div>
-                <div class="label">Verified Achievements</div>
+                <div class="label">Tier Achievements</div>
             </div>
         </div>
     </div>
