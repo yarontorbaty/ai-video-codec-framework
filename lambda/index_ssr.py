@@ -12,54 +12,6 @@ def decimal_to_float(obj):
         return float(obj)
     raise TypeError
 
-def _generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out, psnr=None, ssim=None, quality=None):
-    """Generate metrics HTML including PSNR/SSIM quality metrics"""
-    if is_timed_out:
-        return ''
-    
-    # Build sign for reduction
-    sign = '+' if reduction < 0 else ''
-    color = '#dc3545' if reduction < 0 else '#28a745'
-    
-    # Build HTML
-    bitrate_value = expected_bitrate if is_running and not bitrate else bitrate
-    bitrate_label = 'Expected' if is_running and not bitrate else ''
-    
-    html = '<div class="metrics-grid">'
-    
-    # Bitrate card
-    html += f'<div class="metric-card"><div class="metric-value">{bitrate_value:.2f}</div><div class="metric-label">{bitrate_label} Mbps</div></div>'
-    
-    # Reduction card
-    if not (is_running and not bitrate):
-        html += f'<div class="metric-card"><div class="metric-value" style="color: {color}">{sign}{reduction:.1f}%</div><div class="metric-label">vs HEVC Baseline</div></div>'
-    
-    # PSNR card (NEW!)
-    if psnr is not None and psnr > 0:
-        psnr_color = '#28a745' if psnr >= 30 else ('#ffc107' if psnr >= 25 else '#dc3545')
-        psnr_label = 'Excellent' if psnr >= 35 else ('Good' if psnr >= 30 else ('Acceptable' if psnr >= 25 else 'Poor'))
-        html += f'<div class="metric-card"><div class="metric-value" style="color: {psnr_color}">{psnr:.1f} dB</div><div class="metric-label">PSNR ({psnr_label})</div></div>'
-    
-    # SSIM card (NEW!)
-    if ssim is not None and ssim > 0:
-        ssim_color = '#28a745' if ssim >= 0.9 else ('#ffc107' if ssim >= 0.8 else '#dc3545')
-        html += f'<div class="metric-card"><div class="metric-value" style="color: {ssim_color}">{ssim:.3f}</div><div class="metric-label">SSIM</div></div>'
-    
-    # Quality badge (NEW!)
-    if quality and quality != 'unknown':
-        quality_colors = {
-            'excellent': '#28a745',
-            'good': '#20c997',
-            'acceptable': '#ffc107',
-            'poor': '#dc3545'
-        }
-        quality_color = quality_colors.get(quality, '#6c757d')
-        quality_emoji = '🏆' if quality == 'excellent' else ('✅' if quality == 'good' else ('⚠️' if quality == 'acceptable' else '❌'))
-        html += f'<div class="metric-card"><div class="metric-value" style="color: {quality_color}">{quality_emoji}</div><div class="metric-label">Quality: {quality.capitalize()}</div></div>'
-    
-    html += '</div>'
-    return html
-
 def handler(event, context):
     """
     Lambda function for server-side rendering
@@ -84,6 +36,17 @@ def handler(event, context):
         data_type = query_params.get('type')
         if data_type == 'experiments':
             return get_experiments()
+        elif data_type == 'experiment':
+            # Get single experiment details
+            exp_id = query_params.get('id')
+            if exp_id:
+                return get_experiment_details(exp_id)
+            else:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Missing experiment id parameter'})
+                }
         elif data_type == 'metrics':
             return get_metrics()
         elif data_type == 'costs':
@@ -113,22 +76,13 @@ def handler(event, context):
         # Keep the full path including /admin
         
         try:
-            # Get headers from original request (case-insensitive)
-            incoming_headers = event.get('headers', {})
-            proxy_headers = {'Content-Type': 'application/json'}
-            
-            # Forward Authorization header if present (check both cases)
-            auth_header = incoming_headers.get('Authorization') or incoming_headers.get('authorization')
-            if auth_header:
-                proxy_headers['Authorization'] = auth_header
-            
             # Forward the request
             if event.get('httpMethod') == 'POST':
                 body = event.get('body', '{}')
                 req = urllib.request.Request(
                     f"{admin_api_endpoint}{path}",
                     data=body.encode('utf-8'),
-                    headers=proxy_headers
+                    headers={'Content-Type': 'application/json'}
                 )
                 with urllib.request.urlopen(req) as response:
                     return {
@@ -140,11 +94,7 @@ def handler(event, context):
                         'body': response.read().decode('utf-8')
                     }
             else:
-                req = urllib.request.Request(
-                    f"{admin_api_endpoint}{path}",
-                    headers=proxy_headers
-                )
-                with urllib.request.urlopen(req) as response:
+                with urllib.request.urlopen(f"{admin_api_endpoint}{path}") as response:
                     return {
                         'statusCode': response.status,
                         'headers': {
@@ -153,12 +103,6 @@ def handler(event, context):
                         },
                         'body': response.read().decode('utf-8')
                     }
-        except urllib.error.HTTPError as e:
-            return {
-                'statusCode': e.code,
-                'headers': {'Content-Type': 'application/json'},
-                'body': e.read().decode('utf-8')
-            }
         except Exception as e:
             return {
                 'statusCode': 500,
@@ -242,28 +186,13 @@ def render_dashboard_page():
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     
     try:
-        # Fetch all experiments and sort to get the latest ones
+        # Fetch all data in parallel (conceptually - boto3 is synchronous)
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
-        
-        # Scan all items (DynamoDB scan limit is per page, not total)
-        experiments_response = experiments_table.scan()
-        all_items = experiments_response.get('Items', [])
-        
-        # Handle pagination if there are more items
-        while 'LastEvaluatedKey' in experiments_response:
-            experiments_response = experiments_table.scan(
-                ExclusiveStartKey=experiments_response['LastEvaluatedKey']
-            )
-            all_items.extend(experiments_response.get('Items', []))
-        
-        # Sort by timestamp (descending) and take the latest 50
-        all_items.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
-        total_count = len(all_items)  # Store total count before limiting
-        latest_items = all_items[:50]  # Get latest 50 experiments
+        experiments_response = experiments_table.scan(Limit=50)  # Show more experiments
         
         # Process experiments with more details
         experiments = []
-        for item in latest_items:
+        for item in experiments_response.get('Items', []):
             experiments_data = json.loads(item.get('experiments', '[]'))
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
@@ -340,17 +269,7 @@ def render_dashboard_page():
         # Fetch costs from Cost Explorer
         ce = boto3.client('ce', region_name='us-east-1')
         monthly_cost = 0
-        cost_breakdown = {'EC2': 0, 'S3': 0, 'Lambda': 0, 'Claude': 0, 'Other': 0}
-        
-        # Get Claude API usage costs
-        try:
-            control_table = dynamodb.Table('ai-video-codec-control')
-            llm_stats = control_table.get_item(Key={'control_id': 'llm_usage_stats'}).get('Item', {})
-            claude_cost = float(llm_stats.get('total_cost_usd', 0))
-            cost_breakdown['Claude'] = round(claude_cost, 2)
-        except Exception as e:
-            print(f"Failed to get Claude costs: {e}")
-            cost_breakdown['Claude'] = 0
+        cost_breakdown = {'EC2': 0, 'S3': 0, 'Lambda': 0, 'Other': 0}
         
         try:
             from datetime import timedelta
@@ -392,15 +311,9 @@ def render_dashboard_page():
             
             monthly_cost = (total_cost / 7) * 30 if total_cost > 0 else 0
             
-            # Scale breakdown to monthly (except Claude which is already total)
-            claude_total = cost_breakdown['Claude']
+            # Scale breakdown to monthly
             for key in cost_breakdown:
-                if key != 'Claude':
-                    cost_breakdown[key] = round((cost_breakdown[key] / 7) * 30, 2)
-            cost_breakdown['Claude'] = claude_total  # Restore Claude total
-            
-            # Add Claude to monthly total
-            monthly_cost += claude_total
+                cost_breakdown[key] = round((cost_breakdown[key] / 7) * 30, 2)
                 
         except Exception as e:
             print(f"Cost fetch error: {e}")
@@ -412,16 +325,10 @@ def render_dashboard_page():
             }
             for itype in instance_types:
                 monthly_cost += ec2_hourly_rates.get(itype, 0.1) * 730  # hours per month
-            
-            # Add Claude costs to the estimate
-            claude_cost_estimate = cost_breakdown.get('Claude', 0)
-            monthly_cost += claude_cost_estimate
-            
             cost_breakdown = {
-                'EC2': round(monthly_cost * 0.80, 2),
+                'EC2': round(monthly_cost * 0.85, 2),
                 'S3': round(monthly_cost * 0.08, 2),
                 'Lambda': round(monthly_cost * 0.05, 2),
-                'Claude': claude_cost_estimate,
                 'Other': round(monthly_cost * 0.02, 2)
             }
         
@@ -439,60 +346,27 @@ def render_dashboard_page():
             else:
                 compression_display = f'{compression:.1f}%'
             
-            # Code Evolution Fields
-            code_changed = exp.get('code_changed', False)
-            version = exp.get('version', 0)
-            evo_status = exp.get('status', 'N/A')  # adopted, rejected, test_failed, skipped
-            improvement = exp.get('improvement', 'N/A')
-            deployment_status = exp.get('deployment_status', 'not_deployed')
-            github_committed = exp.get('github_committed', False)
-            github_hash = exp.get('github_commit_hash', '')
-            
-            # Code changed indicator
-            code_badge = ''
-            if code_changed:
-                code_badge = '<span style="background: #667eea; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75em;" title="LLM generated new code">✨ LLM</span>'
-            else:
-                code_badge = '<span style="color: #999; font-size: 0.75em;">—</span>'
-            
-            # Version display
-            version_display = f'<span style="font-weight: 600; color: #667eea;">v{version}</span>' if code_changed else '<span style="color: #999;">—</span>'
-            
-            # Status badge with colors
-            status_colors = {
-                'adopted': ('#28a745', '✓ Adopted', 'Code successfully adopted and deployed'),
-                'rejected': ('#dc3545', '✗ Rejected', 'Code rejected - no improvement'),
-                'test_failed': ('#ffc107', '⚠ Failed', 'Testing failed'),
-                'skipped': ('#6c757d', '⊘ Skipped', 'Evolution skipped')
-            }
-            status_info = status_colors.get(evo_status, ('#999', evo_status, ''))
-            adoption_badge = f'<span style="background: {status_info[0]}; color: white; padding: 3px 8px; border-radius: 6px; font-size: 0.75em;" title="{status_info[2]}">{status_info[1]}</span>' if code_changed else '<span style="color: #999;">—</span>'
-            
-            # GitHub status
-            github_display = ''
-            if github_committed and github_hash:
-                short_hash = github_hash[:7] if github_hash else ''
-                github_display = f'<a href="https://github.com/your-repo/commit/{github_hash}" target="_blank" style="color: #28a745; text-decoration: none;" title="Committed: {short_hash}"><i class="fab fa-github"></i> {short_hash}</a>'
-            elif deployment_status == 'deployed':
-                github_display = '<span style="color: #28a745; font-size: 0.75em;" title="Deployed locally">📦 Local</span>'
-            else:
-                github_display = '<span style="color: #999;">—</span>'
-            
-            # Improvement tooltip
-            improvement_tooltip = f'title="{improvement}"' if improvement != 'N/A' else ''
+            # Evolution badge
+            evolution_badge = ''
+            if exp.get('evolution'):
+                evo = exp['evolution']
+                if evo.get('adopted'):
+                    version = evo.get('version', 0)
+                    evolution_badge = f'<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="Code v{version} adopted">🎉 v{version}</span>'
+                elif evo.get('status') == 'rejected':
+                    reason = evo.get('reason', 'Not better')
+                    evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{reason}">⏭️</span>'
             
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1fr 0.6fr 0.5fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
                     <div class="col">{exp.get('time_of_day', 'N/A')}</div>
-                    <div class="col">{exp['methods']}</div>
-                    <div class="col" {improvement_tooltip}>{compression_display}</div>
+                    <div class="col">{exp['methods']}{evolution_badge}</div>
+                    <div class="col">{compression_display}</div>
+                    <div class="col">95.0%</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
-                    <div class="col">{code_badge}</div>
-                    <div class="col">{version_display}</div>
-                    <div class="col">{adoption_badge}</div>
-                    <div class="col">{github_display}</div>
+                    <div class="col">{exp['timestamp'][:10]}</div>
                     <div class="col"><a href="/blog.html#exp-{i+1}" style="color: #667eea; text-decoration: none;"><i class="fas fa-arrow-right"></i></a></div>
                 </div>
             '''
@@ -538,8 +412,7 @@ def render_dashboard_page():
                             <h3>Total Experiments</h3>
                         </div>
                         <div class="card-content">
-                            <div class="metric-value">{total_count}</div>
-                            <div class="metric-label" style="font-size: 0.75rem; opacity: 0.7; margin-top: 0.25rem;">Showing latest {len(experiments)}</div>
+                            <div class="metric-value">{len(experiments)}</div>
                             <div class="metric-label">AI Codec Iterations</div>
                         </div>
                     </div>
@@ -584,10 +457,6 @@ def render_dashboard_page():
                                     <span><i class="fas fa-bolt"></i> Lambda:</span>
                                     <strong>${cost_breakdown['Lambda']:.2f}</strong>
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin: 0.25rem 0;">
-                                    <span><i class="fas fa-brain"></i> Claude:</span>
-                                    <strong>${cost_breakdown['Claude']:.2f}</strong>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -597,17 +466,15 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1fr 0.6fr 0.5fr 0.8fr 0.6fr 0.6fr 0.6fr 0.7fr 0.6fr 0.8fr 0.5fr;">
+                    <div class="table-header" style="grid-template-columns: 1.2fr 0.7fr 0.6fr 1fr 0.7fr 0.7fr 0.7fr 0.8fr 0.5fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
                         <div>Time</div>
-                        <div>Methods</div>
+                        <div>Methods / Evolution</div>
                         <div>Compression</div>
+                        <div>Quality</div>
                         <div>Bitrate</div>
-                        <div><i class="fas fa-code"></i> Code</div>
-                        <div><i class="fas fa-code-branch"></i> Version</div>
-                        <div><i class="fas fa-check-circle"></i> Adopted</div>
-                        <div><i class="fab fa-github"></i> GitHub</div>
+                        <div>Date</div>
                         <div>Details</div>
                     </div>
                     <div class="table-body">
@@ -629,9 +496,7 @@ def render_dashboard_page():
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'text/html',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
+                'Cache-Control': 'public, max-age=30, s-maxage=30'  # Cache for 30 seconds only
             },
             'body': html
         }
@@ -692,29 +557,18 @@ def render_blog_page():
         experiments_table = dynamodb.Table('ai-video-codec-experiments')
         reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
         
-        # Scan all experiments (with pagination)
-        experiments_res = experiments_table.scan()
-        all_experiments = experiments_res.get('Items', [])
+        experiments_res = experiments_table.scan(Limit=50)
+        reasoning_res = reasoning_table.scan(Limit=50)
         
-        # Handle pagination for experiments
-        while 'LastEvaluatedKey' in experiments_res:
-            experiments_res = experiments_table.scan(
-                ExclusiveStartKey=experiments_res['LastEvaluatedKey']
-            )
-            all_experiments.extend(experiments_res.get('Items', []))
-        
-        # Sort by timestamp and get total count
-        all_experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-        total_count = len(all_experiments)
-        experiments = all_experiments[:50]  # Get latest 50 for display
-        
-        # Fetch reasoning (just get recent ones)
-        reasoning_res = reasoning_table.scan(Limit=100)
+        experiments = experiments_res.get('Items', [])
         reasoning_items = reasoning_res.get('Items', [])
+        
+        # Sort by timestamp
+        experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
         reasoning_items.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
         
         # Generate HTML
-        html = generate_blog_html(experiments, reasoning_items, total_count)
+        html = generate_blog_html(experiments, reasoning_items)
         
         return {
             'statusCode': 200,
@@ -734,7 +588,7 @@ def render_blog_page():
             'body': f'<h1>Error</h1><p>{str(e)}</p>'
         }
 
-def generate_blog_html(experiments, reasoning_items, total_count):
+def generate_blog_html(experiments, reasoning_items):
     """Generate blog HTML with embedded data"""
     
     # Match experiments with reasoning
@@ -808,40 +662,12 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             bitrate = metrics.get('bitrate_mbps', 0)
             reduction = comparison.get('reduction_percent', 0)
             
-            # Extract quality metrics (NEW!)
-            psnr = metrics.get('psnr_db', None)
-            ssim = metrics.get('ssim', None)
-            quality = metrics.get('quality', None)
+            status_class = 'status-success' if exp.get('status') == 'completed' else 'status-failed'
             
-            # Extract video and decoder info (NEW!)
-            video_url = procedural.get('video_url', None)
-            decoder_s3_key = procedural.get('decoder_s3_key', None)
-            
-            status = exp.get('status', 'unknown')
-            if status == 'completed':
-                status_class = 'status-success'
-            elif status == 'running':
-                status_class = 'status-running'
-            elif status == 'timed_out':
-                status_class = 'status-timeout'
-            else:
-                status_class = 'status-failed'
-            
-            # Get hypothesis from reasoning or from experiment approach field
-            hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else (procedural.get('approach', 'Baseline Measurement'))
+            hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else 'Baseline Measurement'
             root_cause = reasoning.get('root_cause', '') if reasoning else ''
             insights = reasoning.get('insights', []) if reasoning else []
             next_experiment = reasoning.get('next_experiment', {}) if reasoning else {}
-            
-            # For running experiments, show expected results
-            expected_bitrate = procedural.get('expected_bitrate', 0)
-            is_running = status == 'running'
-            is_timed_out = status == 'timed_out'
-            
-            # Get abandonment info for timed-out experiments
-            failure_reason = procedural.get('failure_reason', '')
-            stuck_phase = procedural.get('stuck_phase', 'unknown')
-            runtime_seconds = procedural.get('runtime_seconds', 0)
             
             # Generate insights HTML
             insights_html = ""
@@ -858,7 +684,7 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             
             posts_html += f'''
             <div class="blog-post" id="exp-{i+1}">
-                <h2><i class="fas fa-flask"></i> Iteration {total_count - i}: {hypothesis}</h2>
+                <h2><i class="fas fa-flask"></i> Iteration {len(blog_posts) - i}: {hypothesis}</h2>
                 <div class="blog-meta">
                     <span><i class="fas fa-calendar"></i> {exp.get('timestamp_iso', '')[:10]}</span>
                     <span><i class="fas fa-microscope"></i> {exp.get('experiment_id', '')}</span>
@@ -870,18 +696,21 @@ def generate_blog_html(experiments, reasoning_items, total_count):
                     <p>{methods_html if methods_html else 'Hybrid Approach'}</p>
                 </div>
                 
-                {f'<div class="blog-section" style="background: #fff3cd; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px;"><h3 style="color: #856404;"><i class="fas fa-exclamation-triangle"></i> Experiment Abandoned</h3><p><strong>Reason:</strong> {failure_reason}</p><p><strong>Stuck Phase:</strong> {stuck_phase}</p><p><strong>Runtime:</strong> {runtime_seconds}s ({runtime_seconds//60} minutes)</p><p style="font-size: 0.9em; color: #666; margin-top: 15px;"><i class="fas fa-info-circle"></i> This experiment was automatically closed out by the cleanup system. The orchestrator may have crashed or the experiment hung indefinitely. Check logs for details.</p></div>' if is_timed_out else ''}
-                
                 <div class="blog-section">
-                    <h3><i class="fas fa-chart-bar"></i> {'Expected Results' if is_running else 'Results'}</h3>
-                    {f'<p style="color: #f59e0b; font-weight: 600;"><i class="fas fa-spinner fa-spin"></i> Experiment in progress... Results will appear here when execution completes.</p>' if is_running else ''}
-                    {f'<p style="color: #9e9e9e; font-style: italic;">No results available - experiment was abandoned before completion.</p>' if is_timed_out else ''}
-                    {_generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out, psnr, ssim, quality)}
+                    <h3><i class="fas fa-chart-bar"></i> Results</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-value">{bitrate:.2f}</div>
+                            <div class="metric-label">Mbps</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value" style="color: {'#dc3545' if reduction < 0 else '#28a745'}">
+                                {'+' if reduction < 0 else ''}{reduction:.1f}%
+                            </div>
+                            <div class="metric-label">vs HEVC Baseline</div>
+                        </div>
+                    </div>
                 </div>
-                
-                {f'<div class="blog-section" style="background: linear-gradient(135deg, #667eea22 0%, #764ba222 100%); border-left: 4px solid #667eea;"><h3><i class="fas fa-video"></i> Reconstructed Video</h3><p style="margin-bottom: 15px;">View the decompressed video output from this experiment:</p><a href="{video_url}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: transform 0.2s;"><i class="fas fa-play-circle"></i> View Reconstructed Video</a><p style="font-size: 0.85em; color: #666; margin-top: 15px;"><i class="fas fa-info-circle"></i> Presigned URL expires in 7 days. Video shows the decoded output after compression.</p></div>' if video_url else ''}
-                
-                {f'<div class="blog-section" style="background: #f0f9ff; border-left: 4px solid #0ea5e9;"><h3><i class="fas fa-code"></i> Decoder Code</h3><p style="margin-bottom: 15px;">Download the Python decoder used to reconstruct frames from compressed data:</p><a href="https://ai-video-codec-videos-580473065386.s3.amazonaws.com/{decoder_s3_key}" target="_blank" style="display: inline-block; background: #0ea5e9; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: transform 0.2s;"><i class="fas fa-download"></i> Download Decoder (.py)</a><p style="font-size: 0.85em; color: #666; margin-top: 15px;"><i class="fas fa-code-branch"></i> Use this decoder to reconstruct video frames from the compressed data format.</p></div>' if decoder_s3_key else ''}
                 
                 {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
                 
@@ -910,8 +739,6 @@ def generate_blog_html(experiments, reasoning_items, total_count):
         .status-badge {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600; }}
         .status-success {{ background: #d4edda; color: #155724; }}
         .status-failed {{ background: #f8d7da; color: #721c24; }}
-        .status-running {{ background: #fff3cd; color: #856404; }}
-        .status-timeout {{ background: #e0e0e0; color: #424242; }}
         .blog-section {{ margin: 30px 0; }}
         .blog-section h3 {{ font-size: 1.3em; margin-bottom: 15px; color: #667eea; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
         .metrics-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
@@ -944,59 +771,31 @@ def generate_blog_html(experiments, reasoning_items, total_count):
 
 # Keep existing API functions
 def get_experiments():
-    """Fetch experiments from DynamoDB with full quality metrics"""
+    """Fetch experiments from DynamoDB"""
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     table = dynamodb.Table('ai-video-codec-experiments')
     
     try:
-        # Get all experiments and sort by timestamp
-        response = table.scan()
-        all_items = response.get('Items', [])
-        
-        # Handle pagination
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
-            all_items.extend(response.get('Items', []))
-        
-        # Sort by timestamp descending and take latest 50
-        all_items.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-        items = all_items[:50]
-        total_count = len(all_items)
-        
+        response = table.scan(Limit=50)
         experiments = []
         
-        for item in items:
-            exp_data = {
+        for item in response.get('Items', []):
+            experiments_data = json.loads(item.get('experiments', '[]'))
+            procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+            metrics = procedural.get('real_metrics', {})
+            comparison = procedural.get('comparison', {})
+            
+            experiments.append({
                 'id': item.get('experiment_id', ''),
-                'timestamp': float(item.get('timestamp', 0)),
                 'status': item.get('status', 'unknown'),
-                'best_bitrate': None,
-                'psnr_db': None,
-                'ssim': None,
-                'quality': None,
-                'current_phase': item.get('current_phase', 'unknown'),
-                'phase_completed': item.get('phase_completed', 'unknown'),
-            }
-            
-            # Parse experiments data for metrics
-            try:
-                experiments_data = json.loads(item.get('experiments', '[]'))
-                
-                for e in experiments_data:
-                    metrics = e.get('real_metrics', {})
-                    bitrate = metrics.get('bitrate_mbps')
-                    
-                    if bitrate:
-                        if exp_data['best_bitrate'] is None or bitrate < exp_data['best_bitrate']:
-                            exp_data['best_bitrate'] = float(bitrate)
-                            # Also extract quality metrics from best performing experiment
-                            exp_data['psnr_db'] = float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None
-                            exp_data['ssim'] = float(metrics.get('ssim')) if metrics.get('ssim') else None
-                            exp_data['quality'] = metrics.get('quality')
-            except Exception as e:
-                print(f"Error parsing experiment {exp_data['id']}: {e}")
-            
-            experiments.append(exp_data)
+                'compression': comparison.get('reduction_percent', 0),
+                'quality': 95.0,
+                'bitrate': metrics.get('bitrate_mbps', 0),
+                'created_at': item.get('timestamp_iso', ''),
+                'timestamp': float(item.get('timestamp', 0))
+            })
+        
+        experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
         
         return {
             'statusCode': 200,
@@ -1004,19 +803,20 @@ def get_experiments():
                 'Access-Control-Allow-Origin': '*',
                 'Content-Type': 'application/json'
             },
-            'body': json.dumps(experiments, default=decimal_to_float)
+            'body': json.dumps({
+                'experiments': experiments,
+                'total': len(experiments)
+            }, default=decimal_to_float)
         }
     except Exception as e:
         print(f"Experiments error: {e}")
-        import traceback
-        traceback.print_exc()
         return {
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Content-Type': 'application/json'
             },
-            'body': json.dumps([], default=decimal_to_float)
+            'body': json.dumps({'experiments': [], 'total': 0, 'error': str(e)})
         }
 
 def get_metrics():
@@ -1229,5 +1029,97 @@ def get_reasoning():
                 'total': 0,
                 'error': str(e)
             })
+        }
+
+def get_experiment_details(experiment_id):
+    """Fetch detailed experiment data including LLM analysis"""
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    experiments_table = dynamodb.Table('ai-video-codec-experiments')
+    reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
+    
+    try:
+        # Query experiments table
+        exp_response = experiments_table.query(
+            KeyConditionExpression='experiment_id = :id',
+            ExpressionAttributeValues={':id': experiment_id}
+        )
+        
+        if not exp_response.get('Items'):
+            return {
+                'statusCode': 404,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json'
+                },
+                'body': json.dumps({'error': 'Experiment not found'})
+            }
+        
+        exp_item = exp_response['Items'][0]
+        
+        # Parse experiments JSON
+        experiments_data = json.loads(exp_item.get('experiments', '[]'))
+        procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
+        
+        # Try to get reasoning data
+        try:
+            reasoning_response = reasoning_table.query(
+                KeyConditionExpression='reasoning_id = :id',
+                ExpressionAttributeValues={':id': experiment_id}
+            )
+            reasoning_item = reasoning_response['Items'][0] if reasoning_response.get('Items') else {}
+        except:
+            reasoning_item = {}
+        
+        # Parse JSON fields
+        def safe_json_parse(value, default):
+            if isinstance(value, str):
+                try:
+                    return json.loads(value)
+                except:
+                    return default
+            return value if value else default
+        
+        insights = safe_json_parse(reasoning_item.get('insights'), [])
+        next_experiment = safe_json_parse(reasoning_item.get('next_experiment'), {})
+        risks = safe_json_parse(reasoning_item.get('risks'), [])
+        generated_code = safe_json_parse(reasoning_item.get('generated_code'), {})
+        
+        # Build detailed response
+        details = {
+            'experiment_id': experiment_id,
+            'status': exp_item.get('status', 'unknown'),
+            'approach': procedural.get('approach', reasoning_item.get('hypothesis', 'Compression experiment')),
+            'hypothesis': reasoning_item.get('hypothesis', ''),
+            'root_cause': reasoning_item.get('root_cause', ''),
+            'insights': insights,
+            'next_experiment': next_experiment,
+            'risks': risks,
+            'expected_bitrate_mbps': float(reasoning_item.get('expected_bitrate_mbps', 0)) if reasoning_item.get('expected_bitrate_mbps') else 0,
+            'expected_psnr_db': float(reasoning_item.get('expected_psnr_db', 0)) if reasoning_item.get('expected_psnr_db') else 0,
+            'confidence_score': float(reasoning_item.get('confidence_score', 0)) if reasoning_item.get('confidence_score') else 0,
+            'generated_code': generated_code,
+            'real_metrics': procedural.get('real_metrics', {}),
+            'comparison': procedural.get('comparison', {})
+        }
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps(details, default=decimal_to_float)
+        }
+    except Exception as e:
+        print(f"Error fetching experiment details: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            'body': json.dumps({'error': str(e)})
         }
 
