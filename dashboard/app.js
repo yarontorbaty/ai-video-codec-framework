@@ -418,28 +418,131 @@ class Dashboard {
     }
 
     updateExperimentsTable(experiments) {
-        const tableBody = document.getElementById('experiments-table-body');
-        if (!tableBody) return;
+        const container = document.getElementById('experiments-table-container');
+        if (!container) return;
 
-        tableBody.innerHTML = '';
+        // Hide loading
+        const loading = document.getElementById('experiments-loading');
+        if (loading) loading.style.display = 'none';
 
-        experiments.forEach(exp => {
-            const row = document.createElement('div');
-            row.className = 'table-row';
+        if (!experiments || experiments.length === 0) {
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #94a3b8;">No experiments yet</div>';
+            return;
+        }
+
+        let tableHTML = `
+            <table style="width: 100%; border-collapse: collapse; color: #f1f5f9;">
+                <thead>
+                    <tr style="background: rgba(0,0,0,0.3); border-bottom: 2px solid #475569;">
+                        <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Experiment ID</th>
+                        <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Time</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Bitrate</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        experiments.forEach((exp) => {
+            const statusColor = exp.status === 'completed' ? '#10b981' : 
+                               exp.status === 'running' ? '#3b82f6' : 
+                               exp.status === 'failed' ? '#ef4444' : '#94a3b8';
             
-            row.innerHTML = `
-                <div class="col">${exp.id}</div>
-                <div class="col">
-                    <span class="status-badge ${exp.status}">${exp.status}</span>
-                </div>
-                <div class="col">${exp.compression}%</div>
-                <div class="col">${exp.quality} dB</div>
-                <div class="col">${exp.duration}</div>
-                <div class="col">${exp.cost}</div>
+            const time = new Date(exp.timestamp * 1000).toLocaleString();
+            const bitrate = exp.best_bitrate ? `${exp.best_bitrate.toFixed(2)} Mbps` : 'N/A';
+            
+            // Quality metrics
+            const psnr = exp.psnr_db || null;
+            const ssim = exp.ssim || null;
+            const quality = exp.quality || null;
+            
+            let psnrDisplay = '<span style="color: #666;">—</span>';
+            if (psnr !== null && psnr > 0) {
+                const psnrColor = psnr >= 30 ? '#10b981' : (psnr >= 25 ? '#f59e0b' : '#ef4444');
+                const psnrLabel = psnr >= 35 ? 'Excellent' : (psnr >= 30 ? 'Good' : (psnr >= 25 ? 'Acceptable' : 'Poor'));
+                psnrDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                    <span style="font-weight: 600; color: ${psnrColor}; font-size: 1.1em;">${psnr.toFixed(1)} dB</span>
+                    <span style="font-size: 0.75em; color: ${psnrColor}88;">${psnrLabel}</span>
+                </div>`;
+            }
+            
+            let qualityDisplay = '<span style="color: #666;">—</span>';
+            if (quality && quality !== 'unknown') {
+                const qualityColors = {
+                    'excellent': '#10b981',
+                    'good': '#20c997',
+                    'acceptable': '#f59e0b',
+                    'poor': '#ef4444'
+                };
+                const qualityEmoji = {
+                    'excellent': '🏆',
+                    'good': '✅',
+                    'acceptable': '⚠️',
+                    'poor': '❌'
+                };
+                const qColor = qualityColors[quality] || '#94a3b8';
+                const qEmoji = qualityEmoji[quality] || '❓';
+                qualityDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                    <span style="font-size: 1.3em;">${qEmoji}</span>
+                    <span style="font-size: 0.75em; color: ${qColor}; font-weight: 600;">${quality.toUpperCase()}</span>
+                    ${ssim !== null && ssim > 0 ? `<span style="font-size: 0.7em; color: #94a3b8;">SSIM: ${ssim.toFixed(3)}</span>` : ''}
+                </div>`;
+            }
+
+            // Phase display
+            const phaseData = {
+                'design': { icon: 'fa-lightbulb', color: '#3b82f6', label: 'Design' },
+                'deploy': { icon: 'fa-upload', color: '#8b5cf6', label: 'Deploy' },
+                'validation': { icon: 'fa-check-circle', color: '#f59e0b', label: 'Validate' },
+                'execution': { icon: 'fa-play-circle', color: '#10b981', label: 'Execute' },
+                'quality_verification': { icon: 'fa-eye', color: '#ec4899', label: 'Quality Check' },
+                'analysis': { icon: 'fa-chart-line', color: '#06b6d4', label: 'Analyze' },
+                'complete': { icon: 'fa-check-double', color: '#10b981', label: 'Complete' },
+                'unknown': { icon: 'fa-question', color: '#94a3b8', label: 'Unknown' }
+            };
+            
+            const currentPhase = exp.current_phase || exp.phase_completed || 'unknown';
+            const phase = phaseData[currentPhase] || phaseData['unknown'];
+            
+            let phaseBadge = `<span style="padding: 6px 10px; background: ${phase.color}22; border: 1px solid ${phase.color}; border-radius: 6px; color: ${phase.color}; font-size: 0.85em; font-weight: 600; white-space: nowrap;">
+                <i class="fas ${phase.icon}"></i> ${phase.label}
+            </span>`;
+
+            tableHTML += `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s;" 
+                    onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'" 
+                    onmouseout="this.style.background='transparent'">
+                    <td style="padding: 15px; font-family: monospace; font-size: 0.9em; color: #93c5fd;">${exp.id}</td>
+                    <td style="padding: 15px; color: #cbd5e1; font-size: 0.95em;">${time}</td>
+                    <td style="padding: 15px; text-align: center;">
+                        <span style="padding: 6px 12px; background: ${statusColor}33; color: ${statusColor}; border-radius: 6px; font-weight: 600; font-size: 0.9em;">
+                            ${exp.status.toUpperCase()}
+                        </span>
+                    </td>
+                    <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                    <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
+                    <td style="padding: 15px; text-align: center;">
+                        <button onclick="window.open('/blog.html#${exp.id}', '_blank')" 
+                                style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; font-size: 0.85em; font-weight: 600;">
+                            <i class="fas fa-eye"></i> View Details
+                        </button>
+                    </td>
+                </tr>
             `;
-            
-            tableBody.appendChild(row);
         });
+
+        tableHTML += `
+                </tbody>
+            </table>
+        `;
+
+        container.innerHTML = tableHTML;
     }
 
     updateCostBreakdown(costs) {

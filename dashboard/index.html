@@ -208,24 +208,9 @@
             <!-- Recent Experiments -->
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
-                <div class="experiments-table">
-                    <div class="table-header">
-                        <div class="col">ID</div>
-                        <div class="col">Status</div>
-                        <div class="col">Compression</div>
-                        <div class="col">Quality</div>
-                        <div class="col">Duration</div>
-                        <div class="col">Cost</div>
-                    </div>
-                    <div class="table-body" id="experiments-table-body">
-                        <div class="table-row loading">
-                            <div class="col">Loading...</div>
-                            <div class="col">-</div>
-                            <div class="col">-</div>
-                            <div class="col">-</div>
-                            <div class="col">-</div>
-                            <div class="col">-</div>
-                        </div>
+                <div id="experiments-table-container" style="overflow-x: auto;">
+                    <div class="table-row loading" id="experiments-loading" style="padding: 20px; text-align: center; color: #94a3b8;">
+                        <i class="fas fa-spinner fa-spin"></i> Loading experiments...
                     </div>
                 </div>
             </section>

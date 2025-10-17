@@ -731,8 +731,8 @@ function renderExperimentsTable(experiments) {
 }
 
 function viewExperimentDetails(experimentId) {
-    alert(`Viewing details for experiment: ${experimentId}\n\nThis will open detailed metrics and results.`);
-    // TODO: Implement detailed view modal
+    // Open blog with the experiment highlighted
+    window.open(`/blog.html#${experimentId}`, '_blank');
 }
 
 async function rerunExperiment(experimentId) {
