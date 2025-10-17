@@ -297,7 +297,30 @@ Analyze these results and provide:
 
 Be direct, technical, and actionable. Focus on the fundamental problem that procedural generation is creating NEW video (18MB) instead of COMPRESSING existing video.
 
-Format your response as JSON with these keys: root_cause, insights, hypothesis, next_experiment, risks, expected_bitrate_mbps, confidence_score
+# CODE GENERATION
+
+**IMPORTANT**: Along with your analysis, generate a `compress_video_frame()` function implementing your hypothesis.
+
+Requirements:
+- Function signature: `def compress_video_frame(frame: np.ndarray, frame_index: int, config: dict) -> bytes:`
+- Use allowed imports: numpy, cv2, json, struct, base64, math, torch (if needed)
+- Return compressed bytes
+- Must be runnable in Python 3.7
+
+# OUTPUT FORMAT
+
+Format your response as JSON with these keys:
+- `root_cause`: string - Why compression is failing
+- `insights`: array - Key patterns observed
+- `hypothesis`: string - What changes would improve results  
+- `next_experiment`: object - Concrete steps for next experiment
+- `risks`: array - What could go wrong
+- `expected_bitrate_mbps`: number - Expected bitrate
+- `confidence_score`: number - Confidence (0.0-1.0)
+- `generated_code`: object with:
+  - `code`: string - Full Python code for compress_video_frame() function
+  - `description`: string - Brief description of the approach
+  - `expected_improvement`: string - Expected performance gain
 """
         
         return prompt

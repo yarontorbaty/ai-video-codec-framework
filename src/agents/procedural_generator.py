@@ -537,6 +537,7 @@ class ProceduralCompressionAgent:
         bitrate_mbps = (file_size * 8) / duration / 1_000_000
         
         results = {
+            'status': 'completed',  # Added: experiment runner checks for this
             'duration': duration,
             'fps': fps,
             'total_frames': total_frames,
