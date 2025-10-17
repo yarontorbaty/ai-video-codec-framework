@@ -252,19 +252,23 @@ class ProceduralExperimentRunner:
             self.experiments_table.put_item(Item=convert_floats(blog_data))
             logger.info(f"  📝 Blog post created with approach")
             
-            # Also write to reasoning table for blog context
-            reasoning_table = boto3.resource('dynamodb', region_name='us-east-1').Table('ai-video-codec-reasoning')
-            reasoning_data = {
-                'experiment_id': experiment_id,
-                'timestamp': timestamp,  # Use same consistent timestamp
-                'hypothesis': llm_analysis.get('hypothesis', ''),
-                'root_cause': llm_analysis.get('root_cause', ''),
-                'insights': json.dumps(llm_analysis.get('insights', [])),
-                'next_experiment': llm_analysis.get('next_experiment', {}),
-                'confidence_score': llm_analysis.get('confidence_score', 0.0)
-            }
-            reasoning_table.put_item(Item=convert_floats(reasoning_data))
-            logger.info(f"  📝 Reasoning data stored")
+            # Also write to reasoning table for blog context (reasoning_id is the primary key)
+            try:
+                reasoning_table = boto3.resource('dynamodb', region_name='us-east-1').Table('ai-video-codec-reasoning')
+                reasoning_data = {
+                    'reasoning_id': experiment_id,  # Use experiment_id as reasoning_id
+                    'experiment_id': experiment_id,
+                    'timestamp': timestamp,
+                    'hypothesis': llm_analysis.get('hypothesis', ''),
+                    'root_cause': llm_analysis.get('root_cause', ''),
+                    'insights': json.dumps(llm_analysis.get('insights', [])),
+                    'next_experiment': json.dumps(llm_analysis.get('next_experiment', {})),
+                    'confidence_score': llm_analysis.get('confidence_score', 0.0)
+                }
+                reasoning_table.put_item(Item=convert_floats(reasoning_data))
+                logger.info(f"  📝 Reasoning data stored")
+            except Exception as e:
+                logger.debug(f"  Could not write to reasoning table: {e}")
         except Exception as e:
             logger.warning(f"  Failed to write blog post design: {e}")
     
@@ -518,9 +522,26 @@ class ProceduralExperimentRunner:
         
         # Format experiment data in the structure the blog expects
         # The blog looks for experiments[].experiment_type == 'real_procedural_generation'
+        
+        # Try to fetch existing blog post to preserve the approach field
+        approach = 'Compression experiment'
+        try:
+            timestamp = int(experiment_id.split('_')[-1])
+            existing = self.experiments_table.get_item(
+                Key={'experiment_id': experiment_id, 'timestamp': timestamp}
+            ).get('Item', {})
+            
+            if existing and 'experiments' in existing:
+                existing_exp = json.loads(existing['experiments'])
+                if existing_exp and len(existing_exp) > 0:
+                    approach = existing_exp[0].get('approach', approach)
+        except Exception as e:
+            logger.debug(f"Could not fetch existing approach: {e}")
+        
         experiments_array = [{
             'experiment_type': 'real_procedural_generation',
             'status': 'completed',
+            'approach': approach,  # Preserve the approach from design phase
             'real_metrics': real_metrics,
             'comparison': {
                 'hevc_baseline_mbps': hevc_baseline_mbps,
