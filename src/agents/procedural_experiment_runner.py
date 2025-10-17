@@ -176,6 +176,18 @@ class ProceduralExperimentRunner:
             extra_data: Additional data to merge (e.g., retry counts)
         """
         try:
+            from decimal import Decimal
+            
+            # Convert floats to Decimal for DynamoDB
+            def convert_floats(obj):
+                if isinstance(obj, dict):
+                    return {k: convert_floats(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_floats(item) for item in obj]
+                elif isinstance(obj, float):
+                    return Decimal(str(obj))
+                return obj
+            
             item = {
                 'experiment_id': experiment_id,
                 'timestamp': int(time.time()),
@@ -184,8 +196,8 @@ class ProceduralExperimentRunner:
                 'phase_completed': current_phase,  # Track last completed phase
             }
             
-            # Merge in any extra data (like retry counts)
-            item.update(extra_data)
+            # Merge in any extra data (like retry counts), converting floats to Decimal
+            item.update(convert_floats(extra_data))
             
             self.experiments_table.put_item(Item=item)
             logger.debug(f"  Updated status: {current_phase} ({status})")

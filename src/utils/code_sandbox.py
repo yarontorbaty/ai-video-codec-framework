@@ -58,10 +58,10 @@ class CodeSandbox:
         'locals',
         'vars',
         'dir',
-        'getattr',
-        'setattr',
-        'delattr',
-        'hasattr',
+        'getattr',  # Can access arbitrary attributes - too dangerous
+        'setattr',  # Can modify arbitrary attributes - too dangerous
+        'delattr',  # Can delete arbitrary attributes - too dangerous
+        # 'hasattr' removed - safe for checking if attributes exist (like isinstance, len)
     }
     
     def __init__(self, timeout: int = 60, max_memory_mb: int = 2048):
