@@ -438,7 +438,12 @@ class Dashboard {
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Bitrate</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-clock"></i> Runtime</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code-branch"></i> Ver</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fab fa-github"></i> Git</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-video"></i> Media</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Actions</th>
                     </tr>
                 </thead>
@@ -491,6 +496,23 @@ class Dashboard {
                 </div>`;
             }
 
+            // Runtime display
+            const elapsedSeconds = exp.elapsed_seconds || 0;
+            const estimatedSeconds = exp.estimated_duration_seconds || 106;
+            const formatTime = (seconds) => {
+                if (seconds < 60) return `${seconds}s`;
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}m ${secs}s`;
+            };
+            const runtimeColor = exp.status === 'completed' ? '#10b981' : 
+                                elapsedSeconds > estimatedSeconds * 1.5 ? '#ef4444' : 
+                                elapsedSeconds > estimatedSeconds ? '#f59e0b' : '#3b82f6';
+            let runtimeDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <span style="font-weight: 600; color: ${runtimeColor};">${formatTime(elapsedSeconds)}</span>
+                <span style="font-size: 0.75em; color: #94a3b8;">est: ${formatTime(estimatedSeconds)}</span>
+            </div>`;
+
             // Phase display
             const phaseData = {
                 'design': { icon: 'fa-lightbulb', color: '#3b82f6', label: 'Design' },
@@ -510,6 +532,63 @@ class Dashboard {
                 <i class="fas ${phase.icon}"></i> ${phase.label}
             </span>`;
 
+            // Code evolution fields
+            const codeChanged = exp.code_changed || false;
+            const version = exp.version || 0;
+            const githubCommitted = exp.github_committed || false;
+            const githubHash = exp.github_commit_hash || '';
+            const improvement = exp.improvement || '';
+            
+            const codeBadge = codeChanged ? 
+                `<span style="background: #667eea; color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.75em;" title="LLM generated code">✨ LLM</span>` :
+                `<span style="color: #666;">—</span>`;
+            
+            const versionDisplay = codeChanged ? 
+                `<span style="font-weight: 600; color: #60a5fa; font-size: 1.1em;">v${version}</span>` :
+                `<span style="color: #666;">—</span>`;
+            
+            let githubBadge = '<span style="color: #666;">—</span>';
+            if (githubCommitted && githubHash) {
+                const shortHash = githubHash.substring(0, 7);
+                githubBadge = `<a href="https://github.com/your-repo/commit/${githubHash}" target="_blank" style="color: #10b981; text-decoration: none; font-family: monospace;" title="${improvement}">
+                    <i class="fab fa-github"></i> ${shortHash}
+                </a>`;
+            } else if (exp.deployment_status === 'deployed') {
+                githubBadge = `<span style="color: #f59e0b;" title="Deployed locally">📦 Local</span>`;
+            }
+
+            // Parse experiments JSON to get video_url and decoder_s3_key
+            let videoUrl = null;
+            let decoderKey = null;
+            try {
+                if (exp.experiments) {
+                    const experimentsData = typeof exp.experiments === 'string' ? JSON.parse(exp.experiments) : exp.experiments;
+                    if (experimentsData && experimentsData.length > 0) {
+                        videoUrl = experimentsData[0].video_url;
+                        decoderKey = experimentsData[0].decoder_s3_key;
+                    }
+                }
+            } catch (e) {
+                // Ignore parsing errors
+            }
+
+            // Media download buttons
+            let mediaBadge = '<span style="color: #666;">—</span>';
+            if (videoUrl || decoderKey) {
+                mediaBadge = '<div style="display: flex; flex-direction: column; gap: 4px;">';
+                if (videoUrl) {
+                    mediaBadge += `<a href="${videoUrl}" target="_blank" style="padding: 4px 8px; background: #ec489922; border: 1px solid #ec4899; border-radius: 4px; color: #ec4899; text-decoration: none; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
+                        <i class="fas fa-video"></i> Video
+                    </a>`;
+                }
+                if (decoderKey) {
+                    mediaBadge += `<a href="https://ai-video-codec-videos-580473065386.s3.amazonaws.com/${decoderKey}" target="_blank" style="padding: 4px 8px; background: #0ea5e922; border: 1px solid #0ea5e9; border-radius: 4px; color: #0ea5e9; text-decoration: none; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
+                        <i class="fas fa-code"></i> Decoder
+                    </a>`;
+                }
+                mediaBadge += '</div>';
+            }
+
             tableHTML += `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s;" 
                     onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'" 
@@ -524,7 +603,12 @@ class Dashboard {
                     <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
                     <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
                     <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${runtimeDisplay}</td>
                     <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
+                    <td style="padding: 15px; text-align: center;">${codeBadge}</td>
+                    <td style="padding: 15px; text-align: center;">${versionDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${githubBadge}</td>
+                    <td style="padding: 15px; text-align: center;">${mediaBadge}</td>
                     <td style="padding: 15px; text-align: center;">
                         <button onclick="window.open('/blog.html#${exp.id}', '_blank')" 
                                 style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; font-size: 0.85em; font-weight: 600;">

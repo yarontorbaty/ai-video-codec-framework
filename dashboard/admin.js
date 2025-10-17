@@ -494,6 +494,7 @@ function renderExperimentsTable(experiments) {
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code-branch"></i> Ver</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fab fa-github"></i> Git</th>
+                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-video"></i> Media</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-bug"></i> Analysis</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-user-cog"></i> Human</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Actions</th>
@@ -652,6 +653,38 @@ function renderExperimentsTable(experiments) {
         }
         phaseBadge += `</div>`;
         
+        // Parse experiments JSON to get video_url and decoder_s3_key
+        let videoUrl = null;
+        let decoderKey = null;
+        try {
+            if (exp.experiments) {
+                const experimentsData = typeof exp.experiments === 'string' ? JSON.parse(exp.experiments) : exp.experiments;
+                if (experimentsData && experimentsData.length > 0) {
+                    videoUrl = experimentsData[0].video_url;
+                    decoderKey = experimentsData[0].decoder_s3_key;
+                }
+            }
+        } catch (e) {
+            // Ignore parsing errors
+        }
+
+        // Media download buttons
+        let mediaBadge = '<span style="color: #666;">—</span>';
+        if (videoUrl || decoderKey) {
+            mediaBadge = '<div style="display: flex; flex-direction: column; gap: 4px;">';
+            if (videoUrl) {
+                mediaBadge += `<a href="${videoUrl}" target="_blank" style="padding: 4px 8px; background: #ec489922; border: 1px solid #ec4899; border-radius: 4px; color: #ec4899; text-decoration: none; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
+                    <i class="fas fa-video"></i> Video
+                </a>`;
+            }
+            if (decoderKey) {
+                mediaBadge += `<a href="https://ai-video-codec-videos-580473065386.s3.amazonaws.com/${decoderKey}" target="_blank" style="padding: 4px 8px; background: #0ea5e922; border: 1px solid #0ea5e9; border-radius: 4px; color: #0ea5e9; text-decoration: none; font-size: 0.75em; font-weight: 600; white-space: nowrap;">
+                    <i class="fas fa-code"></i> Decoder
+                </a>`;
+            }
+            mediaBadge += '</div>';
+        }
+        
         // Failure analysis badge
         let analysisBadge = '<span style="color: #666;">—</span>';
         if (exp.failure_analysis) {
@@ -706,6 +739,7 @@ function renderExperimentsTable(experiments) {
                 <td style="padding: 15px; text-align: center;">${codeBadge}</td>
                 <td style="padding: 15px; text-align: center;">${versionDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${githubBadge}</td>
+                <td style="padding: 15px; text-align: center;">${mediaBadge}</td>
                 <td style="padding: 15px; text-align: center;">${analysisBadge}</td>
                 <td style="padding: 15px; text-align: center;">${humanBadge}</td>
                 <td style="padding: 15px; text-align: center;">
