@@ -487,6 +487,7 @@ function renderExperimentsTable(experiments) {
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Tests Run</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Best Bitrate</th>
+                    <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code-branch"></i> Ver</th>
                     <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fab fa-github"></i> Git</th>
@@ -550,6 +551,36 @@ function renderExperimentsTable(experiments) {
             </button>`;
         }
         
+        // Phase display with progress indicator
+        const phaseData = {
+            'design': { icon: 'fa-lightbulb', color: '#3b82f6', label: 'Design', order: 1 },
+            'deploy': { icon: 'fa-upload', color: '#8b5cf6', label: 'Deploy', order: 2 },
+            'validation': { icon: 'fa-check-circle', color: '#f59e0b', label: 'Validate', order: 3 },
+            'execution': { icon: 'fa-play-circle', color: '#10b981', label: 'Execute', order: 4 },
+            'analysis': { icon: 'fa-chart-line', color: '#06b6d4', label: 'Analyze', order: 5 },
+            'complete': { icon: 'fa-check-double', color: '#10b981', label: 'Complete', order: 6 },
+            'unknown': { icon: 'fa-question', color: '#94a3b8', label: 'Unknown', order: 0 }
+        };
+        
+        const currentPhase = exp.current_phase || exp.phase_completed || 'unknown';
+        const phase = phaseData[currentPhase] || phaseData['unknown'];
+        
+        let phaseBadge = `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <span style="padding: 6px 10px; background: ${phase.color}22; border: 1px solid ${phase.color}; border-radius: 6px; color: ${phase.color}; font-size: 0.85em; font-weight: 600; white-space: nowrap;">
+                <i class="fas ${phase.icon}"></i> ${phase.label}
+            </span>`;
+        
+        // Show retry counts if applicable
+        const valRetries = exp.validation_retries || 0;
+        const execRetries = exp.execution_retries || 0;
+        if (valRetries > 0 || execRetries > 0) {
+            phaseBadge += `<span style="font-size: 0.75em; color: #94a3b8;">`;
+            if (valRetries > 0) phaseBadge += `Val: ${valRetries}x `;
+            if (execRetries > 0) phaseBadge += `Exec: ${execRetries}x`;
+            phaseBadge += `</span>`;
+        }
+        phaseBadge += `</div>`;
+        
         // Failure analysis badge
         let analysisBadge = '<span style="color: #666;">—</span>';
         if (exp.failure_analysis) {
@@ -597,6 +628,7 @@ function renderExperimentsTable(experiments) {
                 </td>
                 <td style="padding: 15px; text-align: center; color: #e0e7ff; font-weight: 600;">${exp.experiments_run}</td>
                 <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
+                <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
                 <td style="padding: 15px; text-align: center;">${codeBadge}</td>
                 <td style="padding: 15px; text-align: center;">${versionDisplay}</td>
                 <td style="padding: 15px; text-align: center;">${githubBadge}</td>

@@ -938,6 +938,11 @@ def get_experiments_list():
                 'duration': 0,
                 'best_bitrate': None,
                 'experiments_run': 0,
+                # Phase tracking
+                'current_phase': exp.get('current_phase', 'unknown'),
+                'phase_completed': exp.get('phase_completed', 'unknown'),
+                'validation_retries': exp.get('validation_retries', 0),
+                'execution_retries': exp.get('execution_retries', 0),
                 # Code evolution fields
                 'code_changed': False,
                 'version': 0,
