@@ -760,7 +760,15 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             bitrate = metrics.get('bitrate_mbps', 0)
             reduction = comparison.get('reduction_percent', 0)
             
-            status_class = 'status-success' if exp.get('status') == 'completed' else ('status-running' if exp.get('status') == 'running' else 'status-failed')
+            status = exp.get('status', 'unknown')
+            if status == 'completed':
+                status_class = 'status-success'
+            elif status == 'running':
+                status_class = 'status-running'
+            elif status == 'timed_out':
+                status_class = 'status-timeout'
+            else:
+                status_class = 'status-failed'
             
             # Get hypothesis from reasoning or from experiment approach field
             hypothesis = reasoning.get('hypothesis', 'Baseline Measurement') if reasoning else (procedural.get('approach', 'Baseline Measurement'))
@@ -770,7 +778,13 @@ def generate_blog_html(experiments, reasoning_items, total_count):
             
             # For running experiments, show expected results
             expected_bitrate = procedural.get('expected_bitrate', 0)
-            is_running = exp.get('status') == 'running'
+            is_running = status == 'running'
+            is_timed_out = status == 'timed_out'
+            
+            # Get abandonment info for timed-out experiments
+            failure_reason = procedural.get('failure_reason', '')
+            stuck_phase = procedural.get('stuck_phase', 'unknown')
+            runtime_seconds = procedural.get('runtime_seconds', 0)
             
             # Generate insights HTML
             insights_html = ""
@@ -799,16 +813,13 @@ def generate_blog_html(experiments, reasoning_items, total_count):
                     <p>{methods_html if methods_html else 'Hybrid Approach'}</p>
                 </div>
                 
+                {f'<div class="blog-section" style="background: #fff3cd; border-left: 4px solid #f59e0b; padding: 20px; border-radius: 8px;"><h3 style="color: #856404;"><i class="fas fa-exclamation-triangle"></i> Experiment Abandoned</h3><p><strong>Reason:</strong> {failure_reason}</p><p><strong>Stuck Phase:</strong> {stuck_phase}</p><p><strong>Runtime:</strong> {runtime_seconds}s ({runtime_seconds//60} minutes)</p><p style="font-size: 0.9em; color: #666; margin-top: 15px;"><i class="fas fa-info-circle"></i> This experiment was automatically closed out by the cleanup system. The orchestrator may have crashed or the experiment hung indefinitely. Check logs for details.</p></div>' if is_timed_out else ''}
+                
                 <div class="blog-section">
                     <h3><i class="fas fa-chart-bar"></i> {'Expected Results' if is_running else 'Results'}</h3>
                     {f'<p style="color: #f59e0b; font-weight: 600;"><i class="fas fa-spinner fa-spin"></i> Experiment in progress... Results will appear here when execution completes.</p>' if is_running else ''}
-                    <div class="metrics-grid">
-                        <div class="metric-card">
-                            <div class="metric-value">{expected_bitrate if is_running and not bitrate else bitrate:.2f}</div>
-                            <div class="metric-label">{'Expected' if is_running and not bitrate else ''} Mbps</div>
-                        </div>
-                        {'' if is_running and not bitrate else f'<div class="metric-card"><div class="metric-value" style="color: {"#dc3545" if reduction < 0 else "#28a745"}">{"+\" if reduction < 0 else \"\"}{reduction:.1f}%</div><div class="metric-label">vs HEVC Baseline</div></div>'}
-                    </div>
+                    {f'<p style="color: #9e9e9e; font-style: italic;">No results available - experiment was abandoned before completion.</p>' if is_timed_out else ''}
+                    {_generate_metrics_html(bitrate, reduction, expected_bitrate, is_running, is_timed_out)}
                 </div>
                 
                 {f'<div class="blog-section"><h3><i class="fas fa-search"></i> Root Cause Analysis</h3><p>{root_cause}</p></div>' if root_cause else ''}
@@ -839,6 +850,7 @@ def generate_blog_html(experiments, reasoning_items, total_count):
         .status-success {{ background: #d4edda; color: #155724; }}
         .status-failed {{ background: #f8d7da; color: #721c24; }}
         .status-running {{ background: #fff3cd; color: #856404; }}
+        .status-timeout {{ background: #e0e0e0; color: #424242; }}
         .blog-section {{ margin: 30px 0; }}
         .blog-section h3 {{ font-size: 1.3em; margin-bottom: 15px; color: #667eea; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
         .metrics-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }}
