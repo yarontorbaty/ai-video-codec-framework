@@ -185,14 +185,12 @@ class Dashboard {
 
     async fetchDashboardData() {
         try {
-            // Get API base URL - using the correct API Gateway endpoint
-            const apiBaseUrl = 'https://pbv4wnw8zd.execute-api.us-east-1.amazonaws.com/production';
-
-            // Fetch real data from API endpoints (dashboard route with query params)
+            // Use CloudFront URL for proper data format (same origin)
+            // This calls the updated Lambda that returns PSNR/SSIM data
             const [experimentsResponse, metricsResponse, costsResponse] = await Promise.allSettled([
-                fetch(`${apiBaseUrl}/dashboard?type=experiments`),
-                fetch(`${apiBaseUrl}/dashboard?type=metrics`),
-                fetch(`${apiBaseUrl}/dashboard?type=costs`)
+                fetch(`/dashboard?type=experiments`),
+                fetch(`/dashboard?type=metrics`),
+                fetch(`/dashboard?type=costs`)
             ]);
 
             // Process metrics data

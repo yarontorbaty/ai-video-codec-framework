@@ -936,31 +936,59 @@ def generate_blog_html(experiments, reasoning_items, total_count):
 
 # Keep existing API functions
 def get_experiments():
-    """Fetch experiments from DynamoDB"""
+    """Fetch experiments from DynamoDB with full quality metrics"""
     dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
     table = dynamodb.Table('ai-video-codec-experiments')
     
     try:
-        response = table.scan(Limit=50)
+        # Get all experiments and sort by timestamp
+        response = table.scan()
+        all_items = response.get('Items', [])
+        
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            all_items.extend(response.get('Items', []))
+        
+        # Sort by timestamp descending and take latest 50
+        all_items.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        items = all_items[:50]
+        total_count = len(all_items)
+        
         experiments = []
         
-        for item in response.get('Items', []):
-            experiments_data = json.loads(item.get('experiments', '[]'))
-            procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
-            metrics = procedural.get('real_metrics', {})
-            comparison = procedural.get('comparison', {})
-            
-            experiments.append({
+        for item in items:
+            exp_data = {
                 'id': item.get('experiment_id', ''),
+                'timestamp': float(item.get('timestamp', 0)),
                 'status': item.get('status', 'unknown'),
-                'compression': comparison.get('reduction_percent', 0),
-                'quality': 95.0,
-                'bitrate': metrics.get('bitrate_mbps', 0),
-                'created_at': item.get('timestamp_iso', ''),
-                'timestamp': float(item.get('timestamp', 0))
-            })
-        
-        experiments.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+                'best_bitrate': None,
+                'psnr_db': None,
+                'ssim': None,
+                'quality': None,
+                'current_phase': item.get('current_phase', 'unknown'),
+                'phase_completed': item.get('phase_completed', 'unknown'),
+            }
+            
+            # Parse experiments data for metrics
+            try:
+                experiments_data = json.loads(item.get('experiments', '[]'))
+                
+                for e in experiments_data:
+                    metrics = e.get('real_metrics', {})
+                    bitrate = metrics.get('bitrate_mbps')
+                    
+                    if bitrate:
+                        if exp_data['best_bitrate'] is None or bitrate < exp_data['best_bitrate']:
+                            exp_data['best_bitrate'] = float(bitrate)
+                            # Also extract quality metrics from best performing experiment
+                            exp_data['psnr_db'] = float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None
+                            exp_data['ssim'] = float(metrics.get('ssim')) if metrics.get('ssim') else None
+                            exp_data['quality'] = metrics.get('quality')
+            except Exception as e:
+                print(f"Error parsing experiment {exp_data['id']}: {e}")
+            
+            experiments.append(exp_data)
         
         return {
             'statusCode': 200,
@@ -968,20 +996,19 @@ def get_experiments():
                 'Access-Control-Allow-Origin': '*',
                 'Content-Type': 'application/json'
             },
-            'body': json.dumps({
-                'experiments': experiments,
-                'total': len(experiments)
-            }, default=decimal_to_float)
+            'body': json.dumps(experiments, default=decimal_to_float)
         }
     except Exception as e:
         print(f"Experiments error: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Content-Type': 'application/json'
             },
-            'body': json.dumps({'experiments': [], 'total': 0, 'error': str(e)})
+            'body': json.dumps([], default=decimal_to_float)
         }
 
 def get_metrics():
