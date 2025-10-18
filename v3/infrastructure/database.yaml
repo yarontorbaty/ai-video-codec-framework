@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Video Codec v3.0 - Database (DynamoDB)'
+
+Resources:
+  ExperimentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ai-codec-v3-experiments
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: experiment_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: experiment_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Name
+          Value: ai-codec-v3-experiments
+
+Outputs:
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref ExperimentsTable
+    Export:
+      Name: ai-codec-v3-TableName
+  
+  TableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt ExperimentsTable.Arn
+    Export:
+      Name: ai-codec-v3-TableArn
+

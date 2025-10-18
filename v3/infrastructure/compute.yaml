@@ -1,0 +1,207 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Video Codec v3.0 - Compute Resources (EC2 Instances)'
+
+Parameters:
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 Key Pair for SSH access
+    Default: ai-codec-key
+  
+  WorkerSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private subnet for GPU worker
+  
+  OrchestratorSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet for orchestrator
+
+Resources:
+  # IAM Role for Orchestrator
+  OrchestratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: OrchestratorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ai-codec-v3-experiments'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:ai-video-codec-anthropic-key-*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::ai-codec-v3-artifacts/*'
+
+  OrchestratorInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref OrchestratorRole
+
+  # IAM Role for Worker
+  WorkerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: WorkerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::ai-codec-v3-artifacts/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ai-codec-v3-experiments'
+
+  WorkerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref WorkerRole
+
+  # Security Group for Orchestrator
+  OrchestratorSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for orchestrator
+      VpcId: !ImportValue ai-codec-v3-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ai-codec-v3-orchestrator-sg
+
+  # Security Group for Worker
+  WorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for GPU worker
+      VpcId: !ImportValue ai-codec-v3-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref OrchestratorSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ai-codec-v3-worker-sg
+
+  # Orchestrator EC2 Instance
+  OrchestratorInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.medium
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref OrchestratorInstanceProfile
+      SecurityGroupIds:
+        - !Ref OrchestratorSecurityGroup
+      SubnetId: !Ref OrchestratorSubnetId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y python3 python3-pip git
+          
+          # Install CloudWatch agent
+          wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+          rpm -U ./amazon-cloudwatch-agent.rpm
+          
+          echo "Orchestrator ready for deployment"
+      Tags:
+        - Key: Name
+          Value: ai-codec-v3-orchestrator
+
+  # GPU Worker EC2 Instance
+  WorkerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: g4dn.xlarge
+      ImageId: ami-0c55b159cbfafe1f0  # Deep Learning AMI with GPU support
+      KeyName: !Ref KeyPairName
+      IamInstanceProfile: !Ref WorkerInstanceProfile
+      SecurityGroupIds:
+        - !Ref WorkerSecurityGroup
+      SubnetId: !Ref WorkerSubnetId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          
+          # Install Python and dependencies
+          yum install -y python3 python3-pip
+          
+          # Install OpenCV dependencies
+          yum install -y opencv opencv-devel
+          
+          echo "GPU Worker ready for deployment"
+      Tags:
+        - Key: Name
+          Value: ai-codec-v3-worker
+
+Outputs:
+  OrchestratorInstanceId:
+    Description: Orchestrator instance ID
+    Value: !Ref OrchestratorInstance
+    Export:
+      Name: ai-codec-v3-OrchestratorId
+  
+  OrchestratorPrivateIp:
+    Description: Orchestrator private IP
+    Value: !GetAtt OrchestratorInstance.PrivateIp
+    Export:
+      Name: ai-codec-v3-OrchestratorIp
+  
+  WorkerInstanceId:
+    Description: Worker instance ID
+    Value: !Ref WorkerInstance
+    Export:
+      Name: ai-codec-v3-WorkerId
+  
+  WorkerPrivateIp:
+    Description: Worker private IP
+    Value: !GetAtt WorkerInstance.PrivateIp
+    Export:
+      Name: ai-codec-v3-WorkerIp
+

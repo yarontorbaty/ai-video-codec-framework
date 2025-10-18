@@ -1,0 +1,34 @@
+AI Video Codec Framework v3.0 - Deployment Info
+===============================================
+
+Deployed: Fri Oct 17 23:06:30 PDT 2025
+Region: us-east-1
+Account: 580473065386
+
+Resources:
+- DynamoDB Table: ai-codec-v3-experiments
+- S3 Bucket: ai-codec-v3-artifacts-580473065386
+- VPC: vpc-78385d1d
+- Orchestrator SG: sg-0e573e2f685e36cb9
+- Worker SG: sg-0885eababf6f844ba
+
+Next Steps:
+1. Launch EC2 instances manually or via AWS Console
+   - Orchestrator: t3.medium with SSM, use sg-0e573e2f685e36cb9
+   - Worker: g4dn.xlarge with SSM, use sg-0885eababf6f844ba
+
+2. Deploy code to instances:
+   ./v3/deploy/deploy_to_instances.sh
+
+3. Start services:
+   - On orchestrator: cd /opt/orchestrator && python3 main.py
+   - On worker: cd /opt/worker && python3 main.py
+
+4. Monitor:
+   - Check DynamoDB for experiments
+   - Check S3 for videos
+   - Check CloudWatch logs
+
+Configuration:
+- Anthropic Secret: ai-video-codec-anthropic-key
+- Worker URL: http://[WORKER_PRIVATE_IP]:8080

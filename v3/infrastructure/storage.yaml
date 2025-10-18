@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AI Video Codec v3.0 - Storage (S3 Buckets)'
+
+Resources:
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'ai-codec-v3-artifacts-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVideos
+            Status: Enabled
+            ExpirationInDays: 30
+            Prefix: videos/
+          - Id: DeleteOldDecoders
+            Status: Enabled
+            ExpirationInDays: 90
+            Prefix: decoders/
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: ai-codec-v3-artifacts
+
+Outputs:
+  BucketName:
+    Description: S3 bucket name
+    Value: !Ref ArtifactsBucket
+    Export:
+      Name: ai-codec-v3-BucketName
+  
+  BucketArn:
+    Description: S3 bucket ARN
+    Value: !GetAtt ArtifactsBucket.Arn
+    Export:
+      Name: ai-codec-v3-BucketArn
+
