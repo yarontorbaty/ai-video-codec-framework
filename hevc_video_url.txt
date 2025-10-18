@@ -1,0 +1,1 @@
+https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/reference/hevc_baseline.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAYOJXEB6VFMWQSS7J%2F20251018%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20251018T152947Z&X-Amz-Expires=2592000&X-Amz-SignedHeaders=host&X-Amz-Signature=77424185b68175a180611b2ad5d05fe7639255e16dc82ca2305842d0e3287603
