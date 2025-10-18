@@ -91,7 +91,7 @@ class WorkerHandler(BaseHTTPRequestHandler):
             if result['status'] == 'success':
                 logger.info(f"✅ Experiment succeeded, calculating metrics...")
                 metrics = self.metrics.calculate_metrics(
-                    original_path=result['original_path'],
+                    source_path=result['original_path'],  # Compare against SOURCE (ground truth)
                     compressed_path=result['compressed_path'],
                     reconstructed_path=result['reconstructed_path']
                 )

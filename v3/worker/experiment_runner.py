@@ -26,9 +26,10 @@ HEVC_VIDEO_KEY = 'reference/hevc_baseline.mp4'
 # Initialize S3 client
 s3 = boto3.client('s3', region_name='us-east-1')
 
-# Local cache directory for source video
+# Local cache directory for source video and HEVC baseline
 CACHE_DIR = '/home/ec2-user/worker/cache'
 CACHED_SOURCE_VIDEO = os.path.join(CACHE_DIR, 'source.mp4')
+CACHED_HEVC_VIDEO = os.path.join(CACHE_DIR, 'hevc_baseline.mp4')
 
 # Test video configuration (fallback)
 TEST_VIDEO_WIDTH = 640
@@ -84,6 +85,7 @@ class ExperimentRunner:
             {
                 'status': 'success' | 'failed',
                 'original_path': str,
+                'hevc_path': str,  # HEVC baseline for comparison
                 'compressed_path': str,
                 'reconstructed_path': str,
                 'error': str (if failed)
@@ -93,12 +95,17 @@ class ExperimentRunner:
             # Create unique temp paths
             temp_dir = tempfile.mkdtemp(prefix=f"exp_{experiment_id}_")
             original_path = os.path.join(temp_dir, "original.mp4")
+            hevc_path = os.path.join(temp_dir, "hevc_baseline.mp4")
             compressed_path = os.path.join(temp_dir, "compressed.bin")
             reconstructed_path = os.path.join(temp_dir, "reconstructed.mp4")
             
-            # Create test video
+            # Create test video (source)
             logger.info(f"📹 Creating test video...")
             self._create_test_video(original_path)
+            
+            # Download HEVC baseline
+            logger.info(f"📹 Getting HEVC baseline...")
+            self._get_hevc_baseline(hevc_path)
             
             # Read test video
             cap = cv2.VideoCapture(original_path)
@@ -125,6 +132,7 @@ class ExperimentRunner:
                     'status': 'failed',
                     'error': f"Encoding failed: {encoding_result['error']}",
                     'original_path': original_path,
+                    'hevc_path': hevc_path,
                     'compressed_path': None,
                     'reconstructed_path': None
                 }
@@ -143,6 +151,7 @@ class ExperimentRunner:
                     'status': 'failed',
                     'error': f"Decoding failed: {decoding_result['error']}",
                     'original_path': original_path,
+                    'hevc_path': hevc_path,
                     'compressed_path': compressed_path,
                     'reconstructed_path': None
                 }
@@ -153,6 +162,7 @@ class ExperimentRunner:
                     'status': 'failed',
                     'error': 'Reconstructed video was not created',
                     'original_path': original_path,
+                    'hevc_path': hevc_path,
                     'compressed_path': compressed_path,
                     'reconstructed_path': None
                 }
@@ -160,6 +170,7 @@ class ExperimentRunner:
             return {
                 'status': 'success',
                 'original_path': original_path,
+                'hevc_path': hevc_path,
                 'compressed_path': compressed_path,
                 'reconstructed_path': reconstructed_path
             }
@@ -170,6 +181,7 @@ class ExperimentRunner:
                 'status': 'failed',
                 'error': str(e),
                 'original_path': None,
+                'hevc_path': None,
                 'compressed_path': None,
                 'reconstructed_path': None
             }
@@ -248,6 +260,50 @@ class ExperimentRunner:
         
         out.release()
         logger.info(f"✅ Fallback test video created: {num_frames} frames")
+    
+    def _get_hevc_baseline(self, output_path: str):
+        """
+        Use cached HEVC baseline or download from S3 if not present/changed
+        
+        This is our comparison baseline (10Mbps HEVC encoding)
+        """
+        import shutil
+        
+        try:
+            # Check if we have a cached version
+            if os.path.exists(CACHED_HEVC_VIDEO):
+                logger.info(f"📦 Found cached HEVC baseline")
+                
+                # Check if S3 version has changed (compare size)
+                try:
+                    s3_metadata = s3.head_object(Bucket=S3_BUCKET, Key=HEVC_VIDEO_KEY)
+                    s3_size = s3_metadata['ContentLength']
+                    local_size = os.path.getsize(CACHED_HEVC_VIDEO)
+                    
+                    if s3_size == local_size:
+                        logger.info(f"✅ Using cached HEVC baseline (size match: {s3_size} bytes)")
+                        shutil.copy(CACHED_HEVC_VIDEO, output_path)
+                        return
+                    else:
+                        logger.info(f"📥 HEVC baseline changed (S3: {s3_size}, local: {local_size}), re-downloading...")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not check S3 metadata: {e}, using cached version")
+                    shutil.copy(CACHED_HEVC_VIDEO, output_path)
+                    return
+            
+            # Download from S3 and cache it
+            logger.info(f"📥 Downloading HEVC baseline from S3...")
+            s3.download_file(S3_BUCKET, HEVC_VIDEO_KEY, CACHED_HEVC_VIDEO)
+            logger.info(f"✅ HEVC baseline downloaded and cached")
+            
+            # Copy to working directory
+            shutil.copy(CACHED_HEVC_VIDEO, output_path)
+            return
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to download HEVC baseline: {e}")
+            # This is critical - we need HEVC for comparison
+            raise Exception(f"Cannot proceed without HEVC baseline: {e}")
     
     def _execute_encoding(
         self,
