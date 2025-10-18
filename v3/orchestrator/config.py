@@ -33,7 +33,7 @@ class Config:
     def _load_api_key(self) -> str:
         """Load Anthropic API key from AWS Secrets Manager"""
         try:
-            secret_name = os.getenv('ANTHROPIC_SECRET', 'ai-video-codec-anthropic-key')
+            secret_name = os.getenv('ANTHROPIC_SECRET', 'ai-video-codec/anthropic-api-key')
             
             logger.info(f"🔑 Loading API key from Secrets Manager: {secret_name}")
             

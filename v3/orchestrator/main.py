@@ -11,7 +11,7 @@ import os
 import json
 from typing import Dict, Optional
 
-from llm_client import ClaudeClient
+from llm_client_simple import ClaudeClient
 from experiment_manager import ExperimentManager
 from config import Config
 
