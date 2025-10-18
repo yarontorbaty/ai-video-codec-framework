@@ -46,20 +46,93 @@ def get_experiments():
         
         experiments = []
         for item in items[:10]:  # Limit to 10 most recent
-            # Parse the experiments JSON string
-            exp_data = json.loads(item.get('experiments', '[]'))
+            # Check for new format (result field) or old format (experiments field)
+            result_data = item.get('result')
+            experiments_data = item.get('experiments')
             
-            # Extract metrics from the experiments
+            # Initialize GPU instance info
+            gpu_instance = None
+            is_gpu_experiment = False
             compression_ratio = 0
             psnr = 0
             bitrate = 0
             
+            # Handle new format (result field with direct metrics)
+            if result_data:
+                try:
+                    result = json.loads(result_data) if isinstance(result_data, str) else result_data
+                    
+                    # Extract metrics from new format
+                    metrics = result.get('metrics', {})
+                    bitrate = metrics.get('bitrate_mbps', 0)
+                    psnr = metrics.get('psnr_db', 0)
+                    compression_ratio = metrics.get('compression_ratio', 0)
+                    
+                    # Check if it's a GPU experiment
+                    execution_success = result.get('execution_success', {})
+                    if execution_success:
+                        is_gpu_experiment = True
+                        worker_id = result.get('worker_id', '')
+                        if 'ip-10-0-2-118' in worker_id:
+                            gpu_instance = 'GPU-Worker-1 (i-0b614aa221757060e)'
+                        elif 'ip-10-0-1-109' in worker_id:
+                            gpu_instance = 'Orchestrator (i-063947ae46af6dbf8)'
+                        else:
+                            gpu_instance = f'Worker ({worker_id})'
+                    
+                    experiments.append({
+                        'id': item.get('experiment_id', ''),
+                        'status': result.get('status', 'unknown'),
+                        'compression': round(compression_ratio, 2),
+                        'quality': psnr if psnr > 0 else 95.0,
+                        'bitrate': bitrate,
+                        'created_at': item.get('timestamp_iso', ''),
+                        'timestamp': item.get('timestamp', 0),
+                        'is_gpu_experiment': is_gpu_experiment,
+                        'gpu_instance': gpu_instance or 'CPU-Only',
+                        'experiment_type': 'GPU Neural Codec' if is_gpu_experiment else 'Neural Codec'
+                    })
+                    continue
+                except:
+                    pass
+            
+            # Handle old format (experiments field)
+            if experiments_data:
+                exp_data = json.loads(experiments_data) if isinstance(experiments_data, str) else []
+            else:
+                exp_data = []
+            
+            # Extract metrics from the experiments (old format)
             for exp in exp_data:
+                # Support both v1 (real_procedural_generation) and v2 (gpu_neural_codec)
                 if exp.get('experiment_type') == 'real_procedural_generation' and 'real_metrics' in exp:
                     bitrate = exp['real_metrics'].get('bitrate_mbps', 0)
                     # Calculate compression ratio vs baseline
                     baseline = exp.get('comparison', {}).get('hevc_baseline_mbps', 10.0)
                     compression_ratio = ((baseline - bitrate) / baseline * 100) if baseline > 0 else 0
+                elif exp.get('experiment_type') == 'gpu_neural_codec':
+                    # v2.0 Neural Codec experiments
+                    is_gpu_experiment = True
+                    metrics = exp.get('metrics', {})
+                    bitrate = metrics.get('bitrate_mbps', exp.get('bitrate_mbps', 0))
+                    psnr = metrics.get('psnr_db', exp.get('psnr_db', 0))
+                    # Calculate compression ratio vs baseline
+                    baseline = exp.get('baseline_bitrate_mbps', 10.0)
+                    compression_ratio = metrics.get('compression_ratio', 
+                        ((baseline - bitrate) / baseline * 100) if baseline > 0 and bitrate > 0 else 0)
+                    
+                    # Extract GPU instance info from worker_id or result
+                    worker_id = exp.get('worker_id', '')
+                    if worker_id:
+                        # Parse worker ID format: "ip-10-0-2-118.ec2.internal-23138"
+                        if 'ip-10-0-2-118' in worker_id:
+                            gpu_instance = 'GPU-Worker-1 (i-0b614aa221757060e)'
+                        elif 'ip-10-0-1-109' in worker_id:
+                            gpu_instance = 'Orchestrator (i-063947ae46af6dbf8)'
+                        else:
+                            gpu_instance = f'Worker ({worker_id})'
+                    else:
+                        gpu_instance = 'GPU-Worker-1 (i-0b614aa221757060e)'  # Default
             
             experiments.append({
                 'id': item.get('experiment_id', ''),
@@ -68,7 +141,10 @@ def get_experiments():
                 'quality': psnr if psnr > 0 else 95.0,  # Default PSNR
                 'bitrate': bitrate,
                 'created_at': item.get('timestamp_iso', ''),
-                'timestamp': item.get('timestamp', 0)
+                'timestamp': item.get('timestamp', 0),
+                'is_gpu_experiment': is_gpu_experiment,
+                'gpu_instance': gpu_instance or 'CPU-Only',
+                'experiment_type': 'GPU Neural Codec' if is_gpu_experiment else 'Procedural Generation'
             })
         
         return {

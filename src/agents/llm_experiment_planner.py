@@ -189,6 +189,238 @@ class LLMExperimentPlanner:
             logger.error(f"Direct API call failed: {e}")
             return None
     
+    def _parse_llm_response(self, response_text: str) -> Optional[Dict]:
+        """
+        Parse LLM response with new sectioned format.
+        Handles ANALYSIS (JSON) and NEURAL CODEC IMPLEMENTATION (Python code) sections.
+        """
+        try:
+            result = {}
+            
+            # Extract JSON from ANALYSIS section
+            if "## ANALYSIS" in response_text and "```json" in response_text:
+                logger.info("   Detected new sectioned format")
+                
+                # Extract JSON section
+                analysis_start = response_text.find("## ANALYSIS")
+                json_start = response_text.find("```json", analysis_start)
+                if json_start != -1:
+                    json_end = response_text.find("```", json_start + 7)
+                    if json_end != -1:
+                        json_str = response_text[json_start + 7:json_end].strip()
+                        try:
+                            analysis = json.loads(json_str)
+                            result.update(analysis)
+                            logger.info("   ✅ Successfully parsed ANALYSIS JSON")
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"JSON parse failed: {e}")
+                            return self._extract_fields_manually(response_text)
+            
+            # Extract Python code from NEURAL CODEC IMPLEMENTATION section
+            if "## NEURAL CODEC IMPLEMENTATION" in response_text and "```python" in response_text:
+                # Extract Python code section
+                code_start_marker = response_text.find("## NEURAL CODEC IMPLEMENTATION")
+                python_start = response_text.find("```python", code_start_marker)
+                if python_start != -1:
+                    python_end = response_text.find("```", python_start + 9)
+                    if python_end != -1:
+                        code = response_text[python_start + 9:python_end].strip()
+                        result['encoding_agent_code'] = code
+                        result['decoding_agent_code'] = code
+                        logger.info(f"   ✅ Extracted Python code ({len(code)} chars)")
+            
+            # Fallback to old format if new format not detected
+            if not result:
+                logger.info("   No new format detected, trying old format...")
+                return self._extract_fields_manually(response_text)
+            
+            return result if result else None
+                
+        except Exception as e:
+            logger.error(f"Failed to parse LLM response: {e}")
+            return None
+    
+    def _extract_fields_manually(self, text: str) -> Optional[Dict]:
+        """
+        Manually extract fields from LLM response when JSON parsing fails.
+        Looks for code blocks and key fields.
+        """
+        import re
+        
+        result = {}
+        
+        try:
+            # Check for v1 format with "generated_code"
+            if '"generated_code"' in text:
+                logger.info("   Detected v1 format with generated_code field")
+                
+                # Try multiple patterns for v1 format
+                patterns = [
+                    # Pattern 1: Standard JSON with escaped quotes
+                    r'"generated_code"\s*:\s*\{[^}]*"code"\s*:\s*"([^"]*(?:(?:\\"|\\\n)[^"]*)*)"',
+                    # Pattern 2: Multi-line string with triple quotes
+                    r'"generated_code"\s*:\s*\{[^}]*"code"\s*:\s*"""(.*?)"""',
+                    # Pattern 3: Raw string without escaping (but this will break on quotes)
+                    r'"generated_code"\s*:\s*\{[^}]*"code"\s*:\s*"([^"]*)"',
+                ]
+                
+                code = None
+                for pattern in patterns:
+                    code_match = re.search(pattern, text, re.DOTALL)
+                    if code_match:
+                        code = code_match.group(1)
+                        if pattern == patterns[0]:  # Escaped quotes pattern
+                            code = code.replace('\\"', '"').replace('\\n', '\n')
+                        break
+                
+                # If standard patterns fail, try to extract the full code block
+                # by finding the start of the code and extracting until the next field
+                if not code or len(code) < 100:
+                    logger.info("   🔍 Trying to extract full code block from malformed JSON...")
+                    
+                    # Find the start of the code field
+                    code_start = re.search(r'"generated_code"\s*:\s*\{[^}]*"code"\s*:\s*"', text)
+                    if code_start:
+                        start_pos = code_start.end()
+                        
+                        # Find the end by looking for the closing quote before the next field
+                        # Look for patterns like ", "description": or ", "expected_improvement":
+                        end_patterns = [
+                            r'",\s*"description"\s*:',
+                            r'",\s*"expected_improvement"\s*:',
+                            r'",\s*"}\s*$',
+                            r'"\s*}\s*$'
+                        ]
+                        
+                        for end_pattern in end_patterns:
+                            end_match = re.search(end_pattern, text[start_pos:])
+                            if end_match:
+                                code = text[start_pos:start_pos + end_match.start()]
+                                # Unescape the code
+                                code = code.replace('\\"', '"').replace('\\n', '\n')
+                                logger.info(f"   ✅ Extracted full code block ({len(code)} chars)")
+                                break
+                        
+                        # If still no code found, try a more aggressive approach
+                        if not code or len(code) < 100:
+                            logger.info("   🔍 Trying aggressive code extraction...")
+                            
+                            # Look for the actual code content by finding the start of Python code
+                            python_start = re.search(r'import numpy as np', text[start_pos:])
+                            if python_start:
+                                python_start_pos = start_pos + python_start.start()
+                                
+                                # Find the end by looking for the next JSON field
+                                python_end_patterns = [
+                                    r'",\s*"description"\s*:',
+                                    r'",\s*"expected_improvement"\s*:',
+                                    r'"\s*}\s*$'
+                                ]
+                                
+                                for end_pattern in python_end_patterns:
+                                    end_match = re.search(end_pattern, text[python_start_pos:])
+                                    if end_match:
+                                        code = text[python_start_pos:python_start_pos + end_match.start()]
+                                        # Unescape the code
+                                        code = code.replace('\\"', '"').replace('\\n', '\n')
+                                        logger.info(f"   ✅ Extracted Python code block ({len(code)} chars)")
+                                        break
+                
+                if code:
+                    result['encoding_agent_code'] = code
+                    result['decoding_agent_code'] = code
+                    logger.info(f"   ✅ Extracted v1 code ({len(code)} chars)")
+                else:
+                    logger.warning("   ⚠️  Could not extract v1 code with any pattern")
+            
+            # Try v2 format
+            else:
+                # Extract encoding_agent_code with multiple patterns
+                encoding_patterns = [
+                    r'"encoding_agent_code"\s*:\s*"((?:[^"\\]|\\.)*)"',
+                    r'"encoding_agent_code"\s*:\s*"""(.*?)"""',
+                    r'```python\s*#\s*ENCODING\s*AGENT\s*(.*?)```',
+                    r'```python.*?def run_encoding_agent.*?(.*?)```',
+                ]
+                
+                encoding_code = None
+                for pattern in encoding_patterns:
+                    match = re.search(pattern, text, re.DOTALL)
+                    if match:
+                        encoding_code = (match.group(1) or "").strip()
+                        if len(encoding_code) > 50:  # Reasonable minimum for real code
+                            break
+                
+                if encoding_code:
+                    result['encoding_agent_code'] = encoding_code
+                
+                # Extract decoding_agent_code with multiple patterns
+                decoding_patterns = [
+                    r'"decoding_agent_code"\s*:\s*"((?:[^"\\]|\\.)*)"',
+                    r'"decoding_agent_code"\s*:\s*"""(.*?)"""',
+                    r'```python\s*#\s*DECODING\s*AGENT\s*(.*?)```',
+                    r'```python.*?def run_decoding_agent.*?(.*?)```',
+                ]
+                
+                decoding_code = None
+                for pattern in decoding_patterns:
+                    match = re.search(pattern, text, re.DOTALL)
+                    if match:
+                        decoding_code = (match.group(1) or "").strip()
+                        if len(decoding_code) > 50:  # Reasonable minimum for real code
+                            break
+                
+                if decoding_code:
+                    result['decoding_agent_code'] = decoding_code
+                
+                # If we still don't have code, try to extract any Python code blocks
+                if not result.get('encoding_agent_code') or len(result.get('encoding_agent_code', '')) < 50:
+                    logger.info("   🔍 Trying to extract any Python code blocks...")
+                    
+                    # Look for any Python code blocks
+                    python_blocks = re.findall(r'```python\s*\n(.*?)\n```', text, re.DOTALL)
+                    if python_blocks:
+                        # Use the longest code block (likely the main implementation)
+                        longest_block = max(python_blocks, key=len)
+                        if len(longest_block) > 50:
+                            result['encoding_agent_code'] = longest_block.strip()
+                            result['decoding_agent_code'] = longest_block.strip()
+                            logger.info(f"   ✅ Extracted Python code block ({len(longest_block)} chars)")
+                
+                # Final fallback: look for function definitions
+                if not result.get('encoding_agent_code') or len(result.get('encoding_agent_code', '')) < 50:
+                    logger.info("   🔍 Trying to extract function definitions...")
+                    
+                    # Look for function definitions
+                    func_match = re.search(r'(def\s+\w+.*?)(?=\ndef|\Z)', text, re.DOTALL)
+                    if func_match:
+                        func_code = func_match.group(1).strip()
+                        if len(func_code) > 50:
+                            result['encoding_agent_code'] = func_code
+                            result['decoding_agent_code'] = func_code
+                            logger.info(f"   ✅ Extracted function code ({len(func_code)} chars)")
+            
+            # Extract other fields
+            for field in ['hypothesis', 'compression_strategy', 'expected_bitrate_mbps']:
+                match = re.search(rf'"{field}"\s*:\s*"([^"]*)"', text)
+                if match:
+                    result[field] = match.group(1)
+                else:
+                    match = re.search(rf'"{field}"\s*:\s*([0-9.]+)', text)
+                    if match:
+                        result[field] = float(match.group(1))
+            
+            # If we got both agent codes, consider it a success
+            if 'encoding_agent_code' in result and 'decoding_agent_code' in result:
+                logger.info("✅ Manually extracted agent codes from malformed JSON")
+                return result
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Manual extraction failed: {e}")
+            return None
+    
     def analyze_recent_experiments(self, limit: int = 5) -> List[Dict]:
         """
         Fetch and analyze recent experiments from DynamoDB.
@@ -329,19 +561,49 @@ Requirements:
 
 # OUTPUT FORMAT
 
-Format your response as JSON with these keys:
-- `root_cause`: string - Why compression is failing
-- `insights`: array - Key patterns observed
-- `hypothesis`: string - What changes would improve results  
-- `next_experiment`: object - Concrete steps for next experiment
-- `risks`: array - What could go wrong
-- `expected_bitrate_mbps`: number - Expected bitrate
-- `expected_psnr_db`: number - Expected PSNR (quality)
-- `confidence_score`: number - Confidence (0.0-1.0)
-- `generated_code`: object with:
-  - `code`: string - Full Python code with BOTH compress_video_frame() AND decompress_video_frame() functions
-  - `description`: string - Brief description of the approach
-  - `expected_improvement`: string - Expected performance gain
+**CRITICAL**: Format your response with these EXACT sections:
+
+## ANALYSIS
+```json
+{
+  "root_cause": "Why compression is failing",
+  "insights": ["Key patterns observed"],
+  "hypothesis": "What changes would improve results",
+  "next_experiment": {
+    "approach": "Concrete steps for next experiment",
+    "changes": ["Specific changes needed"]
+  },
+  "risks": ["What could go wrong"],
+  "expected_bitrate_mbps": 4.2,
+  "expected_psnr_db": 32.0,
+  "confidence_score": 0.75
+}
+```
+
+## NEURAL CODEC IMPLEMENTATION
+```python
+# Your complete neural codec implementation here
+# Include BOTH compress_video_frame() AND decompress_video_frame() functions
+# Use proper Python syntax - no JSON escaping needed
+
+import numpy as np
+import cv2
+import struct
+# ... your full implementation ...
+
+def compress_video_frame(frame: np.ndarray, frame_index: int, config: dict) -> bytes:
+    # Your compression logic here
+    pass
+
+def decompress_video_frame(compressed_data: bytes, frame_index: int, config: dict) -> np.ndarray:
+    # Your decompression logic here
+    pass
+```
+
+## DESCRIPTION
+Brief description of your neural codec approach and expected performance improvements.
+
+**IMPORTANT**: Do NOT embed code in JSON strings. Use the sectioned format above.
 """
         
         return prompt
@@ -427,17 +689,25 @@ Format your response as JSON with these keys:
                 logger.warning("No text response after tool calling")
                 return None
             
-            # Try to parse JSON (handle markdown code blocks)
-            if "```json" in response_text:
-                json_str = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                json_str = response_text.split("```")[1].split("```")[0].strip()
+            # Debug: Save response to file for inspection
+            try:
+                import tempfile
+                debug_path = os.path.join(tempfile.gettempdir(), 'llm_response_debug.txt')
+                with open(debug_path, 'w') as f:
+                    f.write(response_text)
+                logger.info(f"   💾 Debug: Response saved to {debug_path}")
+            except:
+                pass
+            
+            # Parse response with robust handling
+            analysis = self._parse_llm_response(response_text)
+            
+            if analysis:
+                logger.info("✅ LLM analysis received successfully")
             else:
-                json_str = response_text.strip()
+                logger.error("❌ Failed to parse LLM response")
+                logger.info(f"   Response preview (first 500 chars): {response_text[:500]}")
             
-            analysis = json.loads(json_str)
-            
-            logger.info("✅ LLM analysis received successfully")
             return analysis
             
         except Exception as e:
@@ -464,16 +734,14 @@ Format your response as JSON with these keys:
                     "confidence_score": 0.0
                 }
             
-            # Try to parse JSON (handle markdown code blocks)
-            if "```json" in response_text:
-                json_str = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                json_str = response_text.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = response_text.strip()
+            # Parse response with robust handling
+            analysis = self._parse_llm_response(response_text)
             
-            analysis = json.loads(json_str)
-            logger.info("✅ LLM analysis received via direct API")
+            if analysis:
+                logger.info("✅ LLM analysis received via direct API")
+            else:
+                logger.error("❌ Failed to parse direct API response")
+            
             return analysis
             
         except Exception as e:

@@ -41,6 +41,9 @@ class CodeSandbox:
         'io',
         'collections',
         'typing',
+        'time',  # Added for sleep/timeout simulation
+        'os',  # Added for file operations (path.exists, remove)
+        'os.path',  # Added for path operations
     }
     
     FORBIDDEN_ATTRIBUTES = {
@@ -49,7 +52,7 @@ class CodeSandbox:
         # 'eval' removed - PyTorch model.eval() is safe and necessary
         # The dangerous eval() builtin is still blocked via restricted_globals
         'compile',
-        'open',
+        # 'open' removed - needed for experiment output files
         'file',
         'input',
         'raw_input',
@@ -249,12 +252,15 @@ class CodeSandbox:
                     'type': type,
                     'print': print,  # For debugging
                     '__import__': safe_import,  # Allow controlled imports
+                    'open': open,  # Allow file I/O for experiment output files
                 },
             }
             
             # Import allowed modules
             import numpy as np
             import cv2
+            import os
+            
             try:
                 import torch
                 import torch.nn as nn
@@ -274,10 +280,20 @@ class CodeSandbox:
             restricted_globals['np'] = np
             restricted_globals['numpy'] = np
             restricted_globals['cv2'] = cv2
+            restricted_globals['os'] = os
             restricted_globals['math'] = __import__('math')
             restricted_globals['json'] = __import__('json')
             restricted_globals['struct'] = __import__('struct')
             restricted_globals['base64'] = __import__('base64')
+            restricted_globals['__name__'] = '__main__'  # Fix __name__ reference issue
+            
+            # Add common exception classes
+            restricted_globals['ValueError'] = ValueError
+            restricted_globals['TypeError'] = TypeError
+            restricted_globals['IndexError'] = IndexError
+            restricted_globals['KeyError'] = KeyError
+            restricted_globals['AttributeError'] = AttributeError
+            restricted_globals['Exception'] = Exception
             
             # Execute code to define function
             exec(code, restricted_globals)
@@ -337,25 +353,30 @@ class CodeSandbox:
         Raises:
             TimeoutError: If execution exceeds timeout
         """
-        # For now, simple timeout with signal (Unix only)
-        # TODO: Use multiprocessing for cross-platform support
+        import threading
         
-        def timeout_handler(signum, frame):
-            raise TimeoutError(f"Execution exceeded {self.timeout}s timeout")
-        
-        # Try signal-based timeout (Unix)
-        try:
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(self.timeout)
+        # Check if we're in the main thread
+        if threading.current_thread() is threading.main_thread():
+            # Main thread - can use signals
+            def timeout_handler(signum, frame):
+                raise TimeoutError(f"Execution exceeded {self.timeout}s timeout")
+            
             try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
-            return result
-        except AttributeError:
-            # Windows doesn't have SIGALRM, just execute directly
-            logger.warning("Timeout not enforced (Windows platform)")
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(self.timeout)
+                try:
+                    result = func(*args, **kwargs)
+                finally:
+                    signal.alarm(0)
+                    signal.signal(signal.SIGALRM, old_handler)
+                return result
+            except AttributeError:
+                # Windows doesn't have SIGALRM, just execute directly
+                logger.warning("Timeout not enforced (Windows platform)")
+                return func(*args, **kwargs)
+        else:
+            # Thread - cannot use signals, execute without timeout
+            logger.warning("Cannot enforce timeout in thread - executing without timeout protection")
             return func(*args, **kwargs)
 
 

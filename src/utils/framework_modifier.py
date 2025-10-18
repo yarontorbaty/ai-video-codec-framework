@@ -23,16 +23,30 @@ class FrameworkModifier:
     Includes backup, rollback, and validation mechanisms.
     """
     
-    def __init__(self, base_path: str = "/home/ec2-user/ai-video-codec"):
+    def __init__(self, base_path: str = None):
         """
         Initialize framework modifier.
         
         Args:
-            base_path: Root directory of the framework
+            base_path: Root directory of the framework (auto-detected if None)
         """
+        if base_path is None:
+            # Auto-detect project root (3 levels up from this file)
+            current_file = os.path.abspath(__file__)
+            base_path = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+        
         self.base_path = base_path
         self.backup_dir = os.path.join(base_path, '.framework_backups')
-        os.makedirs(self.backup_dir, exist_ok=True)
+        
+        # Create backup directory if it doesn't exist and path is writable
+        try:
+            os.makedirs(self.backup_dir, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            logger.warning(f"Could not create backup directory: {e}")
+            # Use temp directory as fallback
+            import tempfile
+            self.backup_dir = os.path.join(tempfile.gettempdir(), 'framework_backups')
+            os.makedirs(self.backup_dir, exist_ok=True)
         
         # Track modifications for rollback
         self.modification_history = []

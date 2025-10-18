@@ -435,11 +435,18 @@ class Dashboard {
                         <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Experiment ID</th>
                         <th style="padding: 15px; text-align: left; color: #cbd5e1; font-weight: 600;">Time</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Status</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Type</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-microchip"></i> Instance</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Bitrate</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-line"></i> PSNR</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-eye"></i> Quality</th>
                         <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-list-ol"></i> Phase</th>
-                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;">Actions</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-code"></i> Code</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-tag"></i> Ver</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fab fa-git-alt"></i> Git</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-film"></i> Media</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-cube"></i> Decoder</th>
+                        <th style="padding: 15px; text-align: center; color: #cbd5e1; font-weight: 600;"><i class="fas fa-chart-bar"></i> Analyze</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -510,6 +517,81 @@ class Dashboard {
                 <i class="fas ${phase.icon}"></i> ${phase.label}
             </span>`;
 
+            // Experiment type display
+            const experimentType = exp.experiment_type || 'Procedural Generation';
+            const isGPU = exp.is_gpu_experiment || false;
+            const typeColor = isGPU ? '#8b5cf6' : '#3b82f6';
+            const typeIcon = isGPU ? 'fa-microchip' : 'fa-cogs';
+            const typeBadge = `<span style="padding: 6px 10px; background: ${typeColor}22; border: 1px solid ${typeColor}; border-radius: 6px; color: ${typeColor}; font-size: 0.85em; font-weight: 600; white-space: nowrap;">
+                <i class="fas ${typeIcon}"></i> ${experimentType}
+            </span>`;
+
+            // GPU instance display
+            const gpuInstance = exp.gpu_instance || 'CPU-Only';
+            const instanceColor = isGPU ? '#10b981' : '#94a3b8';
+            const instanceIcon = isGPU ? 'fa-microchip' : 'fa-desktop';
+            const instanceDisplay = `<div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                <span style="font-size: 0.8em; color: ${instanceColor}; font-weight: 600;">
+                    <i class="fas ${instanceIcon}"></i> ${gpuInstance}
+                </span>
+                ${isGPU ? '<span style="font-size: 0.7em; color: #10b981;">GPU Accelerated</span>' : '<span style="font-size: 0.7em; color: #94a3b8;">CPU Only</span>'}
+            </div>`;
+
+            // Code column - links to encoding/decoding code
+            const encodingCodeUrl = exp.encoding_code_url;
+            const decodingCodeUrl = exp.decoding_code_url;
+            let codeDisplay = '<span style="color: #666;">—</span>';
+            if (encodingCodeUrl || decodingCodeUrl) {
+                codeDisplay = '<div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">';
+                if (encodingCodeUrl) {
+                    codeDisplay += `<a href="${encodingCodeUrl}" target="_blank" style="padding: 4px 8px; background: #3b82f622; border: 1px solid #3b82f6; border-radius: 4px; color: #3b82f6; font-size: 0.75em; text-decoration: none; white-space: nowrap;"><i class="fas fa-code"></i> Encode</a>`;
+                }
+                if (decodingCodeUrl) {
+                    codeDisplay += `<a href="${decodingCodeUrl}" target="_blank" style="padding: 4px 8px; background: #8b5cf622; border: 1px solid #8b5cf6; border-radius: 4px; color: #8b5cf6; font-size: 0.75em; text-decoration: none; white-space: nowrap;"><i class="fas fa-code"></i> Decode</a>`;
+                }
+                codeDisplay += '</div>';
+            }
+
+            // Version column
+            const codeVersion = exp.code_version || 'N/A';
+            const versionDisplay = `<span style="font-size: 0.85em; color: #94a3b8; font-family: monospace;">${codeVersion}</span>`;
+
+            // Git column
+            const gitCommit = exp.git_commit || 'N/A';
+            const gitDisplay = gitCommit !== 'N/A' 
+                ? `<span style="font-size: 0.75em; color: #94a3b8; font-family: monospace;">${gitCommit.substring(0, 7)}</span>`
+                : '<span style="color: #666;">—</span>';
+
+            // Media column - links to compressed/reconstructed files
+            const videoUrl = exp.video_url;
+            const outputFiles = exp.output_files;
+            let mediaDisplay = '<span style="color: #666;">—</span>';
+            if (videoUrl || (outputFiles && (outputFiles.compressed || outputFiles.reconstructed))) {
+                mediaDisplay = '<div style="display: flex; flex-direction: column; gap: 4px; align-items: center;">';
+                if (videoUrl) {
+                    mediaDisplay += `<a href="${videoUrl}" target="_blank" style="padding: 4px 8px; background: #10b98122; border: 1px solid #10b981; border-radius: 4px; color: #10b981; font-size: 0.75em; text-decoration: none; white-space: nowrap;"><i class="fas fa-film"></i> Video</a>`;
+                }
+                if (outputFiles && outputFiles.compressed) {
+                    mediaDisplay += `<span style="padding: 4px 8px; background: #f59e0b22; border: 1px solid #f59e0b; border-radius: 4px; color: #f59e0b; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-file-archive"></i> Compressed</span>`;
+                }
+                if (outputFiles && outputFiles.reconstructed) {
+                    mediaDisplay += `<span style="padding: 4px 8px; background: #06b6d422; border: 1px solid #06b6d4; border-radius: 4px; color: #06b6d4; font-size: 0.75em; white-space: nowrap;"><i class="fas fa-image"></i> Reconstructed</span>`;
+                }
+                mediaDisplay += '</div>';
+            }
+
+            // Decoder column
+            const decoderS3Key = exp.decoder_s3_key;
+            const decoderDisplay = decoderS3Key 
+                ? `<a href="#" onclick="alert('S3 Key: ${decoderS3Key}'); return false;" style="padding: 4px 8px; background: #8b5cf622; border: 1px solid #8b5cf6; border-radius: 4px; color: #8b5cf6; font-size: 0.75em; text-decoration: none; white-space: nowrap;"><i class="fas fa-cube"></i> View</a>`
+                : '<span style="color: #666;">—</span>';
+
+            // Analyze column
+            const analyzeDisplay = `<button onclick="window.open('/blog.html#${exp.id}', '_blank')" 
+                style="padding: 6px 10px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; font-size: 0.8em; font-weight: 600; white-space: nowrap;">
+                <i class="fas fa-chart-bar"></i> Analyze
+            </button>`;
+
             tableHTML += `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); transition: background 0.2s;" 
                     onmouseover="this.style.background='rgba(59, 130, 246, 0.1)'" 
@@ -521,16 +603,18 @@ class Dashboard {
                             ${exp.status.toUpperCase()}
                         </span>
                     </td>
+                    <td style="padding: 15px; text-align: center;">${typeBadge}</td>
+                    <td style="padding: 15px; text-align: center;">${instanceDisplay}</td>
                     <td style="padding: 15px; text-align: center; color: #a5f3fc; font-weight: 600;">${bitrate}</td>
                     <td style="padding: 15px; text-align: center;">${psnrDisplay}</td>
                     <td style="padding: 15px; text-align: center;">${qualityDisplay}</td>
                     <td style="padding: 15px; text-align: center;">${phaseBadge}</td>
-                    <td style="padding: 15px; text-align: center;">
-                        <button onclick="window.open('/blog.html#${exp.id}', '_blank')" 
-                                style="padding: 8px 12px; background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; cursor: pointer; font-size: 0.85em; font-weight: 600;">
-                            <i class="fas fa-eye"></i> View Details
-                        </button>
-                    </td>
+                    <td style="padding: 15px; text-align: center;">${codeDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${versionDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${gitDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${mediaDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${decoderDisplay}</td>
+                    <td style="padding: 15px; text-align: center;">${analyzeDisplay}</td>
                 </tr>
             `;
         });

@@ -219,7 +219,92 @@ def render_dashboard_page():
         # Process experiments with more details
         experiments = []
         for item in all_items:
-            experiments_data = json.loads(item.get('experiments', '[]'))
+            # Check for new format (result field) or old format (experiments field)
+            result_data = item.get('result')
+            experiments_data_str = item.get('experiments')
+            
+            # Parse timestamp for time of day
+            timestamp_str = str(item.get('timestamp_iso', '') or item.get('updated_at', ''))
+            time_of_day = ''
+            if timestamp_str and timestamp_str != '':
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                    time_of_day = dt.strftime('%I:%M %p')
+                except:
+                    time_of_day = timestamp_str[11:16] if len(timestamp_str) > 16 else ''
+            
+            # Handle new format (result field with direct metrics)
+            if result_data:
+                try:
+                    result = json.loads(result_data) if isinstance(result_data, str) else result_data
+                    
+                    # Extract metrics from new format
+                    metrics = result.get('metrics', {})
+                    bitrate = metrics.get('bitrate_mbps', 0)
+                    psnr = metrics.get('psnr_db', 0)
+                    ssim = metrics.get('ssim', 0)
+                    compression_ratio = metrics.get('compression_ratio', 0)
+                    processing_time = metrics.get('processing_time_seconds', 0)
+                    
+                    # Calculate quality tier
+                    quality = 'unknown'
+                    if psnr > 35:
+                        quality = 'excellent'
+                    elif psnr > 30:
+                        quality = 'good'
+                    elif psnr > 25:
+                        quality = 'acceptable'
+                    elif psnr > 0:
+                        quality = 'poor'
+                    
+                    # Calculate achievement tier
+                    achievement_tier = '🎯 In Progress'
+                    if compression_ratio >= 90:
+                        achievement_tier = '🏆 90% Reduction'
+                    elif compression_ratio >= 70:
+                        achievement_tier = '🥇 70% Reduction'
+                    elif compression_ratio >= 50:
+                        achievement_tier = '🥈 50% Reduction'
+                    
+                    # Get worker info
+                    worker_id = result.get('worker_id', '')
+                    is_gpu_experiment = 'ip-10-0-2-118' in worker_id
+                    
+                    # Get phase from result
+                    current_phase = result.get('phase', 'execution')
+                    
+                    experiments.append({
+                        'id': item.get('experiment_id', ''),
+                        'status': result.get('status', item.get('status', 'unknown')),
+                        'compression': round(compression_ratio, 2),
+                        'reduction_percent': round(compression_ratio, 2),
+                        'bitrate': round(bitrate, 3),
+                        'psnr_db': round(psnr, 2) if psnr > 0 else None,
+                        'ssim': round(ssim, 3) if ssim > 0 else None,
+                        'quality': quality if quality != 'unknown' else None,
+                        'quality_verified': is_gpu_experiment and psnr > 0,
+                        'achievement_tier': achievement_tier,
+                        'target_achieved': compression_ratio > 50,
+                        'current_phase': current_phase,
+                        'phase_completed': 'complete' if result.get('status') == 'completed' else current_phase,
+                        'timestamp': timestamp_str,
+                        'time_of_day': time_of_day,
+                        'methods': 'GPU Neural Codec' if is_gpu_experiment else 'Neural Codec',
+                        'evolution': None,
+                        'video_url': None,
+                        'decoder_s3_key': None,
+                        'runtime': round(processing_time, 1) if processing_time > 0 else None,
+                        'test_count': metrics.get('frames_processed', 0),
+                        'full_data': []
+                    })
+                    continue
+                except Exception as e:
+                    print(f"Error parsing new format for {item.get('experiment_id')}: {e}")
+                    pass
+            
+            # Handle old format (experiments field)
+            experiments_data = json.loads(experiments_data_str) if experiments_data_str else []
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             ai_neural = next((e for e in experiments_data if e.get('experiment_type') == 'real_ai_neural'), {})
             llm_code = next((e for e in experiments_data if e.get('experiment_type') in ['llm_generated_code', 'llm_generated_code_evolution']), {})
@@ -248,17 +333,6 @@ def render_dashboard_page():
                         'reason': evolution.get('reason', '')
                     }
             
-            # Parse timestamp for time of day
-            timestamp_str = item.get('timestamp_iso', '')
-            time_of_day = ''
-            if timestamp_str:
-                try:
-                    from datetime import datetime
-                    dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                    time_of_day = dt.strftime('%I:%M %p')
-                except:
-                    time_of_day = timestamp_str[11:16] if len(timestamp_str) > 16 else ''
-            
             experiments.append({
                 'id': item.get('experiment_id', ''),
                 'status': item.get('status', 'unknown'),
@@ -269,17 +343,19 @@ def render_dashboard_page():
                 'ssim': float(metrics.get('ssim')) if metrics.get('ssim') else None,
                 'quality': metrics.get('quality'),
                 'quality_verified': metrics.get('quality_verified', False),
-                'achievement_tier': comparison.get('achievement_tier'),
+                'achievement_tier': comparison.get('achievement_tier') or '🎯 In Progress',
                 'target_achieved': comparison.get('target_achieved', False),
                 'current_phase': item.get('current_phase', 'unknown'),
                 'phase_completed': item.get('phase_completed', 'unknown'),
-                'timestamp': item.get('timestamp_iso', ''),
+                'timestamp': timestamp_str,
                 'time_of_day': time_of_day,
                 'methods': methods_str,
                 'evolution': evolution_info,
                 'video_url': procedural.get('video_url'),
                 'decoder_s3_key': procedural.get('decoder_s3_key'),
-                'full_data': experiments_data  # Keep full data for blog linking
+                'runtime': metrics.get('processing_time_seconds') or metrics.get('runtime_seconds'),
+                'test_count': metrics.get('frames_processed') or metrics.get('test_frames', 0),
+                'full_data': experiments_data
             })
         
         experiments.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
@@ -430,8 +506,18 @@ def render_dashboard_page():
                     reason = evo.get('reason', 'Not better')
                     evolution_badge = f'<span style="background: #ffc107; color: #333; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; margin-left: 5px;" title="{reason}">⏭️</span>'
             
+            # Media icons (video/decoder)
+            media_display = ''
+            if exp.get('video_url'):
+                media_display += f'<a href="{exp["video_url"]}" target="_blank" title="View Video" style="color: #ec4899; margin-right: 6px; font-size: 1.1em;"><i class="fas fa-play-circle"></i></a>'
+            if exp.get('decoder_s3_key'):
+                decoder_url = f'https://ai-video-codec-videos-580473065386.s3.amazonaws.com/{exp["decoder_s3_key"]}'
+                media_display += f'<a href="{decoder_url}" target="_blank" download title="Download Decoder" style="color: #3b82f6; font-size: 1.1em;"><i class="fas fa-file-code"></i></a>'
+            if not media_display:
+                media_display = '<span style="color: #666;">—</span>'
+            
             experiments_html += f'''
-                <div class="table-row" style="cursor: pointer; grid-template-columns: 1fr 0.6fr 0.5fr 0.9fr 0.7fr 0.6fr 0.7fr 0.7fr 0.7fr 0.5fr 0.7fr 0.4fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
+                <div class="table-row" style="cursor: pointer; grid-template-columns: 1fr 0.6fr 0.5fr 0.9fr 0.7fr 0.6fr 0.7fr 0.7fr 0.7fr 0.5fr 0.5fr 0.7fr 0.4fr;" onclick="window.location.href='/blog.html#exp-{i+1}'">
                     <div class="col">{exp['id'][:18]}...</div>
                     <div class="col"><span class="status-badge {status_class}">{exp['status']}</span></div>
                     <div class="col">{exp.get('time_of_day', 'N/A')}</div>
@@ -442,7 +528,8 @@ def render_dashboard_page():
                     <div class="col">{quality_display}</div>
                     <div class="col">{exp['bitrate']:.2f} Mbps</div>
                     <div class="col">{phase_display}</div>
-                    <div class="col">{exp['timestamp'][:10]}</div>
+                    <div class="col" onclick="event.stopPropagation();">{media_display}</div>
+                    <div class="col">{exp['timestamp'][:10] if exp['timestamp'] else 'N/A'}</div>
                     <div class="col"><a href="/blog.html#exp-{i+1}" style="color: #667eea; text-decoration: none;"><i class="fas fa-arrow-right"></i></a></div>
                 </div>
             '''
@@ -542,7 +629,7 @@ def render_dashboard_page():
             <section class="experiments-section">
                 <h2><i class="fas fa-flask"></i> Recent Experiments</h2>
                 <div class="experiments-table">
-                    <div class="table-header" style="grid-template-columns: 1fr 0.6fr 0.5fr 0.9fr 0.7fr 0.6fr 0.7fr 0.7fr 0.7fr 0.5fr 0.7fr 0.4fr;">
+                    <div class="table-header" style="grid-template-columns: 1fr 0.6fr 0.5fr 0.9fr 0.7fr 0.6fr 0.7fr 0.7fr 0.7fr 0.5fr 0.5fr 0.7fr 0.4fr;">
                         <div>Experiment ID</div>
                         <div>Status</div>
                         <div>Time</div>
@@ -553,6 +640,7 @@ def render_dashboard_page():
                         <div><i class="fas fa-eye"></i> Quality</div>
                         <div>Bitrate</div>
                         <div><i class="fas fa-tasks"></i> Phase</div>
+                        <div><i class="fas fa-photo-video"></i> Media</div>
                         <div>Date</div>
                         <div>Details</div>
                     </div>
@@ -1026,7 +1114,76 @@ def get_experiments():
         experiments = []
         
         for item in all_items:
-            experiments_data = json.loads(item.get('experiments', '[]'))
+            # Check for new format (result field) or old format (experiments field)
+            result_data = item.get('result')
+            experiments_data_str = item.get('experiments')
+            
+            # Handle new format (result field with direct metrics)
+            if result_data:
+                try:
+                    result = json.loads(result_data) if isinstance(result_data, str) else result_data
+                    
+                    # Extract metrics from new format
+                    metrics = result.get('metrics', {})
+                    bitrate = metrics.get('bitrate_mbps', 0)
+                    psnr = metrics.get('psnr_db', 0)
+                    compression_ratio = metrics.get('compression_ratio', 0)
+                    
+                    # Check if it's a GPU experiment
+                    execution_success = result.get('execution_success', {})
+                    is_gpu_experiment = bool(execution_success.get('encoding') and execution_success.get('decoding'))
+                    
+                    # Get worker info
+                    worker_id = result.get('worker_id', '')
+                    gpu_instance = None
+                    if 'ip-10-0-2-118' in worker_id:
+                        gpu_instance = 'GPU-Worker-1'
+                        is_gpu_experiment = True
+                    elif 'ip-10-0-1-109' in worker_id:
+                        gpu_instance = 'Orchestrator'
+                    
+                    # Generate links for completed experiments
+                    encoding_code_url = None
+                    decoding_code_url = None
+                    if result.get('status') == 'completed':
+                        # Store code in S3 and generate presigned URLs
+                        exp_id = item.get('experiment_id', '')
+                        encoding_code_url = f"/api/code/{exp_id}/encoding"
+                        decoding_code_url = f"/api/code/{exp_id}/decoding"
+                    
+                    experiments.append({
+                        'id': item.get('experiment_id', ''),
+                        'status': result.get('status', 'unknown'),
+                        'compression': round(compression_ratio, 2),
+                        'reduction_percent': round(compression_ratio, 2),
+                        'bitrate': round(bitrate, 3),
+                        'psnr_db': round(psnr, 2) if psnr > 0 else None,
+                        'ssim': metrics.get('ssim', 0),
+                        'quality': 'excellent' if psnr > 35 else 'good' if psnr > 30 else 'acceptable' if psnr > 25 else 'poor' if psnr > 0 else None,
+                        'quality_verified': is_gpu_experiment,
+                        'achievement_tier': 'experimental',
+                        'target_achieved': compression_ratio > 80,
+                        'current_phase': 'complete' if result.get('status') == 'completed' else 'processing',
+                        'phase_completed': 'complete' if result.get('status') == 'completed' else 'processing',
+                        'created_at': item.get('timestamp_iso', ''),
+                        'timestamp': float(item.get('timestamp', 0)),
+                        'video_url': None,
+                        'decoder_s3_key': None,
+                        'is_gpu_experiment': is_gpu_experiment,
+                        'gpu_instance': gpu_instance,
+                        'experiment_type': 'GPU Neural Codec' if is_gpu_experiment else 'Neural Codec',
+                        'encoding_code_url': encoding_code_url,
+                        'decoding_code_url': decoding_code_url,
+                        'code_version': result.get('code_version', 'v2.0'),
+                        'git_commit': result.get('git_commit', 'N/A')
+                    })
+                    continue
+                except Exception as e:
+                    print(f"Error parsing new format: {e}")
+                    pass
+            
+            # Handle old format (experiments field)
+            experiments_data = json.loads(experiments_data_str) if experiments_data_str else []
             procedural = next((e for e in experiments_data if e.get('experiment_type') == 'real_procedural_generation'), {})
             metrics = procedural.get('real_metrics', {})
             comparison = procedural.get('comparison', {})
