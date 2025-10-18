@@ -45,6 +45,16 @@ else
     log "✅ LLM API key detected - Claude-powered real-time planning enabled"
 fi
 
+# Check if auto-execution is enabled
+is_auto_execution_enabled() {
+    AUTO_EXEC=$(aws ssm get-parameter --name "/ai-video-codec/auto-execution-enabled" --region us-east-1 --query 'Parameter.Value' --output text 2>/dev/null)
+    if [ "$AUTO_EXEC" = "true" ]; then
+        return 0  # Enabled
+    else
+        return 1  # Disabled
+    fi
+}
+
 # Monitor system health
 check_health() {
     MEMORY=$(free -m | awk 'NR==2{printf "%.2f", $3*100/$2 }')
@@ -110,6 +120,16 @@ CONSECUTIVE_FAILURES=0
 MAX_CONSECUTIVE_FAILURES=5
 
 while true; do
+    # Check if auto-execution is enabled
+    if ! is_auto_execution_enabled; then
+        log "⏸️  Auto-execution is DISABLED - pausing for 30 seconds..."
+        log "   To enable: aws ssm put-parameter --name /ai-video-codec/auto-execution-enabled --value true --overwrite --region us-east-1"
+        sleep 30
+        continue
+    fi
+    
+    log "✅ Auto-execution is ENABLED - running experiment $ITERATION"
+    
     # Run procedural experiment (no timeout, handles own retry logic)
     run_procedural_experiment $ITERATION
     RESULT=$?

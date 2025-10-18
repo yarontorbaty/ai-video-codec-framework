@@ -226,6 +226,29 @@ function loadAdminInterface() {
                 </button>
             </div>
             
+            <!-- Auto-Execution Toggle -->
+            <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); border-radius: 16px; padding: 25px; margin-top: 30px; border: 2px solid #475569; box-shadow: 0 8px 16px rgba(0,0,0,0.3);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; color: #f1f5f9; font-size: 1.3em;">
+                            <i class="fas fa-toggle-on" style="color: #60a5fa;"></i> Auto-Execution Control
+                        </h3>
+                        <p style="margin: 0; color: #94a3b8; font-size: 0.95em;">
+                            When enabled, the orchestrator will automatically run experiments continuously
+                        </p>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <span id="autoExecStatusText" style="font-weight: 600; color: #94a3b8; font-size: 1.1em;">
+                            <i class="fas fa-spinner fa-spin"></i> Loading...
+                        </span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoExecToggle" onchange="toggleAutoExecution(this.checked)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
             <div id="commandStatus" style="margin: 20px 0; padding: 18px; border-radius: 12px; display: none; font-size: 1.1em; font-weight: 600; border: 2px solid;"></div>
             
             <!-- Experiments Table -->
@@ -278,10 +301,59 @@ function loadAdminInterface() {
         </div>
     `;
     
+    // Add CSS for toggle switch
+    if (!document.getElementById('toggleSwitchCSS')) {
+        const style = document.createElement('style');
+        style.id = 'toggleSwitchCSS';
+        style.innerHTML = `
+            .toggle-switch {
+                position: relative;
+                display: inline-block;
+                width: 60px;
+                height: 34px;
+            }
+            .toggle-switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+            .toggle-slider {
+                position: absolute;
+                cursor: pointer;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: #dc2626;
+                transition: .4s;
+                border-radius: 34px;
+            }
+            .toggle-slider:before {
+                position: absolute;
+                content: "";
+                height: 26px;
+                width: 26px;
+                left: 4px;
+                bottom: 4px;
+                background-color: white;
+                transition: .4s;
+                border-radius: 50%;
+            }
+            .toggle-switch input:checked + .toggle-slider {
+                background-color: #10b981;
+            }
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(26px);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
     showAdminInterface();
     loadSystemStatus();
     loadChatHistory();
     loadExperiments();
+    loadAutoExecutionStatus();
     setInterval(loadSystemStatus, 30000); // Update every 30 seconds
     setInterval(loadExperiments, 30000); // Update experiments every 30 seconds
 }
@@ -1101,3 +1173,82 @@ function appendChatMessage(role, content, timestamp, id) {
     chatContainer.appendChild(messageDiv);
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
+
+async function loadAutoExecutionStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/admin/auto-execution`, {
+            headers: {
+                'Authorization': localStorage.getItem('admin_token') || ''
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            const isEnabled = data.enabled;
+            document.getElementById('autoExecToggle').checked = isEnabled;
+            updateAutoExecStatusText(isEnabled);
+        } else {
+            updateAutoExecStatusText(false, 'Error loading status');
+        }
+    } catch (error) {
+        console.error('Error loading auto-execution status:', error);
+        updateAutoExecStatusText(false, 'Error loading status');
+    }
+}
+
+function updateAutoExecStatusText(isEnabled, errorMsg = null) {
+    const statusText = document.getElementById('autoExecStatusText');
+    if (errorMsg) {
+        statusText.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${errorMsg}`;
+        statusText.style.color = '#f59e0b';
+    } else if (isEnabled) {
+        statusText.innerHTML = '<i class="fas fa-check-circle"></i> Enabled';
+        statusText.style.color = '#10b981';
+    } else {
+        statusText.innerHTML = '<i class="fas fa-times-circle"></i> Disabled';
+        statusText.style.color = '#dc2626';
+    }
+}
+
+async function toggleAutoExecution(enabled) {
+    const statusDiv = document.getElementById('commandStatus');
+    try {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#1e40af';
+        statusDiv.style.color = '#ffffff';
+        statusDiv.style.borderColor = '#3b82f6';
+        statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${enabled ? 'Enabling' : 'Disabling'} auto-execution...`;
+        
+        const response = await fetch(`${API_BASE}/admin/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('admin_token') || ''
+            },
+            body: JSON.stringify({
+                command: 'set_auto_execution',
+                enabled: enabled
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusDiv.style.background = '#065f46';
+            statusDiv.style.borderColor = '#10b981';
+            statusDiv.innerHTML = `<i class="fas fa-check"></i> ${result.message}`;
+            updateAutoExecStatusText(enabled);
+            setTimeout(() => statusDiv.style.display = 'none', 3000);
+        } else {
+            throw new Error(result.message || 'Failed to update auto-execution');
+        }
+    } catch (error) {
+        statusDiv.style.background = '#991b1b';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+        // Revert toggle
+        document.getElementById('autoExecToggle').checked = !enabled;
+        updateAutoExecStatusText(!enabled);
+    }
+}
+

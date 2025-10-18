@@ -887,7 +887,9 @@ def rerun_experiment_command(experiment_id):
     
     except Exception as e:
         logger.error(f"Error rerunning experiment: {e}")
-        return {"success": False, "message": str(e)}
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return {"success": False, "message": f"Error: {str(e)}", "error_type": type(e).__name__}
 
 
 def stop_experiments_command():
@@ -947,6 +949,45 @@ def resume_autonomous_command():
     
     except Exception as e:
         logger.error(f"Error resuming autonomous: {e}")
+        return {"success": False, "message": str(e)}
+
+
+def set_auto_execution_command(enabled):
+    """Enable or disable automatic experiment execution."""
+    try:
+        value = "true" if enabled else "false"
+        ssm.put_parameter(
+            Name='/ai-video-codec/auto-execution-enabled',
+            Value=value,
+            Type='String',
+            Overwrite=True
+        )
+        status = "enabled" if enabled else "disabled"
+        logger.info(f"Auto-execution {status}")
+        return {
+            "success": True,
+            "message": f"Auto-execution {status}",
+            "enabled": enabled
+        }
+    except Exception as e:
+        logger.error(f"Error setting auto-execution: {e}")
+        return {"success": False, "message": str(e)}
+
+
+def get_auto_execution_status():
+    """Get the current auto-execution status."""
+    try:
+        response = ssm.get_parameter(Name='/ai-video-codec/auto-execution-enabled')
+        enabled = response['Parameter']['Value'] == 'true'
+        return {
+            "success": True,
+            "enabled": enabled,
+            "last_modified": response['Parameter']['LastModifiedDate'].isoformat()
+        }
+    except ssm.exceptions.ParameterNotFound:
+        return {"success": True, "enabled": False, "message": "Parameter not found - defaulting to disabled"}
+    except Exception as e:
+        logger.error(f"Error getting auto-execution status: {e}")
         return {"success": False, "message": str(e)}
 
 
@@ -1018,55 +1059,89 @@ def get_experiments_list():
                 'human_intervention_reasons': exp.get('human_intervention_reasons', [])
             }
             
-            # Parse experiment details
+            # Parse experiment details - handle BOTH old and new formats
             try:
-                exp_details = exp.get('experiments', '[]')
-                if isinstance(exp_details, str):
-                    exp_details = json.loads(exp_details)
-                
-                exp_data['experiments_run'] = len(exp_details)
-                
-                # Extract code evolution data and best bitrate
-                for e in exp_details:
-                    # Check for code evolution experiment
-                    if e.get('experiment_type') == 'llm_generated_code_evolution':
-                        exp_data['code_changed'] = True
-                        
-                        # Get evolution info
-                        evolution = e.get('evolution', {})
-                        code_info = e.get('code_info', {})
-                        
-                        exp_data['version'] = code_info.get('version', 0)
-                        exp_data['evolution_status'] = evolution.get('status', 'unknown')
-                        exp_data['improvement'] = evolution.get('improvement', 'N/A')
-                        exp_data['summary'] = evolution.get('summary', evolution.get('reason', ''))
-                        exp_data['deployment_status'] = evolution.get('deployment_status', 'not_deployed')
-                        exp_data['github_committed'] = evolution.get('github_committed', False)
-                        exp_data['github_commit_hash'] = evolution.get('github_commit_hash', None)
-                        
-                        # Extract failure analysis if present
-                        failure_analysis = evolution.get('failure_analysis', {})
-                        if failure_analysis:
-                            exp_data['failure_analysis'] = {
-                                'category': failure_analysis.get('failure_category', 'unknown'),
-                                'root_cause': failure_analysis.get('root_cause', 'N/A'),
-                                'fix_suggestion': failure_analysis.get('fix_suggestion', 'N/A'),
-                                'severity': failure_analysis.get('severity', 'unknown')
-                            }
+                # Check for NEW format (result field)
+                result_data = exp.get('result')
+                if result_data:
+                    # NEW format from GPU workers
+                    result = json.loads(result_data) if isinstance(result_data, str) else result_data
+                    metrics = result.get('metrics', {})
                     
-                    # Find best bitrate and quality metrics
-                    metrics = e.get('real_metrics', {})
-                    bitrate = metrics.get('bitrate_mbps')
-                    if bitrate:
-                        if exp_data['best_bitrate'] is None or bitrate < exp_data['best_bitrate']:
-                            exp_data['best_bitrate'] = float(bitrate)
-                            # Also extract quality metrics from the best performing experiment
-                            exp_data['psnr_db'] = float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None
-                            exp_data['ssim'] = float(metrics.get('ssim')) if metrics.get('ssim') else None
-                            exp_data['quality'] = metrics.get('quality')
-                            # Extract media artifacts (video and decoder code)
-                            exp_data['video_url'] = e.get('video_url')
-                            exp_data['decoder_s3_key'] = e.get('decoder_s3_key')
+                    exp_data['best_bitrate'] = float(metrics.get('bitrate_mbps', 0)) if metrics.get('bitrate_mbps') else None
+                    exp_data['psnr_db'] = float(metrics.get('psnr_db', 0)) if metrics.get('psnr_db') else None
+                    exp_data['ssim'] = float(metrics.get('ssim', 0)) if metrics.get('ssim') else None
+                    exp_data['experiments_run'] = 1  # New format = 1 experiment
+                    
+                    # Calculate quality
+                    psnr = metrics.get('psnr_db', 0)
+                    if psnr > 35:
+                        exp_data['quality'] = 'excellent'
+                    elif psnr > 30:
+                        exp_data['quality'] = 'good'
+                    elif psnr > 25:
+                        exp_data['quality'] = 'acceptable'
+                    elif psnr > 0:
+                        exp_data['quality'] = 'poor'
+                    
+                    # Get processing time
+                    processing_time = metrics.get('processing_time_seconds', 0)
+                    exp_data['elapsed_seconds'] = processing_time
+                    
+                    # Worker info
+                    worker_id = result.get('worker_id', '')
+                    is_gpu = 'ip-10-0-2-118' in worker_id
+                    exp_data['worker'] = 'GPU-Worker-1' if is_gpu else 'CPU'
+                    
+                else:
+                    # OLD format from orchestrator
+                    exp_details = exp.get('experiments', '[]')
+                    if isinstance(exp_details, str):
+                        exp_details = json.loads(exp_details)
+                    
+                    exp_data['experiments_run'] = len(exp_details)
+                    
+                    # Extract code evolution data and best bitrate
+                    for e in exp_details:
+                        # Check for code evolution experiment
+                        if e.get('experiment_type') == 'llm_generated_code_evolution':
+                            exp_data['code_changed'] = True
+                            
+                            # Get evolution info
+                            evolution = e.get('evolution', {})
+                            code_info = e.get('code_info', {})
+                            
+                            exp_data['version'] = code_info.get('version', 0)
+                            exp_data['evolution_status'] = evolution.get('status', 'unknown')
+                            exp_data['improvement'] = evolution.get('improvement', 'N/A')
+                            exp_data['summary'] = evolution.get('summary', evolution.get('reason', ''))
+                            exp_data['deployment_status'] = evolution.get('deployment_status', 'not_deployed')
+                            exp_data['github_committed'] = evolution.get('github_committed', False)
+                            exp_data['github_commit_hash'] = evolution.get('github_commit_hash', None)
+                            
+                            # Extract failure analysis if present
+                            failure_analysis = evolution.get('failure_analysis', {})
+                            if failure_analysis:
+                                exp_data['failure_analysis'] = {
+                                    'category': failure_analysis.get('failure_category', 'unknown'),
+                                    'root_cause': failure_analysis.get('root_cause', 'N/A'),
+                                    'fix_suggestion': failure_analysis.get('fix_suggestion', 'N/A'),
+                                    'severity': failure_analysis.get('severity', 'unknown')
+                                }
+                        
+                        # Find best bitrate and quality metrics
+                        metrics = e.get('real_metrics', {})
+                        bitrate = metrics.get('bitrate_mbps')
+                        if bitrate:
+                            if exp_data['best_bitrate'] is None or bitrate < exp_data['best_bitrate']:
+                                exp_data['best_bitrate'] = float(bitrate)
+                                # Also extract quality metrics from the best performing experiment
+                                exp_data['psnr_db'] = float(metrics.get('psnr_db')) if metrics.get('psnr_db') else None
+                                exp_data['ssim'] = float(metrics.get('ssim')) if metrics.get('ssim') else None
+                                exp_data['quality'] = metrics.get('quality')
+                                # Extract media artifacts (video and decoder code)
+                                exp_data['video_url'] = e.get('video_url')
+                                exp_data['decoder_s3_key'] = e.get('decoder_s3_key')
             except Exception as e:
                 logger.error(f"Error parsing experiment {exp_data['id']}: {e}")
             
@@ -1095,6 +1170,7 @@ def handle_command(command, params=None):
         'pause_autonomous': pause_autonomous_command,
         'resume_autonomous': resume_autonomous_command,
         'rerun_experiment': rerun_experiment_command,
+        'set_auto_execution': set_auto_execution_command,
     }
     
     handler = command_map.get(command.lower())
@@ -1104,7 +1180,12 @@ def handle_command(command, params=None):
             if params and 'experiment_id' in params:
                 return handler(params['experiment_id'])
             else:
-                return {"success": False, "message": "experiment_id parameter required for rerun_experiment"}
+                return {"success": False, "message": "experiment_id required for rerun_experiment"}
+        elif command.lower() == 'set_auto_execution':
+            if params and 'enabled' in params:
+                return handler(params['enabled'])
+            else:
+                return {"success": False, "message": "enabled (true/false) required for set_auto_execution"}
         else:
             return handler()
     else:
@@ -1223,6 +1304,9 @@ def lambda_handler(event, context):
         elif path == '/admin/command' and method == 'POST':
             command = body.get('command', '')
             response_body = handle_command(command, body)
+        
+        elif path == '/admin/auto-execution' and method == 'GET':
+            response_body = get_auto_execution_status()
         
         elif path == '/admin/execute' and method == 'POST':
             command = body.get('command', '')
