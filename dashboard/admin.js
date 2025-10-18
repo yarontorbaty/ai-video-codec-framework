@@ -214,7 +214,7 @@ function loadAdminInterface() {
                 </div>
             </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 30px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin: 30px 0;">
                 <button onclick="executeCommand('start_experiment')" style="padding: 18px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 2px solid #34d399; border-radius: 12px; color: white; font-weight: 700; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: transform 0.2s;">
                     <i class="fas fa-play"></i> Start Experiment
                 </button>
@@ -223,6 +223,9 @@ function loadAdminInterface() {
                 </button>
                 <button onclick="executeCommand('pause_autonomous')" style="padding: 18px; background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); border: 2px solid #fbbf24; border-radius: 12px; color: white; font-weight: 700; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: transform 0.2s;">
                     <i class="fas fa-pause"></i> Pause Autonomous
+                </button>
+                <button onclick="purgeAllExperiments()" style="padding: 18px; background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%); border: 2px solid #dc2626; border-radius: 12px; color: white; font-weight: 700; cursor: pointer; font-size: 1.1em; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: transform 0.2s;">
+                    <i class="fas fa-trash-alt"></i> Purge All
                 </button>
             </div>
             
@@ -818,6 +821,10 @@ function renderExperimentsTable(experiments) {
                             style="padding: 8px 12px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 1px solid #34d399; border-radius: 6px; color: white; cursor: pointer; margin: 0 4px; font-size: 0.85em; font-weight: 600;">
                         <i class="fas fa-redo"></i> Rerun
                     </button>
+                    <button onclick="purgeExperiment('${exp.id}')" 
+                            style="padding: 8px 12px; background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%); border: 1px solid #dc2626; border-radius: 6px; color: white; cursor: pointer; margin: 0 4px; font-size: 0.85em; font-weight: 600;">
+                        <i class="fas fa-trash"></i> Purge
+                    </button>
                 </td>
             </tr>
         `;
@@ -1249,6 +1256,106 @@ async function toggleAutoExecution(enabled) {
         // Revert toggle
         document.getElementById('autoExecToggle').checked = !enabled;
         updateAutoExecStatusText(!enabled);
+    }
+}
+
+async function purgeExperiment(experimentId) {
+    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to purge experiment ${experimentId}?\n\nThis will delete:\n- Experiment data\n- All metrics\n- LLM reasoning\n- This action CANNOT be undone!`)) {
+        return;
+    }
+    
+    const statusDiv = document.getElementById('commandStatus');
+    try {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#7c2d12';
+        statusDiv.style.color = '#ffffff';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Purging experiment ${experimentId}...`;
+        
+        const response = await fetch(`${API_BASE}/admin/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('admin_token') || ''
+            },
+            body: JSON.stringify({
+                command: 'purge_experiment',
+                experiment_id: experimentId
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusDiv.style.background = '#065f46';
+            statusDiv.style.borderColor = '#10b981';
+            statusDiv.innerHTML = `<i class="fas fa-check"></i> ${result.message}`;
+            
+            // Reload experiments after 1 second
+            setTimeout(() => {
+                loadExperiments();
+                statusDiv.style.display = 'none';
+            }, 1500);
+        } else {
+            throw new Error(result.message || 'Failed to purge experiment');
+        }
+    } catch (error) {
+        statusDiv.style.background = '#991b1b';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+    }
+}
+
+async function purgeAllExperiments() {
+    if (!confirm(`🚨 CRITICAL WARNING 🚨\n\nAre you ABSOLUTELY SURE you want to PURGE ALL EXPERIMENTS?\n\nThis will DELETE EVERYTHING:\n✗ All experiment data\n✗ All metrics\n✗ All LLM reasoning\n✗ All historical records\n\n⚠️ THIS CANNOT BE UNDONE! ⚠️\n\nType 'yes' in the next dialog to confirm.`)) {
+        return;
+    }
+    
+    const confirmation = prompt('Type "DELETE ALL" to confirm purging all experiments:');
+    if (confirmation !== 'DELETE ALL') {
+        alert('Purge cancelled - confirmation text did not match.');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('commandStatus');
+    try {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#7c2d12';
+        statusDiv.style.color = '#ffffff';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Purging ALL experiments... This may take a moment...`;
+        
+        const response = await fetch(`${API_BASE}/admin/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('admin_token') || ''
+            },
+            body: JSON.stringify({
+                command: 'purge_all_experiments'
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusDiv.style.background = '#065f46';
+            statusDiv.style.borderColor = '#10b981';
+            statusDiv.innerHTML = `<i class="fas fa-check"></i> ${result.message}`;
+            
+            // Reload everything after 2 seconds
+            setTimeout(() => {
+                loadSystemStatus();
+                loadExperiments();
+                statusDiv.style.display = 'none';
+            }, 2000);
+        } else {
+            throw new Error(result.message || 'Failed to purge all experiments');
+        }
+    } catch (error) {
+        statusDiv.style.background = '#991b1b';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
     }
 }
 

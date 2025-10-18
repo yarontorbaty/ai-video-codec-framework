@@ -991,6 +991,121 @@ def get_auto_execution_status():
         return {"success": False, "message": str(e)}
 
 
+def purge_experiment_command(experiment_id):
+    """Delete a specific experiment from all tables."""
+    try:
+        deleted_counts = {}
+        
+        # Delete from experiments table
+        try:
+            experiments_table.delete_item(
+                Key={'experiment_id': experiment_id}
+            )
+            deleted_counts['experiments'] = 1
+            logger.info(f"Deleted experiment {experiment_id} from experiments table")
+        except Exception as e:
+            logger.warning(f"Error deleting from experiments table: {e}")
+            deleted_counts['experiments'] = 0
+        
+        # Delete from reasoning table
+        try:
+            reasoning_table = dynamodb.Table('ai-video-codec-reasoning')
+            reasoning_table.delete_item(
+                Key={'reasoning_id': experiment_id}
+            )
+            deleted_counts['reasoning'] = 1
+            logger.info(f"Deleted reasoning for {experiment_id}")
+        except Exception as e:
+            logger.warning(f"Error deleting from reasoning table: {e}")
+            deleted_counts['reasoning'] = 0
+        
+        # Delete from metrics table (may have multiple entries)
+        try:
+            metrics_table = dynamodb.Table('ai-video-codec-metrics')
+            # Query for all metrics with this experiment_id
+            response = metrics_table.query(
+                KeyConditionExpression='experiment_id = :id',
+                ExpressionAttributeValues={':id': experiment_id}
+            )
+            items = response.get('Items', [])
+            deleted_count = 0
+            with metrics_table.batch_writer() as batch:
+                for item in items:
+                    batch.delete_item(Key={
+                        'experiment_id': item['experiment_id'],
+                        'timestamp': item['timestamp']
+                    })
+                    deleted_count += 1
+            deleted_counts['metrics'] = deleted_count
+            logger.info(f"Deleted {deleted_count} metrics for {experiment_id}")
+        except Exception as e:
+            logger.warning(f"Error deleting from metrics table: {e}")
+            deleted_counts['metrics'] = 0
+        
+        total_deleted = sum(deleted_counts.values())
+        return {
+            "success": True,
+            "message": f"Purged experiment {experiment_id} ({total_deleted} records deleted)",
+            "deleted_counts": deleted_counts
+        }
+    
+    except Exception as e:
+        logger.error(f"Error purging experiment {experiment_id}: {e}")
+        return {"success": False, "message": str(e)}
+
+
+def purge_all_experiments_command():
+    """Delete all experiments from all tables."""
+    try:
+        tables_to_purge = [
+            ('ai-video-codec-experiments', ['experiment_id']),
+            ('ai-video-codec-reasoning', ['reasoning_id']),
+            ('ai-video-codec-metrics', ['experiment_id', 'timestamp'])
+        ]
+        
+        total_deleted = 0
+        deleted_by_table = {}
+        
+        for table_name, key_names in tables_to_purge:
+            try:
+                table = dynamodb.Table(table_name)
+                
+                # Scan all items
+                response = table.scan()
+                items = response.get('Items', [])
+                
+                if not items:
+                    deleted_by_table[table_name] = 0
+                    continue
+                
+                # Batch delete
+                deleted = 0
+                with table.batch_writer() as batch:
+                    for item in items:
+                        key = {k: item[k] for k in key_names if k in item}
+                        batch.delete_item(Key=key)
+                        deleted += 1
+                
+                deleted_by_table[table_name] = deleted
+                total_deleted += deleted
+                logger.info(f"Purged {deleted} items from {table_name}")
+                
+            except Exception as e:
+                logger.error(f"Error purging {table_name}: {e}")
+                deleted_by_table[table_name] = 0
+        
+        return {
+            "success": True,
+            "message": f"Purged all experiments ({total_deleted} total records deleted)",
+            "deleted_by_table": deleted_by_table,
+            "total_deleted": total_deleted
+        }
+    
+    except Exception as e:
+        logger.error(f"Error purging all experiments: {e}")
+        return {"success": False, "message": str(e)}
+
+
 def get_experiments_list():
     """Get list of recent experiments with details."""
     try:
@@ -1171,6 +1286,8 @@ def handle_command(command, params=None):
         'resume_autonomous': resume_autonomous_command,
         'rerun_experiment': rerun_experiment_command,
         'set_auto_execution': set_auto_execution_command,
+        'purge_experiment': purge_experiment_command,
+        'purge_all_experiments': purge_all_experiments_command,
     }
     
     handler = command_map.get(command.lower())
@@ -1186,6 +1303,11 @@ def handle_command(command, params=None):
                 return handler(params['enabled'])
             else:
                 return {"success": False, "message": "enabled (true/false) required for set_auto_execution"}
+        elif command.lower() == 'purge_experiment':
+            if params and 'experiment_id' in params:
+                return handler(params['experiment_id'])
+            else:
+                return {"success": False, "message": "experiment_id required for purge_experiment"}
         else:
             return handler()
     else:
