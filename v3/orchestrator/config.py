@@ -21,7 +21,7 @@ class Config:
         self.dynamodb_table = os.getenv('DYNAMODB_TABLE', 'ai-codec-v3-experiments')
         
         # Worker Configuration
-        self.worker_url = os.getenv('WORKER_URL', 'http://10.0.2.10:8080')
+        self.worker_url = os.getenv('WORKER_URL', 'http://172.31.73.149:8080')
         
         # Orchestrator Configuration
         self.max_iterations = int(os.getenv('MAX_ITERATIONS', '100'))

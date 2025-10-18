@@ -65,12 +65,13 @@ class ExperimentManager:
             response.raise_for_status()
             result = response.json()
             
-            # Store in DynamoDB
+            # Store in DynamoDB (this replaces the in_progress record)
             self._store_result(
                 experiment_id=experiment_id,
                 result=result,
                 iteration=iteration,
-                llm_reasoning=llm_reasoning
+                llm_reasoning=llm_reasoning,
+                timestamp=timestamp  # Use same timestamp to replace in_progress record
             )
             
             experiment_result = result.get('result', {})
@@ -82,12 +83,12 @@ class ExperimentManager:
             
         except requests.exceptions.Timeout:
             logger.error(f"❌ Worker timeout after 5 minutes")
-            self._store_failed(experiment_id, "Worker timeout", iteration)
+            self._store_failed(experiment_id, "Worker timeout", iteration, timestamp)
             return {'status': 'failed', 'error': 'Worker timeout'}
             
         except Exception as e:
             logger.error(f"❌ Experiment error: {e}", exc_info=True)
-            self._store_failed(experiment_id, str(e), iteration)
+            self._store_failed(experiment_id, str(e), iteration, timestamp)
             return {'status': 'failed', 'error': str(e)}
     
     def _store_in_progress(self, experiment_id: str, iteration: int, timestamp: int):
@@ -114,9 +115,10 @@ class ExperimentManager:
         experiment_id: str,
         result: Dict,
         iteration: int,
-        llm_reasoning: str
+        llm_reasoning: str,
+        timestamp: int
     ):
-        """Store experiment result in DynamoDB"""
+        """Store experiment result in DynamoDB (replaces in_progress record)"""
         try:
             experiment_result = result.get('result', {})
             metrics = experiment_result.get('metrics', {})
@@ -124,7 +126,7 @@ class ExperimentManager:
             # Convert floats to Decimal for DynamoDB
             item = {
                 'experiment_id': experiment_id,
-                'timestamp': result.get('timestamp', int(time.time())),
+                'timestamp': timestamp,  # Use same timestamp to replace in_progress record
                 'iteration': iteration,
                 'status': experiment_result.get('status', 'unknown'),
                 'metrics': {
@@ -149,12 +151,12 @@ class ExperimentManager:
         except Exception as e:
             logger.error(f"❌ DynamoDB storage error: {e}", exc_info=True)
     
-    def _store_failed(self, experiment_id: str, error: str, iteration: int):
-        """Store failed experiment"""
+    def _store_failed(self, experiment_id: str, error: str, iteration: int, timestamp: int):
+        """Store failed experiment (replaces in_progress record)"""
         try:
             item = {
                 'experiment_id': experiment_id,
-                'timestamp': int(time.time()),
+                'timestamp': timestamp,  # Use same timestamp to replace in_progress record
                 'iteration': iteration,
                 'status': 'failed',
                 'error': error,
