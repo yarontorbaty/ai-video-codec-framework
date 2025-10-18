@@ -1,0 +1,4 @@
+anthropic==0.34.2
+boto3==1.28.85
+requests==2.31.0
+
