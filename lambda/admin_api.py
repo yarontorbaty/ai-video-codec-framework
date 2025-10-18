@@ -1106,6 +1106,173 @@ def purge_all_experiments_command():
         return {"success": False, "message": str(e)}
 
 
+def get_orchestrator_health():
+    """Get orchestrator instance and service health status."""
+    try:
+        ec2 = boto3.client('ec2', region_name='us-east-1')
+        
+        # Get instance status
+        try:
+            response = ec2.describe_instances(InstanceIds=[ORCHESTRATOR_INSTANCE_ID])
+            if not response['Reservations']:
+                return {"success": False, "message": "Orchestrator instance not found"}
+            
+            instance = response['Reservations'][0]['Instances'][0]
+            instance_state = instance['State']['Name']
+            
+            # Get instance status checks
+            status_response = ec2.describe_instance_status(InstanceIds=[ORCHESTRATOR_INSTANCE_ID])
+            status_checks = {}
+            if status_response['InstanceStatuses']:
+                status = status_response['InstanceStatuses'][0]
+                status_checks = {
+                    'system_status': status['SystemStatus']['Status'],
+                    'instance_status': status['InstanceStatus']['Status']
+                }
+            
+        except Exception as e:
+            logger.error(f"Error getting instance status: {e}")
+            return {"success": False, "message": f"Failed to get instance status: {str(e)}"}
+        
+        # Get service status and system metrics via SSM
+        service_status = "unknown"
+        system_metrics = {}
+        
+        if instance_state == 'running':
+            try:
+                cmd_response = ssm.send_command(
+                    InstanceIds=[ORCHESTRATOR_INSTANCE_ID],
+                    DocumentName='AWS-RunShellScript',
+                    Parameters={
+                        'commands': [
+                            'ps aux | grep -E "autonomous_orchestrator_llm.sh" | grep -v grep > /dev/null && echo "running" || echo "stopped"',
+                            'free -m | awk \'NR==2{printf "%.1f", $3*100/$2}\'',
+                            'top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk \'{print 100 - $1}\'',
+                            'df -h /home | awk \'NR==2{print $5}\' | tr -d \'%\'',
+                            'uptime | awk -F\'load average:\' \'{print $2}\' | awk \'{print $1}\' | tr -d \',\''
+                        ]
+                    },
+                    TimeoutSeconds=10
+                )
+                
+                # Wait for command to complete
+                import time
+                time.sleep(2)
+                
+                cmd_id = cmd_response['Command']['CommandId']
+                invocation = ssm.get_command_invocation(
+                    CommandId=cmd_id,
+                    InstanceId=ORCHESTRATOR_INSTANCE_ID
+                )
+                
+                if invocation['Status'] == 'Success':
+                    output_lines = invocation['StandardOutputContent'].strip().split('\n')
+                    if len(output_lines) >= 5:
+                        service_status = output_lines[0]
+                        system_metrics = {
+                            'memory_percent': float(output_lines[1]),
+                            'cpu_percent': float(output_lines[2]),
+                            'disk_percent': float(output_lines[3]),
+                            'load_average': float(output_lines[4])
+                        }
+                
+            except Exception as e:
+                logger.warning(f"Error getting service status: {e}")
+                service_status = "unknown"
+        
+        return {
+            "success": True,
+            "instance_state": instance_state,
+            "instance_id": ORCHESTRATOR_INSTANCE_ID,
+            "status_checks": status_checks,
+            "service_status": service_status,
+            "system_metrics": system_metrics,
+            "private_ip": instance.get('PrivateIpAddress', 'N/A'),
+            "launch_time": instance['LaunchTime'].isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting orchestrator health: {e}")
+        return {"success": False, "message": str(e)}
+
+
+def control_orchestrator_service(action):
+    """Control the orchestrator service (start/stop/restart)."""
+    try:
+        commands = {
+            'start': [
+                'cd /home/ec2-user/ai-video-codec',
+                'nohup bash scripts/autonomous_orchestrator_llm.sh > /tmp/orch.log 2>&1 &',
+                'sleep 2',
+                'ps aux | grep autonomous_orchestrator_llm.sh | grep -v grep && echo "Service started" || echo "Failed to start"'
+            ],
+            'stop': [
+                'pkill -f "autonomous_orchestrator_llm.sh"',
+                'pkill -f "procedural_experiment_runner.py"',
+                'sleep 1',
+                'ps aux | grep -E "autonomous_orchestrator|procedural_experiment_runner" | grep -v grep || echo "Service stopped"'
+            ],
+            'restart': [
+                'pkill -f "autonomous_orchestrator_llm.sh"',
+                'pkill -f "procedural_experiment_runner.py"',
+                'sleep 2',
+                'cd /home/ec2-user/ai-video-codec',
+                'nohup bash scripts/autonomous_orchestrator_llm.sh > /tmp/orch.log 2>&1 &',
+                'sleep 2',
+                'ps aux | grep autonomous_orchestrator_llm.sh | grep -v grep && echo "Service restarted" || echo "Failed to restart"'
+            ]
+        }
+        
+        if action not in commands:
+            return {"success": False, "message": f"Invalid action: {action}"}
+        
+        response = ssm.send_command(
+            InstanceIds=[ORCHESTRATOR_INSTANCE_ID],
+            DocumentName='AWS-RunShellScript',
+            Parameters={'commands': commands[action]},
+            TimeoutSeconds=30,
+            Comment=f'{action.capitalize()} orchestrator service'
+        )
+        
+        return {
+            "success": True,
+            "message": f"Service {action} command sent",
+            "command_id": response['Command']['CommandId']
+        }
+        
+    except Exception as e:
+        logger.error(f"Error controlling orchestrator service: {e}")
+        return {"success": False, "message": str(e)}
+
+
+def control_orchestrator_instance(action):
+    """Control the orchestrator EC2 instance (start/stop/reboot)."""
+    try:
+        ec2 = boto3.client('ec2', region_name='us-east-1')
+        
+        if action == 'start':
+            ec2.start_instances(InstanceIds=[ORCHESTRATOR_INSTANCE_ID])
+            message = "Instance start initiated"
+        elif action == 'stop':
+            ec2.stop_instances(InstanceIds=[ORCHESTRATOR_INSTANCE_ID])
+            message = "Instance stop initiated"
+        elif action == 'reboot':
+            ec2.reboot_instances(InstanceIds=[ORCHESTRATOR_INSTANCE_ID])
+            message = "Instance reboot initiated"
+        else:
+            return {"success": False, "message": f"Invalid action: {action}"}
+        
+        return {
+            "success": True,
+            "message": message,
+            "instance_id": ORCHESTRATOR_INSTANCE_ID
+        }
+        
+    except Exception as e:
+        logger.error(f"Error controlling orchestrator instance: {e}")
+        return {"success": False, "message": str(e)}
+
+
 def get_experiments_list():
     """Get list of recent experiments with details."""
     try:
@@ -1288,6 +1455,8 @@ def handle_command(command, params=None):
         'set_auto_execution': set_auto_execution_command,
         'purge_experiment': purge_experiment_command,
         'purge_all_experiments': purge_all_experiments_command,
+        'orchestrator_service': control_orchestrator_service,
+        'orchestrator_instance': control_orchestrator_instance,
     }
     
     handler = command_map.get(command.lower())
@@ -1308,6 +1477,11 @@ def handle_command(command, params=None):
                 return handler(params['experiment_id'])
             else:
                 return {"success": False, "message": "experiment_id required for purge_experiment"}
+        elif command.lower() in ['orchestrator_service', 'orchestrator_instance']:
+            if params and 'action' in params:
+                return handler(params['action'])
+            else:
+                return {"success": False, "message": f"action required for {command}"}
         else:
             return handler()
     else:
@@ -1429,6 +1603,9 @@ def lambda_handler(event, context):
         
         elif path == '/admin/auto-execution' and method == 'GET':
             response_body = get_auto_execution_status()
+        
+        elif path == '/admin/orchestrator-health' and method == 'GET':
+            response_body = get_orchestrator_health()
         
         elif path == '/admin/execute' and method == 'POST':
             command = body.get('command', '')

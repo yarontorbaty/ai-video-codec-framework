@@ -252,6 +252,63 @@ function loadAdminInterface() {
                 </div>
             </div>
             
+            <!-- Orchestrator Health Monitoring -->
+            <div style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%); border-radius: 16px; padding: 25px; margin-top: 30px; border: 2px solid #475569; box-shadow: 0 8px 16px rgba(0,0,0,0.3);">
+                <h3 style="margin: 0 0 20px 0; color: #f1f5f9; font-size: 1.3em;">
+                    <i class="fas fa-heartbeat" style="color: #60a5fa;"></i> Orchestrator Health
+                </h3>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px; border: 2px solid #475569;">
+                        <div style="color: #94a3b8; font-size: 0.85em; margin-bottom: 5px;">EC2 Instance</div>
+                        <div id="instanceState" style="font-size: 1.2em; font-weight: 700; color: #f1f5f9;">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px; border: 2px solid #475569;">
+                        <div style="color: #94a3b8; font-size: 0.85em; margin-bottom: 5px;">Service Status</div>
+                        <div id="serviceStatus" style="font-size: 1.2em; font-weight: 700; color: #f1f5f9;">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px; border: 2px solid #475569;">
+                        <div style="color: #94a3b8; font-size: 0.85em; margin-bottom: 5px;">CPU Usage</div>
+                        <div id="cpuUsage" style="font-size: 1.2em; font-weight: 700; color: #f1f5f9;">-</div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px; border: 2px solid #475569;">
+                        <div style="color: #94a3b8; font-size: 0.85em; margin-bottom: 5px;">Memory Usage</div>
+                        <div id="memoryUsage" style="font-size: 1.2em; font-weight: 700; color: #f1f5f9;">-</div>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <button onclick="controlService('start')" style="padding: 12px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: 2px solid #34d399; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 0.95em;">
+                        <i class="fas fa-play"></i> Start Service
+                    </button>
+                    <button onclick="controlService('restart')" style="padding: 12px; background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%); border: 2px solid #fbbf24; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 0.95em;">
+                        <i class="fas fa-redo"></i> Restart Service
+                    </button>
+                    <button onclick="controlService('stop')" style="padding: 12px; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); border: 2px solid #f87171; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 0.95em;">
+                        <i class="fas fa-stop"></i> Stop Service
+                    </button>
+                </div>
+                
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #475569;">
+                    <div style="color: #94a3b8; font-size: 0.85em; margin-bottom: 8px;">EC2 Instance Controls (Use with caution)</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                        <button onclick="controlInstance('start')" style="padding: 10px; background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); border: 1px solid #60a5fa; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; font-size: 0.9em;">
+                            <i class="fas fa-power-off"></i> Start Instance
+                        </button>
+                        <button onclick="controlInstance('reboot')" style="padding: 10px; background: linear-gradient(135deg, #7c2d12 0%, #ea580c 100%); border: 1px solid #f97316; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; font-size: 0.9em;">
+                            <i class="fas fa-sync"></i> Reboot Instance
+                        </button>
+                        <button onclick="controlInstance('stop')" style="padding: 10px; background: linear-gradient(135deg, #7c2d12 0%, #991b1b 100%); border: 1px solid #dc2626; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; font-size: 0.9em;">
+                            <i class="fas fa-power-off"></i> Stop Instance
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
             <div id="commandStatus" style="margin: 20px 0; padding: 18px; border-radius: 12px; display: none; font-size: 1.1em; font-weight: 600; border: 2px solid;"></div>
             
             <!-- Experiments Table -->
@@ -357,8 +414,10 @@ function loadAdminInterface() {
     loadChatHistory();
     loadExperiments();
     loadAutoExecutionStatus();
+    loadOrchestratorHealth();
     setInterval(loadSystemStatus, 30000); // Update every 30 seconds
     setInterval(loadExperiments, 30000); // Update experiments every 30 seconds
+    setInterval(loadOrchestratorHealth, 15000); // Update health every 15 seconds
 }
 
 async function loadSystemStatus() {
@@ -1351,6 +1410,173 @@ async function purgeAllExperiments() {
             }, 2000);
         } else {
             throw new Error(result.message || 'Failed to purge all experiments');
+        }
+    } catch (error) {
+        statusDiv.style.background = '#991b1b';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+    }
+}
+
+async function loadOrchestratorHealth() {
+    try {
+        const response = await fetch(`${API_BASE}/admin/orchestrator-health`, {
+            headers: {
+                'Authorization': localStorage.getItem('admin_token') || ''
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update instance state
+            const instanceStateEl = document.getElementById('instanceState');
+            const state = data.instance_state;
+            let stateColor = '#94a3b8';
+            let stateIcon = 'fa-circle';
+            
+            if (state === 'running') {
+                stateColor = '#10b981';
+                stateIcon = 'fa-check-circle';
+            } else if (state === 'stopped') {
+                stateColor = '#dc2626';
+                stateIcon = 'fa-times-circle';
+            } else if (state === 'pending' || state === 'stopping') {
+                stateColor = '#f59e0b';
+                stateIcon = 'fa-spinner fa-spin';
+            }
+            
+            instanceStateEl.innerHTML = `<i class="fas ${stateIcon}" style="color: ${stateColor};"></i> ${state}`;
+            
+            // Update service status
+            const serviceStatusEl = document.getElementById('serviceStatus');
+            const serviceState = data.service_status;
+            let serviceColor = '#94a3b8';
+            let serviceIcon = 'fa-question-circle';
+            
+            if (serviceState === 'running') {
+                serviceColor = '#10b981';
+                serviceIcon = 'fa-play-circle';
+            } else if (serviceState === 'stopped') {
+                serviceColor = '#dc2626';
+                serviceIcon = 'fa-stop-circle';
+            }
+            
+            serviceStatusEl.innerHTML = `<i class="fas ${serviceIcon}" style="color: ${serviceColor};"></i> ${serviceState}`;
+            
+            // Update system metrics
+            const metrics = data.system_metrics;
+            if (metrics && Object.keys(metrics).length > 0) {
+                const cpuEl = document.getElementById('cpuUsage');
+                const cpuPercent = metrics.cpu_percent;
+                let cpuColor = '#10b981';
+                if (cpuPercent > 80) cpuColor = '#dc2626';
+                else if (cpuPercent > 60) cpuColor = '#f59e0b';
+                cpuEl.innerHTML = `<span style="color: ${cpuColor};">${cpuPercent.toFixed(1)}%</span>`;
+                
+                const memEl = document.getElementById('memoryUsage');
+                const memPercent = metrics.memory_percent;
+                let memColor = '#10b981';
+                if (memPercent > 80) memColor = '#dc2626';
+                else if (memPercent > 60) memColor = '#f59e0b';
+                memEl.innerHTML = `<span style="color: ${memColor};">${memPercent.toFixed(1)}%</span>`;
+            }
+        } else {
+            document.getElementById('instanceState').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+            document.getElementById('serviceStatus').innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+        }
+    } catch (error) {
+        console.error('Error loading orchestrator health:', error);
+    }
+}
+
+async function controlService(action) {
+    const confirmMsg = `Are you sure you want to ${action} the orchestrator service?`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    const statusDiv = document.getElementById('commandStatus');
+    try {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#1e40af';
+        statusDiv.style.color = '#ffffff';
+        statusDiv.style.borderColor = '#3b82f6';
+        statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${action}ing orchestrator service...`;
+        
+        const response = await fetch(`${API_BASE}/admin/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('admin_token') || ''
+            },
+            body: JSON.stringify({
+                command: 'orchestrator_service',
+                action: action
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusDiv.style.background = '#065f46';
+            statusDiv.style.borderColor = '#10b981';
+            statusDiv.innerHTML = `<i class="fas fa-check"></i> ${result.message}`;
+            
+            // Reload health after 3 seconds
+            setTimeout(() => {
+                loadOrchestratorHealth();
+                statusDiv.style.display = 'none';
+            }, 3000);
+        } else {
+            throw new Error(result.message || `Failed to ${action} service`);
+        }
+    } catch (error) {
+        statusDiv.style.background = '#991b1b';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${error.message}`;
+    }
+}
+
+async function controlInstance(action) {
+    const confirmMsg = `⚠️ WARNING ⚠️\n\nAre you sure you want to ${action} the EC2 instance?\n\nThis will affect the orchestrator and any running experiments.`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    const statusDiv = document.getElementById('commandStatus');
+    try {
+        statusDiv.style.display = 'block';
+        statusDiv.style.background = '#7c2d12';
+        statusDiv.style.color = '#ffffff';
+        statusDiv.style.borderColor = '#dc2626';
+        statusDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${action}ing EC2 instance...`;
+        
+        const response = await fetch(`${API_BASE}/admin/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('admin_token') || ''
+            },
+            body: JSON.stringify({
+                command: 'orchestrator_instance',
+                action: action
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            statusDiv.style.background = '#065f46';
+            statusDiv.style.borderColor = '#10b981';
+            statusDiv.innerHTML = `<i class="fas fa-check"></i> ${result.message}`;
+            
+            // Reload health after 5 seconds
+            setTimeout(() => {
+                loadOrchestratorHealth();
+                statusDiv.style.display = 'none';
+            }, 5000);
+        } else {
+            throw new Error(result.message || `Failed to ${action} instance`);
         }
     } catch (error) {
         statusDiv.style.background = '#991b1b';
