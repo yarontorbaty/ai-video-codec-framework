@@ -772,10 +772,12 @@ def render_dashboard():
                 document.getElementById('in-progress-count').textContent = data.in_progress.length;
                 document.getElementById('failed-count').textContent = data.failed.length;
                 
-                // Check if we need to reload entire page (new successful experiments)
+                // Check if we need to reload entire page (new successful or failed experiments)
                 const currentSuccessful = document.querySelectorAll('#successful tbody tr').length;
-                if (data.successful.length !== currentSuccessful) {{
-                    // Reload page to update all sections (LLM summary, best results, etc.)
+                const currentFailed = document.querySelectorAll('#failed tbody tr').length;
+                
+                if (data.successful.length !== currentSuccessful || data.failed.length !== currentFailed) {{
+                    // Reload page to update all sections (LLM summary, best results, failed list, etc.)
                     location.reload();
                     return;
                 }}
