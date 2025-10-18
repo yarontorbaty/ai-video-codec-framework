@@ -945,7 +945,7 @@ async function rerunExperiment(experimentId) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             },
             body: JSON.stringify({
                 command: 'rerun_experiment',
@@ -1244,7 +1244,7 @@ async function loadAutoExecutionStatus() {
     try {
         const response = await fetch(`${API_BASE}/admin/auto-execution`, {
             headers: {
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             }
         });
         const data = await response.json();
@@ -1289,7 +1289,7 @@ async function toggleAutoExecution(enabled) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             },
             body: JSON.stringify({
                 command: 'set_auto_execution',
@@ -1335,7 +1335,7 @@ async function purgeExperiment(experimentId) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             },
             body: JSON.stringify({
                 command: 'purge_experiment',
@@ -1388,7 +1388,7 @@ async function purgeAllExperiments() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             },
             body: JSON.stringify({
                 command: 'purge_all_experiments'
@@ -1422,7 +1422,7 @@ async function loadOrchestratorHealth() {
     try {
         const response = await fetch(`${API_BASE}/admin/orchestrator-health`, {
             headers: {
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             }
         });
         const data = await response.json();
@@ -1507,7 +1507,7 @@ async function controlService(action) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             },
             body: JSON.stringify({
                 command: 'orchestrator_service',
@@ -1555,7 +1555,7 @@ async function controlInstance(action) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': localStorage.getItem('admin_token') || ''
+                'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
             },
             body: JSON.stringify({
                 command: 'orchestrator_instance',
