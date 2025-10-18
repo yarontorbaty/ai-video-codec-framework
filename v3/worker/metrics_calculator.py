@@ -17,10 +17,12 @@ logger = logging.getLogger(__name__)
 class MetricsCalculator:
     """Calculate video compression quality metrics"""
     
-    # HEVC Baseline (10Mbps, measured once)
-    HEVC_SIZE_BYTES = 12_729_475
+    # HEVC Baseline (10Mbps, measured Oct 18 2025)
+    HEVC_SIZE_BYTES = 12_729_475  # 12.14 MB
     HEVC_BITRATE_MBPS = 10.18
-    # HEVC PSNR/SSIM vs source will be calculated on first run
+    HEVC_PSNR_DB = 27.82  # vs SOURCE (measured)
+    HEVC_SSIM = 0.6826  # vs SOURCE (measured)
+    # ^ THIS IS OUR THRESHOLD TO BEAT!
     
     def calculate_metrics(
         self,
@@ -70,8 +72,8 @@ class MetricsCalculator:
             ssim_score = self._calculate_ssim(source_path, reconstructed_path)
             
             logger.info(f"📊 Metrics calculated (vs SOURCE):")
-            logger.info(f"   PSNR: {psnr_db:.2f} dB (HEVC baseline: ~35-40 dB)")
-            logger.info(f"   SSIM: {ssim_score:.3f} (HEVC baseline: ~0.95)")
+            logger.info(f"   PSNR: {psnr_db:.2f} dB (HEVC: {self.HEVC_PSNR_DB:.2f} dB)")
+            logger.info(f"   SSIM: {ssim_score:.3f} (HEVC: {self.HEVC_SSIM:.4f})")
             logger.info(f"   Bitrate: {bitrate_mbps:.2f} Mbps (HEVC: {self.HEVC_BITRATE_MBPS} Mbps)")
             logger.info(f"   Compression vs source: {compression_ratio:.1f}x")
             logger.info(f"   Size vs HEVC: {compression_vs_hevc:.2f}x ({'better' if compression_vs_hevc > 1 else 'worse'})")
@@ -86,6 +88,8 @@ class MetricsCalculator:
                 'compression_vs_hevc': round(compression_vs_hevc, 2),
                 'source_size_bytes': source_size,
                 'compressed_size_bytes': compressed_size,
+                'hevc_baseline_psnr': self.HEVC_PSNR_DB,
+                'hevc_baseline_ssim': self.HEVC_SSIM,
                 'hevc_baseline_bitrate': self.HEVC_BITRATE_MBPS,
                 'hevc_baseline_size': self.HEVC_SIZE_BYTES
             }
@@ -100,6 +104,8 @@ class MetricsCalculator:
                 'compression_vs_hevc': 0.0,
                 'source_size_bytes': 0,
                 'compressed_size_bytes': 0,
+                'hevc_baseline_psnr': self.HEVC_PSNR_DB,
+                'hevc_baseline_ssim': self.HEVC_SSIM,
                 'hevc_baseline_bitrate': self.HEVC_BITRATE_MBPS,
                 'hevc_baseline_size': self.HEVC_SIZE_BYTES
             }
