@@ -24,6 +24,10 @@ HEVC_VIDEO_KEY = 'reference/hevc_baseline.mp4'
 # Initialize S3 client
 s3 = boto3.client('s3', region_name='us-east-1')
 
+# Local cache directory for source video
+CACHE_DIR = '/home/ec2-user/worker/cache'
+CACHED_SOURCE_VIDEO = os.path.join(CACHE_DIR, 'source.mp4')
+
 # Test video configuration (fallback)
 TEST_VIDEO_WIDTH = 640
 TEST_VIDEO_HEIGHT = 480
@@ -36,6 +40,8 @@ class ExperimentRunner:
     
     def __init__(self):
         self.test_video_cache = None
+        # Ensure cache directory exists
+        os.makedirs(CACHE_DIR, exist_ok=True)
     
     def run_experiment(
         self,
@@ -142,16 +148,45 @@ class ExperimentRunner:
     
     def _create_test_video(self, output_path: str):
         """
-        Download source video from S3, or create test video as fallback
+        Use cached source video or download from S3 if not present/changed
+        
+        This avoids downloading 710MB on every experiment.
         """
+        import shutil
+        
         try:
-            # Try to download source video from S3
-            logger.info(f"📥 Downloading source video from S3...")
-            s3.download_file(S3_BUCKET, SOURCE_VIDEO_KEY, output_path)
-            logger.info(f"✅ Source video downloaded from S3")
+            # Check if we have a cached version
+            if os.path.exists(CACHED_SOURCE_VIDEO):
+                logger.info(f"📦 Found cached source video")
+                
+                # Check if S3 version has changed (compare ETag/size)
+                try:
+                    s3_metadata = s3.head_object(Bucket=S3_BUCKET, Key=SOURCE_VIDEO_KEY)
+                    s3_size = s3_metadata['ContentLength']
+                    local_size = os.path.getsize(CACHED_SOURCE_VIDEO)
+                    
+                    if s3_size == local_size:
+                        logger.info(f"✅ Using cached source video (size match: {s3_size} bytes)")
+                        shutil.copy(CACHED_SOURCE_VIDEO, output_path)
+                        return
+                    else:
+                        logger.info(f"📥 Source video changed (S3: {s3_size}, local: {local_size}), re-downloading...")
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not check S3 metadata: {e}, using cached version")
+                    shutil.copy(CACHED_SOURCE_VIDEO, output_path)
+                    return
+            
+            # Download from S3 and cache it
+            logger.info(f"📥 Downloading source video from S3 (710MB, first time only)...")
+            s3.download_file(S3_BUCKET, SOURCE_VIDEO_KEY, CACHED_SOURCE_VIDEO)
+            logger.info(f"✅ Source video downloaded and cached")
+            
+            # Copy to working directory
+            shutil.copy(CACHED_SOURCE_VIDEO, output_path)
             return
+            
         except Exception as e:
-            logger.warning(f"⚠️ Failed to download source video: {e}")
+            logger.warning(f"⚠️ Failed to download/cache source video: {e}")
             logger.info(f"📹 Creating fallback test video...")
         
         # Fallback: Create simple test video
