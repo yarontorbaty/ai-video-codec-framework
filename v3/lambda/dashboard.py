@@ -31,6 +31,9 @@ def lambda_handler(event, context):
     
     if path == '/' or path == '/dashboard':
         return render_dashboard()
+    elif path == '/api/experiments':
+        # API endpoint for real-time updates
+        return get_experiments_api()
     elif path.startswith('/blog/'):
         experiment_id = path.split('/')[-1]
         return render_blog_post(experiment_id)
@@ -39,6 +42,54 @@ def lambda_handler(event, context):
             'statusCode': 404,
             'headers': {'Content-Type': 'text/html'},
             'body': '<h1>404 Not Found</h1>'
+        }
+
+
+def get_experiments_api():
+    """API endpoint for real-time experiment updates"""
+    try:
+        # Get all experiments
+        table = dynamodb.Table(DYNAMODB_TABLE)
+        response = table.scan()
+        experiments = response.get('Items', [])
+        
+        # Sort by iteration
+        experiments.sort(key=lambda x: int(x.get('iteration', 0)), reverse=True)
+        
+        # Separate by status
+        successful = [e for e in experiments if e.get('status') == 'success']
+        in_progress = [e for e in experiments if e.get('status') == 'in_progress']
+        failed = [e for e in experiments if e.get('status') == 'failed']
+        
+        # Convert Decimal to float for JSON serialization
+        def convert_decimals(obj):
+            if isinstance(obj, Decimal):
+                return float(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_decimals(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_decimals(item) for item in obj]
+            return obj
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+            },
+            'body': json.dumps({
+                'successful': convert_decimals(successful),
+                'in_progress': convert_decimals(in_progress),
+                'failed': convert_decimals(failed),
+                'total': len(experiments)
+            })
+        }
+    except Exception as e:
+        print(f"Error in API: {e}")
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps({'error': str(e)})
         }
 
 
@@ -180,7 +231,7 @@ def generate_llm_summary(experiments):
 
 
 def render_dashboard():
-    """Render main dashboard page with dark theme"""
+    """Render main dashboard page with dark theme and real-time updates"""
     
     # Get all experiments
     table = dynamodb.Table(DYNAMODB_TABLE)
@@ -190,8 +241,9 @@ def render_dashboard():
     # Sort by iteration
     experiments.sort(key=lambda x: int(x.get('iteration', 0)), reverse=True)
     
-    # Separate successful and failed
+    # Separate by status
     successful = [e for e in experiments if e.get('status') == 'success']
+    in_progress = [e for e in experiments if e.get('status') == 'in_progress']
     failed = [e for e in experiments if e.get('status') == 'failed']
     
     # Generate LLM summary
@@ -675,15 +727,22 @@ def render_dashboard():
             <section id="experiments">
                 <div class="tabs">
                     <div class="tab active" data-tab="successful">
-                        <i class="fas fa-check-circle"></i> Successful ({len(successful)})
+                        <i class="fas fa-check-circle"></i> Successful (<span id="successful-count">{len(successful)}</span>)
+                    </div>
+                    <div class="tab" data-tab="in-progress">
+                        <i class="fas fa-spinner fa-spin"></i> In Progress (<span id="in-progress-count">{len(in_progress)}</span>)
                     </div>
                     <div class="tab" data-tab="failed">
-                        <i class="fas fa-times-circle"></i> Failed ({len(failed)})
+                        <i class="fas fa-times-circle"></i> Failed (<span id="failed-count">{len(failed)}</span>)
                     </div>
                 </div>
                 
                 <div id="successful" class="tab-content active">
                     {generate_successful_table(successful)}
+                </div>
+                
+                <div id="in-progress" class="tab-content">
+                    {generate_in_progress_table(in_progress)}
                 </div>
                 
                 <div id="failed" class="tab-content">
@@ -700,6 +759,66 @@ def render_dashboard():
     </div>
     
     <script>
+        // Real-time updates
+        let lastRefreshTime = Date.now();
+        
+        async function refreshExperiments() {{
+            try {{
+                const response = await fetch('/api/experiments');
+                const data = await response.json();
+                
+                // Update counts
+                document.getElementById('successful-count').textContent = data.successful.length;
+                document.getElementById('in-progress-count').textContent = data.in_progress.length;
+                document.getElementById('failed-count').textContent = data.failed.length;
+                
+                // Check if we need to reload entire page (new successful experiments)
+                const currentSuccessful = document.querySelectorAll('#successful tbody tr').length;
+                if (data.successful.length !== currentSuccessful) {{
+                    // Reload page to update all sections (LLM summary, best results, etc.)
+                    location.reload();
+                    return;
+                }}
+                
+                // Update in-progress table
+                updateInProgressTable(data.in_progress);
+                
+                lastRefreshTime = Date.now();
+            }} catch (err) {{
+                console.error('Failed to refresh experiments:', err);
+            }}
+        }}
+        
+        function updateInProgressTable(experiments) {{
+            const tableBody = document.querySelector('#in-progress tbody');
+            if (!tableBody) return;
+            
+            if (experiments.length === 0) {{
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #94a3b8;">No experiments in progress</td></tr>';
+                return;
+            }}
+            
+            tableBody.innerHTML = experiments.map(exp => {{
+                const iteration = exp.iteration || 'N/A';
+                const experimentId = exp.experiment_id || '';
+                const startedAt = exp.started_at ? new Date(exp.started_at).toLocaleString() : 'Just now';
+                const phase = exp.phase || 'Starting...';
+                
+                return `
+                    <tr>
+                        <td>${{iteration}}</td>
+                        <td>${{experimentId}}</td>
+                        <td><span class="badge" style="background: #fbbf24; color: #0f172a;"><i class="fas fa-spinner fa-spin"></i> ${{phase}}</span></td>
+                        <td>${{startedAt}}</td>
+                        <td><i class="fas fa-circle-notch fa-spin" style="color: #fbbf24;"></i> Running</td>
+                    </tr>
+                `;
+            }}).join('');
+        }}
+        
+        // Auto-refresh every 5 seconds
+        setInterval(refreshExperiments, 5000);
+        
         // Tab switching
         document.querySelectorAll('.tab').forEach(tab => {{
             tab.addEventListener('click', () => {{
@@ -908,6 +1027,66 @@ def generate_successful_table(experiments):
             </tbody>
         </table>
         {pagination_html}
+    </div>
+    """
+
+
+def generate_in_progress_table(experiments):
+    """Generate in-progress experiments table"""
+    if not experiments:
+        return '<p>No experiments currently in progress.</p>'
+    
+    rows = []
+    for exp in experiments:
+        experiment_id = exp.get('experiment_id', '')
+        iteration = exp.get('iteration', 0)
+        started_at = exp.get('started_at', '')
+        phase = exp.get('phase', 'Starting...')
+        
+        # Format timestamp
+        if started_at:
+            try:
+                if isinstance(started_at, str):
+                    dt = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+                    started_at = dt.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                started_at = 'Just now'
+        else:
+            started_at = 'Just now'
+        
+        row = f"""
+        <tr>
+            <td><strong>{iteration}</strong></td>
+            <td>{experiment_id}</td>
+            <td>
+                <span class="badge" style="background: #fbbf24; color: #0f172a;">
+                    <i class="fas fa-spinner fa-spin"></i> {phase}
+                </span>
+            </td>
+            <td>{started_at}</td>
+            <td>
+                <i class="fas fa-circle-notch fa-spin" style="color: #fbbf24;"></i> Running
+            </td>
+        </tr>
+        """
+        rows.append(row)
+    
+    return f"""
+    <div class="table-container">
+        <table id="inProgressTable">
+            <thead>
+                <tr>
+                    <th>Iteration</th>
+                    <th>Experiment ID</th>
+                    <th>Phase</th>
+                    <th>Started</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(rows)}
+            </tbody>
+        </table>
     </div>
     """
 
