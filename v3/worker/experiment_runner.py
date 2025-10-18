@@ -12,6 +12,8 @@ import traceback
 import cv2
 import numpy as np
 import boto3
+import signal
+from contextlib import contextmanager
 from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,32 @@ TEST_VIDEO_WIDTH = 640
 TEST_VIDEO_HEIGHT = 480
 TEST_VIDEO_FPS = 30
 TEST_VIDEO_DURATION_SEC = 2  # Short test video
+
+# Execution timeout (2 minutes per encoding/decoding)
+CODE_EXECUTION_TIMEOUT = 120
+
+
+class TimeoutError(Exception):
+    """Raised when code execution times out"""
+    pass
+
+
+@contextmanager
+def timeout(seconds):
+    """Context manager for timing out code execution"""
+    def timeout_handler(signum, frame):
+        raise TimeoutError(f"Code execution exceeded {seconds} seconds")
+    
+    # Set the signal handler and alarm
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    
+    try:
+        yield
+    finally:
+        # Disable the alarm and restore the old handler
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 class ExperimentRunner:
@@ -227,7 +255,7 @@ class ExperimentRunner:
         frames: list,
         output_path: str
     ) -> Dict:
-        """Execute user's encoding code"""
+        """Execute user's encoding code with timeout"""
         try:
             # Create execution environment
             env = {}
@@ -244,8 +272,10 @@ class ExperimentRunner:
                     'error': 'No encoding function found (expected run_encoding_agent or encode)'
                 }
             
-            # Execute encoding
-            result = encode_func(frames, output_path)
+            # Execute encoding with timeout
+            logger.info(f"🔧 Executing encoding with {CODE_EXECUTION_TIMEOUT}s timeout...")
+            with timeout(CODE_EXECUTION_TIMEOUT):
+                result = encode_func(frames, output_path)
             
             # Verify output exists
             if not os.path.exists(output_path):
@@ -256,6 +286,12 @@ class ExperimentRunner:
             
             return {'success': True}
             
+        except TimeoutError as e:
+            logger.error(f"Encoding timeout: {e}")
+            return {
+                'success': False,
+                'error': f"Encoding timed out after {CODE_EXECUTION_TIMEOUT} seconds"
+            }
         except Exception as e:
             logger.error(f"Encoding error: {e}")
             return {
@@ -270,7 +306,7 @@ class ExperimentRunner:
         output_path: str,
         expected_frames: int
     ) -> Dict:
-        """Execute user's decoding code"""
+        """Execute user's decoding code with timeout"""
         try:
             # Create execution environment
             env = {}
@@ -287,8 +323,10 @@ class ExperimentRunner:
                     'error': 'No decoding function found (expected run_decoding_agent or decode)'
                 }
             
-            # Execute decoding
-            result = decode_func(input_path, output_path, expected_frames)
+            # Execute decoding with timeout
+            logger.info(f"🔧 Executing decoding with {CODE_EXECUTION_TIMEOUT}s timeout...")
+            with timeout(CODE_EXECUTION_TIMEOUT):
+                result = decode_func(input_path, output_path, expected_frames)
             
             # Verify output exists
             if not os.path.exists(output_path):
@@ -299,6 +337,12 @@ class ExperimentRunner:
             
             return {'success': True}
             
+        except TimeoutError as e:
+            logger.error(f"Decoding timeout: {e}")
+            return {
+                'success': False,
+                'error': f"Decoding timed out after {CODE_EXECUTION_TIMEOUT} seconds"
+            }
         except Exception as e:
             logger.error(f"Decoding error: {e}")
             return {
