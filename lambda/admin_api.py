@@ -996,13 +996,28 @@ def purge_experiment_command(experiment_id):
     try:
         deleted_counts = {}
         
-        # Delete from experiments table
+        # Delete from experiments table (need to query for timestamp first since it's a composite key)
         try:
-            experiments_table.delete_item(
-                Key={'experiment_id': experiment_id}
+            # Query for the experiment to get the timestamp
+            response = experiments_table.query(
+                KeyConditionExpression='experiment_id = :id',
+                ExpressionAttributeValues={':id': experiment_id}
             )
-            deleted_counts['experiments'] = 1
-            logger.info(f"Deleted experiment {experiment_id} from experiments table")
+            items = response.get('Items', [])
+            
+            if items:
+                # Delete all matching items (should typically be just one)
+                with experiments_table.batch_writer() as batch:
+                    for item in items:
+                        batch.delete_item(Key={
+                            'experiment_id': item['experiment_id'],
+                            'timestamp': item['timestamp']
+                        })
+                deleted_counts['experiments'] = len(items)
+                logger.info(f"Deleted {len(items)} experiment record(s) for {experiment_id}")
+            else:
+                deleted_counts['experiments'] = 0
+                logger.warning(f"No experiment found with ID {experiment_id}")
         except Exception as e:
             logger.warning(f"Error deleting from experiments table: {e}")
             deleted_counts['experiments'] = 0
