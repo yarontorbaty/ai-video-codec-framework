@@ -11,11 +11,20 @@ import logging
 import traceback
 import cv2
 import numpy as np
+import boto3
 from typing import Dict, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Test video configuration
+# S3 configuration
+S3_BUCKET = 'ai-codec-v3-artifacts-580473065386'
+SOURCE_VIDEO_KEY = 'reference/source.mp4'
+HEVC_VIDEO_KEY = 'reference/hevc_baseline.mp4'
+
+# Initialize S3 client
+s3 = boto3.client('s3', region_name='us-east-1')
+
+# Test video configuration (fallback)
 TEST_VIDEO_WIDTH = 640
 TEST_VIDEO_HEIGHT = 480
 TEST_VIDEO_FPS = 30
@@ -132,7 +141,20 @@ class ExperimentRunner:
             }
     
     def _create_test_video(self, output_path: str):
-        """Create a simple test video with colorful patterns"""
+        """
+        Download source video from S3, or create test video as fallback
+        """
+        try:
+            # Try to download source video from S3
+            logger.info(f"📥 Downloading source video from S3...")
+            s3.download_file(S3_BUCKET, SOURCE_VIDEO_KEY, output_path)
+            logger.info(f"✅ Source video downloaded from S3")
+            return
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to download source video: {e}")
+            logger.info(f"📹 Creating fallback test video...")
+        
+        # Fallback: Create simple test video
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(
             output_path,
@@ -162,7 +184,7 @@ class ExperimentRunner:
             out.write(frame)
         
         out.release()
-        logger.info(f"✅ Test video created: {num_frames} frames")
+        logger.info(f"✅ Fallback test video created: {num_frames} frames")
     
     def _execute_encoding(
         self,
