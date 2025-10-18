@@ -437,6 +437,79 @@ def render_dashboard():
             line-height: 1.7;
         }}
         
+        /* HEVC Baseline Card */
+        .hevc-baseline-card {{
+            background: linear-gradient(135deg, #164e63 0%, #155e75 100%);
+            border: 2px solid #06b6d4;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+        }}
+        
+        .hevc-baseline-card h3 {{
+            color: #22d3ee;
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .baseline-metrics {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }}
+        
+        .baseline-metric {{
+            background: rgba(255, 255, 255, 0.05);
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(34, 211, 238, 0.3);
+            text-align: center;
+        }}
+        
+        .baseline-label {{
+            font-size: 0.85em;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }}
+        
+        .baseline-value {{
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #22d3ee;
+            margin-bottom: 8px;
+        }}
+        
+        .baseline-target {{
+            font-size: 0.8em;
+            color: #e0f2fe;
+            font-weight: 600;
+            padding: 4px 8px;
+            background: rgba(34, 211, 238, 0.1);
+            border-radius: 4px;
+            display: inline-block;
+        }}
+        
+        .baseline-note {{
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #cbd5e1;
+            border-left: 3px solid #22d3ee;
+        }}
+        
+        .baseline-note i {{
+            color: #22d3ee;
+            margin-right: 8px;
+        }}
+        
         /* Best Results */
         .best-results {{
             background: #1e293b;
@@ -706,6 +779,38 @@ def render_dashboard():
                 <div class="llm-summary">
                     <i class="fas fa-robot"></i> <strong>AI Analysis:</strong><br>
                     {llm_summary}
+                </div>
+                
+                <!-- HEVC Baseline Threshold -->
+                <div class="hevc-baseline-card">
+                    <h3><i class="fas fa-bullseye"></i> HEVC Baseline - Our Threshold to Beat</h3>
+                    <div class="baseline-metrics">
+                        <div class="baseline-metric">
+                            <div class="baseline-label">PSNR (vs SOURCE)</div>
+                            <div class="baseline-value">27.82 dB</div>
+                            <div class="baseline-target">Target: ≥ 27.82 dB</div>
+                        </div>
+                        <div class="baseline-metric">
+                            <div class="baseline-label">SSIM (vs SOURCE)</div>
+                            <div class="baseline-value">0.6826</div>
+                            <div class="baseline-target">Target: ≥ 0.6826</div>
+                        </div>
+                        <div class="baseline-metric">
+                            <div class="baseline-label">Bitrate</div>
+                            <div class="baseline-value">10.18 Mbps</div>
+                            <div class="baseline-target">Target: &lt; 10.18 Mbps</div>
+                        </div>
+                        <div class="baseline-metric">
+                            <div class="baseline-label">File Size</div>
+                            <div class="baseline-value">12.14 MB</div>
+                            <div class="baseline-target">Target: &lt; 12.14 MB</div>
+                        </div>
+                    </div>
+                    <div class="baseline-note">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Goal:</strong> Match or beat HEVC quality (PSNR/SSIM) at lower bitrate/size.
+                        Measured on actual 10Mbps HEVC encoding vs uncompressed source.
+                    </div>
                 </div>
             </section>
             
