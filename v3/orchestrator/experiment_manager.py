@@ -42,12 +42,16 @@ class ExperimentManager:
             }
         """
         try:
+            # Mark as in_progress in DynamoDB
+            timestamp = int(time.time())
+            self._store_in_progress(experiment_id, iteration, timestamp)
+            
             # Prepare experiment payload
             payload = {
                 'experiment_id': experiment_id,
                 'encoding_code': encoding_code,
                 'decoding_code': decoding_code,
-                'timestamp': int(time.time())
+                'timestamp': timestamp
             }
             
             # Submit to worker
@@ -85,6 +89,25 @@ class ExperimentManager:
             logger.error(f"❌ Experiment error: {e}", exc_info=True)
             self._store_failed(experiment_id, str(e), iteration)
             return {'status': 'failed', 'error': str(e)}
+    
+    def _store_in_progress(self, experiment_id: str, iteration: int, timestamp: int):
+        """Store in-progress experiment marker"""
+        try:
+            from datetime import datetime
+            item = {
+                'experiment_id': experiment_id,
+                'timestamp': timestamp,
+                'iteration': iteration,
+                'status': 'in_progress',
+                'started_at': datetime.now().isoformat(),
+                'phase': 'Worker Processing'
+            }
+            
+            self.table.put_item(Item=item)
+            logger.info(f"✅ Marked as in_progress in DynamoDB: {experiment_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ DynamoDB in-progress marker error: {e}", exc_info=True)
     
     def _store_result(
         self,

@@ -12,7 +12,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # S3 Configuration
-BUCKET_NAME = os.getenv('S3_BUCKET', 'ai-codec-v3-artifacts')
+BUCKET_NAME = os.getenv('S3_BUCKET', 'ai-codec-v3-artifacts-580473065386')
 REGION = os.getenv('AWS_REGION', 'us-east-1')
 
 
