@@ -96,17 +96,21 @@ Create two Python functions:
 1. `run_encoding_agent(frames, output_path)` - Compress a list of video frames
 2. `run_decoding_agent(input_path, output_path, frame_count)` - Decompress back to video
 
-**Requirements:**
+**CRITICAL REQUIREMENTS:**
+- ⚠️ MUST complete in under 60 seconds (will timeout otherwise)
+- ⚠️ NO infinite loops, NO while True, NO recursion
+- ⚠️ Use fixed iterations only: for i in range(N)
 - The encoder must create a compressed file at `output_path`
 - The decoder must create a video file at `output_path`
-- Use only: cv2, numpy (no torch, no tensorflow)
+- Use only: cv2, numpy, pickle (no torch, no tensorflow)
 - Focus on REAL compression (not procedural generation)
 - Target: PSNR > 30dB, SSIM > 0.85, compression ratio > 10x
+- Keep it SIMPLE and FAST
 
 **Input:**
-- `frames`: List of numpy arrays (BGR images, 640x480)
+- `frames`: List of ~60 numpy arrays (BGR images, 640x480)
 - `output_path`: Where to save compressed data
-- `frame_count`: Number of frames to decode
+- `frame_count`: Number of frames to decode (~60)
 
 """
         

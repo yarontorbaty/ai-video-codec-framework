@@ -9,6 +9,7 @@ import json
 import os
 import time
 import logging
+import shutil
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Any
 
@@ -115,6 +116,9 @@ class WorkerHandler(BaseHTTPRequestHandler):
             else:
                 logger.error(f"❌ Experiment failed: {result.get('error')}")
             
+            # Clean up temporary files
+            self._cleanup_temp_files(result)
+            
             # Send response
             self._send_json_response({
                 'status': 'completed',
@@ -130,6 +134,23 @@ class WorkerHandler(BaseHTTPRequestHandler):
                 'status': 'error',
                 'error': str(e)
             }, 500)
+    
+    def _cleanup_temp_files(self, result: Dict[str, Any]):
+        """Clean up temporary experiment files to prevent disk full"""
+        try:
+            # Get temp directory from any of the paths
+            temp_dir = None
+            for key in ['original_path', 'compressed_path', 'reconstructed_path']:
+                if result.get(key):
+                    temp_dir = os.path.dirname(result[key])
+                    break
+            
+            if temp_dir and os.path.exists(temp_dir):
+                logger.info(f"🧹 Cleaning up temp directory: {temp_dir}")
+                shutil.rmtree(temp_dir)
+                logger.info(f"✅ Temp directory cleaned up")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to clean up temp files: {e}")
     
     def _handle_health(self):
         """Health check endpoint"""
