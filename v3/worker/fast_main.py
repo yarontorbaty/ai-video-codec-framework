@@ -70,6 +70,7 @@ class FastWorkerHandler(BaseHTTPRequestHandler):
     def _store_results_batch(self, results: list):
         """Store experiment results in DynamoDB (batch operation)"""
         import time
+        from decimal import Decimal
         
         # DynamoDB batch write (25 items at a time)
         batch_size = 25
@@ -78,16 +79,19 @@ class FastWorkerHandler(BaseHTTPRequestHandler):
             
             with experiments_table.batch_writer() as writer:
                 for result in batch:
+                    # Convert floats to Decimal for DynamoDB
                     item = {
                         'experiment_id': result['experiment_id'],
                         'timestamp': int(time.time()),
                         'status': result['status'],
-                        'mse': result.get('mse'),
-                        'compression_ratio': result.get('compression_ratio'),
+                        'mse': Decimal(str(result['mse'])) if result.get('mse') is not None else None,
+                        'compression_ratio': Decimal(str(result['compression_ratio'])) if result.get('compression_ratio') is not None else None,
                         'time_ms': result.get('time_ms'),
                         'compressed_size': result.get('compressed_size'),
                         'error': result.get('error')
                     }
+                    # Remove None values
+                    item = {k: v for k, v in item.items() if v is not None}
                     writer.put_item(Item=item)
         
         logger.info(f"💾 Stored {len(results)} results in DynamoDB")

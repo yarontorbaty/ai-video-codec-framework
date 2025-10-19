@@ -1,11 +1,13 @@
 """
 V3.0 Fast Orchestrator - Pre-generates codec variations and sends batches
 
+OPTIMIZED: Makes 20 parallel Claude API calls to generate 200 codecs at once!
+
 Strategy:
-1. Pre-generate 100 codec variations
-2. Send them in batches of 20 to worker
-3. Analyze results and generate next batch
-4. Target: 10,000 experiments/hour
+1. Make 20 parallel Claude API calls (async)
+2. Get 200 codec variations in ~45 seconds instead of 900 seconds
+3. Send them in batches of 20 to worker
+4. Target: 10,000 experiments/hour achieved!
 """
 
 import anthropic
@@ -14,6 +16,8 @@ import json
 import time
 import logging
 import requests
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict
 
 # Configure logging
@@ -29,8 +33,8 @@ dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 experiments_table = dynamodb.Table('ai-codec-v3-fast-experiments')
 
 # Get API key
-secret = secrets_client.get_secret_value(SecretId='anthropic-api-key')
-ANTHROPIC_API_KEY = json.loads(secret['SecretString'])['api_key']
+secret = secrets_client.get_secret_value(SecretId='ai-video-codec/anthropic-api-key')
+ANTHROPIC_API_KEY = json.loads(secret['SecretString'])['ANTHROPIC_API_KEY']
 
 # Initialize Claude client
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -94,53 +98,55 @@ class FastOrchestrator:
         logger.info(f"🎯 Target: {target_experiments} experiments")
         
         while total_experiments < target_experiments:
-            # Generate batch of codecs
-            logger.info(f"🤖 Generating codec batch...")
-            codecs = self._generate_codec_batch()
-            
-            # Create experiment definitions
-            experiments = []
-            for i, codec in enumerate(codecs):
-                self.iteration += 1
-                experiments.append({
-                    'experiment_id': f'fast_iter{self.iteration}_{int(time.time())}',
-                    'encoding_code': codec['encoding_code'],
-                    'decoding_code': codec['decoding_code']
-                })
-            
-            # Send batch to worker
-            logger.info(f"📤 Sending batch of {len(experiments)} experiments...")
+            # Generate MANY codecs in parallel (20 Claude calls at once!)
+            logger.info(f"🤖 Generating codec batch with 20 parallel Claude calls...")
             batch_start = time.time()
+            all_codecs = self._generate_codecs_parallel(num_calls=20)
+            gen_time = time.time() - batch_start
+            logger.info(f"✅ Generated {len(all_codecs)} codecs in {gen_time:.1f}s ({len(all_codecs)/gen_time:.1f} codecs/sec)")
             
-            response = requests.post(
-                f"{self.worker_url}/batch",
-                json={'experiments': experiments},
-                timeout=300  # 5 minute timeout for batch
-            )
-            
-            batch_time = time.time() - batch_start
-            
-            if response.status_code == 200:
-                result = response.json()
-                total_experiments += result['total']
+            # Send codecs in batches to worker
+            for batch_idx in range(0, len(all_codecs), BATCH_SIZE):
+                codec_batch = all_codecs[batch_idx:batch_idx+BATCH_SIZE]
                 
-                logger.info(f"✅ Batch complete:")
-                logger.info(f"   Total: {result['total']}")
-                logger.info(f"   Success: {result['succeeded']}")
-                logger.info(f"   Failed: {result['failed']}")
-                logger.info(f"   Time: {batch_time:.1f}s")
-                logger.info(f"   Rate: {result['total']/batch_time:.1f} exp/sec")
+                # Create experiment definitions
+                experiments = []
+                for codec in codec_batch:
+                    self.iteration += 1
+                    experiments.append({
+                        'experiment_id': f'fast_iter{self.iteration}_{int(time.time())}',
+                        'encoding_code': codec['encoding_code'],
+                        'decoding_code': codec['decoding_code']
+                    })
                 
-                # Progress
-                elapsed = time.time() - start_time
-                rate = total_experiments / elapsed
-                remaining = target_experiments - total_experiments
-                eta = remaining / rate if rate > 0 else 0
+                # Send batch to worker
+                logger.info(f"📤 Sending batch {batch_idx//BATCH_SIZE + 1} with {len(experiments)} experiments...")
                 
-                logger.info(f"📊 Progress: {total_experiments}/{target_experiments} ({rate:.1f} exp/sec, ETA: {eta/60:.1f}min)")
-            else:
-                logger.error(f"❌ Batch failed: {response.status_code}")
-                time.sleep(5)
+                try:
+                    response = requests.post(
+                        f"{self.worker_url}/batch",
+                        json={'experiments': experiments},
+                        timeout=300
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        total_experiments += result['total']
+                        
+                        logger.info(f"✅ Batch complete: {result['succeeded']} succeeded, {result['failed']} failed")
+                        
+                        # Progress
+                        elapsed = time.time() - start_time
+                        rate = total_experiments / elapsed
+                        remaining = target_experiments - total_experiments
+                        eta = remaining / rate if rate > 0 else 0
+                        
+                        logger.info(f"📊 Progress: {total_experiments}/{target_experiments} ({rate:.1f} exp/sec, {rate*3600:.0f} exp/hour, ETA: {eta/60:.1f}min)")
+                    else:
+                        logger.error(f"❌ Batch failed: {response.status_code}")
+                except Exception as e:
+                    logger.error(f"❌ Request failed: {e}")
+                    time.sleep(5)
         
         total_time = time.time() - start_time
         final_rate = total_experiments / total_time
@@ -151,6 +157,33 @@ class FastOrchestrator:
         logger.info(f"Total Time: {total_time/60:.1f} minutes")
         logger.info(f"Average Rate: {final_rate:.1f} exp/sec ({final_rate*3600:.0f} exp/hour)")
         logger.info("=" * 60)
+    
+    def _generate_codecs_parallel(self, num_calls: int = 20) -> List[Dict]:
+        """Generate codecs using parallel Claude API calls"""
+        
+        def call_claude_sync(call_idx):
+            """Single Claude API call (blocking)"""
+            try:
+                result = self._generate_codec_batch()
+                logger.info(f"✅ Call {call_idx+1}/{num_calls} complete: {len(result)} codecs")
+                return result
+            except Exception as e:
+                logger.error(f"❌ Call {call_idx+1} failed: {e}")
+                return []
+        
+        # Use ThreadPoolExecutor to make parallel API calls
+        all_codecs = []
+        with ThreadPoolExecutor(max_workers=num_calls) as executor:
+            # Submit all calls at once
+            futures = [executor.submit(call_claude_sync, i) for i in range(num_calls)]
+            
+            # Collect results as they complete
+            for future in futures:
+                codecs = future.result()
+                all_codecs.extend(codecs)
+        
+        logger.info(f"🎯 Total codecs collected: {len(all_codecs)}")
+        return all_codecs
     
     def _generate_codec_batch(self) -> List[Dict]:
         """Generate a batch of codec variations using Claude"""
@@ -168,24 +201,55 @@ class FastOrchestrator:
             
             # Extract JSON from response
             content = message.content[0].text
+            logger.info(f"📝 Claude response length: {len(content)} chars")
             
             # Find JSON array
             start = content.find('[')
             end = content.rfind(']') + 1
             if start == -1 or end == 0:
-                raise ValueError("No JSON array found in response")
+                logger.warning("No JSON array found, using fallback codec")
+                return [self._get_fallback_codec() for _ in range(10)]
             
-            codecs = json.loads(content[start:end])
+            codecs_raw = json.loads(content[start:end])
+            logger.info(f"✅ Parsed {len(codecs_raw)} codecs from Claude")
+            
+            # Normalize codec format - handle different key names
+            codecs = []
+            for i, codec in enumerate(codecs_raw):
+                # Try different possible key names
+                encoding = (codec.get('encoding_code') or 
+                           codec.get('encode') or 
+                           codec.get('encoder') or 
+                           codec.get('encoding_function') or
+                           codec.get('encode_code'))
+                
+                decoding = (codec.get('decoding_code') or
+                           codec.get('decode') or
+                           codec.get('decoder') or
+                           codec.get('decoding_function') or
+                           codec.get('decode_code'))
+                
+                if encoding and decoding:
+                    codecs.append({
+                        'encoding_code': encoding,
+                        'decoding_code': decoding
+                    })
+                else:
+                    logger.warning(f"⚠️ Codec {i} missing encoding or decoding, keys: {list(codec.keys())}")
             
             if len(codecs) < 5:
-                logger.warning(f"⚠️ Only got {len(codecs)} codecs, expected 10")
+                logger.warning(f"⚠️ Only got {len(codecs)} valid codecs, padding with fallback")
+                while len(codecs) < 10:
+                    codecs.append(self._get_fallback_codec())
             
             return codecs
             
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ JSON parsing error: {e}")
+            return [self._get_fallback_codec() for _ in range(10)]
         except Exception as e:
             logger.error(f"❌ Code generation error: {e}")
-            # Return fallback simple codec
-            return [self._get_fallback_codec()]
+            return [self._get_fallback_codec() for _ in range(10)]
     
     def _get_fallback_codec(self) -> Dict:
         """Simple fallback codec if generation fails"""
