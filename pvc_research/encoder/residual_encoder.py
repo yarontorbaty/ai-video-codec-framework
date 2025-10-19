@@ -112,11 +112,15 @@ class ResidualEncoder:
                     # In production, would use better codec (AV1, VQ, etc.)
                     _, encoded = cv2.imencode('.png', original[y1:y2, x1:x2])
                     
+                    # Convert bytes to base64 for JSON serialization
+                    import base64
+                    encoded_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
+                    
                     tiles.append({
                         'position': [int(x1), int(y1)],
                         'size': [int(x2 - x1), int(y2 - y1)],
                         'error': float(tile_error),
-                        'data': encoded.tobytes(),  # Compressed tile data
+                        'data': encoded_b64,  # Base64 encoded compressed tile
                         'data_size': len(encoded)
                     })
         
