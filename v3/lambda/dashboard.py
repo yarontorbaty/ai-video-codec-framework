@@ -887,17 +887,7 @@ def render_dashboard():
                 document.getElementById('in-progress-count').textContent = data.in_progress.length;
                 document.getElementById('failed-count').textContent = data.failed.length;
                 
-                // Check if we need to reload entire page (new successful or failed experiments)
-                const currentSuccessful = document.querySelectorAll('#successful tbody tr').length;
-                const currentFailed = document.querySelectorAll('#failed tbody tr').length;
-                
-                if (data.successful.length !== currentSuccessful || data.failed.length !== currentFailed) {{
-                    // Reload page to update all sections (LLM summary, best results, failed list, etc.)
-                    location.reload();
-                    return;
-                }}
-                
-                // Update in-progress table
+                // Update in-progress table only (don't reload page)
                 updateInProgressTable(data.in_progress);
                 
                 lastRefreshTime = Date.now();
@@ -1093,9 +1083,19 @@ def generate_successful_table(experiments):
                     filename=f"{experiment_id}_video.mp4"
                 )
         
+        # Format timestamp
+        timestamp = exp.get('timestamp', 0)
+        try:
+            from datetime import datetime
+            dt = datetime.fromtimestamp(int(timestamp))
+            timestamp_str = dt.strftime('%m/%d %H:%M')
+        except:
+            timestamp_str = '-'
+        
         row = f"""
         <tr>
             <td><strong>{iteration}</strong></td>
+            <td style="font-size: 0.85em; color: #94a3b8;">{timestamp_str}</td>
             <td>
                 {psnr:.2f} dB
                 <span class="quality-badge" style="background: {psnr_color};">{psnr_label}</span>
@@ -1131,6 +1131,7 @@ def generate_successful_table(experiments):
             <thead>
                 <tr>
                     <th>Iter</th>
+                    <th>Time</th>
                     <th>PSNR</th>
                     <th>SSIM</th>
                     <th>Bitrate</th>

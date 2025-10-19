@@ -25,13 +25,16 @@ from graphics.primitives_extended import NUM_EXTENDED_FUNCTIONS
 class ExtendedFunctionDataset(Dataset):
     """Dataset for extended function set with 47+ functions."""
     
-    def __init__(self, frames: np.ndarray, sequences: list):
+    def __init__(self, frames: np.ndarray, sequences: list, num_functions: int):
         self.frames = frames
         self.sequences = sequences
+        self.num_functions = num_functions
+        self.end_token_id = num_functions  # END token is num_functions
         
         # Find max sequence length
         self.max_seq_len = max(len(seq) for seq in sequences)
         print(f"   Max sequence length: {self.max_seq_len}")
+        print(f"   END token ID: {self.end_token_id}")
     
     def __len__(self):
         return len(self.frames)
@@ -44,12 +47,20 @@ class ExtendedFunctionDataset(Dataset):
         frame_tensor = torch.from_numpy(frame).permute(2, 0, 1).float() / 255.0
         
         # Extract function IDs and parameters
-        func_ids = [fc['func_id'] for fc in sequence]
-        params = [fc['normalized_params'] for fc in sequence]
+        func_ids = []
+        params = []
         
-        # Pad sequences to max length
+        for fc in sequence:
+            fid = fc['func_id']
+            # Ensure function ID is within valid range [0, num_functions-1]
+            if fid >= self.num_functions:
+                fid = 0  # Default to fill_solid if out of range
+            func_ids.append(fid)
+            params.append(fc['normalized_params'])
+        
+        # Pad sequences to max length with END token
         while len(func_ids) < self.max_seq_len:
-            func_ids.append(NUM_EXTENDED_FUNCTIONS)  # END token
+            func_ids.append(self.end_token_id)  # END token
             params.append(np.zeros(10, dtype=np.float32))
         
         func_ids_tensor = torch.tensor(func_ids, dtype=torch.long)
@@ -97,7 +108,7 @@ def train_extended_model(
     
     # Create dataset and dataloader
     print("\n📦 Creating dataset...")
-    dataset = ExtendedFunctionDataset(frames, sequences)
+    dataset = ExtendedFunctionDataset(frames, sequences, NUM_EXTENDED_FUNCTIONS)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     print(f"   Dataset size: {len(dataset)}")
     print(f"   Batches: {len(dataloader)}")
