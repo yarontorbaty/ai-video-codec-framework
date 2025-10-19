@@ -54,9 +54,9 @@ EOF
 WORKER_INSTANCE_ID=$(aws ec2 run-instances \
   --image-id ami-0453ec754f44f9a4a \
   --instance-type c5.2xlarge \
-  --key-name yaron-mac \
-  --security-group-ids sg-0d3c0a5e61f8c8e5a \
-  --subnet-id subnet-0e329fcf66e06ead5 \
+  --key-name gpu-ec2 \
+  --security-group-ids sg-0e573e2f685e36cb9 \
+  --subnet-id subnet-2f7b1b4a \
   --iam-instance-profile Name=ai-codec-v3-ec2-role \
   --user-data "$WORKER_USER_DATA" \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${PROJECT_NAME}-worker},{Key=Project,Value=${PROJECT_NAME}}]" \
@@ -105,9 +105,9 @@ EOF2
 ORCH_INSTANCE_ID=$(aws ec2 run-instances \
   --image-id ami-0453ec754f44f9a4a \
   --instance-type t3.medium \
-  --key-name yaron-mac \
-  --security-group-ids sg-0d3c0a5e61f8c8e5a \
-  --subnet-id subnet-0e329fcf66e06ead5 \
+  --key-name gpu-ec2 \
+  --security-group-ids sg-0e573e2f685e36cb9 \
+  --subnet-id subnet-2f7b1b4a \
   --iam-instance-profile Name=ai-codec-v3-ec2-role \
   --user-data "$ORCH_USER_DATA" \
   --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${PROJECT_NAME}-orchestrator},{Key=Project,Value=${PROJECT_NAME}}]" \
