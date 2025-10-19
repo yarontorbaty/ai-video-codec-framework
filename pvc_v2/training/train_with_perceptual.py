@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.enhanced_network import EnhancedPVCv2Model
 from training.perceptual_loss import CombinedLoss, VGGPerceptualLoss
-from training.dataset_with_params import ExtendedFunctionDataset
+from training.dataset_with_params import FunctionSequenceDatasetWithParams
 from training.synthetic_generator_extended import ExtendedSyntheticGenerator
 from graphics.primitives_extended import NUM_EXTENDED_FUNCTIONS
 from tests.complete_evaluation import execute_function_complete
@@ -33,8 +33,15 @@ def reconstruct_batch(model, frames_batch, device):
     """
     Reconstruct a batch of frames using the model's predictions.
     
+    Args:
+        frames_batch: numpy array (B, H, W, 3) or torch tensor
+        
     Returns reconstructed frames as tensors in [0, 1] range for perceptual loss.
     """
+    # Convert to numpy if needed
+    if isinstance(frames_batch, torch.Tensor):
+        frames_batch = frames_batch.cpu().numpy()
+    
     batch_size = frames_batch.shape[0]
     height, width = frames_batch.shape[1:3]
     
@@ -43,7 +50,7 @@ def reconstruct_batch(model, frames_batch, device):
     model.eval()
     with torch.no_grad():
         for i in range(batch_size):
-            frame = frames_batch[i].cpu().numpy()
+            frame = frames_batch[i]
             
             # Get predictions
             func_ids, params = model.predict_with_params(frame)
@@ -129,10 +136,10 @@ def train_with_perceptual_loss(
     )
     
     # Create dataset and dataloader
-    train_dataset = ExtendedFunctionDataset(
+    train_dataset = FunctionSequenceDatasetWithParams(
         train_frames,
         train_sequences,
-        num_functions=NUM_EXTENDED_FUNCTIONS
+        max_seq_len=20
     )
     train_loader = DataLoader(
         train_dataset,
@@ -174,7 +181,7 @@ def train_with_perceptual_loss(
                 original_frames = original_frames.permute(0, 3, 1, 2)  # BHWC -> BCHW
                 
                 # Reconstruct frames
-                reconstructed_frames = reconstruct_batch(model, frames_batch.cpu().numpy(), device)
+                reconstructed_frames = reconstruct_batch(model, frames_batch, device)
             else:
                 original_frames = None
                 reconstructed_frames = None

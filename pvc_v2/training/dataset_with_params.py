@@ -49,16 +49,31 @@ class FunctionSequenceDatasetWithParams(Dataset):
         
         # Extract function IDs
         func_calls = self.function_sequences[idx]
-        func_ids = [f.func_id for f in func_calls]
+        
+        # Handle both dict and FunctionCall objects
+        if len(func_calls) > 0:
+            if isinstance(func_calls[0], dict):
+                # Dictionary format from ExtendedSyntheticGenerator
+                func_ids = [f['func_id'] for f in func_calls]
+            else:
+                # FunctionCall objects
+                func_ids = [f.func_id for f in func_calls]
+        else:
+            func_ids = []
         
         # Extract normalized parameters (10 values per function)
         # [coords(4), color1(3), color2(3)]
         params_list = []
         for call in func_calls:
-            params_array = call.get_normalized_params(
-                frame_width=frame.shape[1],
-                frame_height=frame.shape[0]
-            )
+            if isinstance(call, dict):
+                # Dictionary format - get normalized_params directly
+                params_array = call.get('normalized_params', np.zeros(10, dtype=np.float32))
+            else:
+                # FunctionCall object
+                params_array = call.get_normalized_params(
+                    frame_width=frame.shape[1],
+                    frame_height=frame.shape[0]
+                )
             params_list.append(params_array)
         
         # Pad sequences to max_seq_len
