@@ -233,10 +233,15 @@ def generate_llm_summary(experiments):
 def render_dashboard():
     """Render main dashboard page with dark theme and real-time updates"""
     
-    # Get all experiments
+    # Get all experiments with pagination
     table = dynamodb.Table(DYNAMODB_TABLE)
     response = table.scan()
     experiments = response.get('Items', [])
+    
+    # Handle pagination to get ALL experiments
+    while 'LastEvaluatedKey' in response:
+        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        experiments.extend(response.get('Items', []))
     
     # Sort by iteration
     experiments.sort(key=lambda x: int(x.get('iteration', 0)), reverse=True)

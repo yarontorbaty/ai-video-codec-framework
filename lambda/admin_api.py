@@ -22,7 +22,7 @@ s3 = boto3.client('s3', region_name='us-east-1')
 secretsmanager = boto3.client('secretsmanager', region_name='us-east-1')
 
 # Tables
-experiments_table = dynamodb.Table('ai-video-codec-experiments')
+experiments_table = dynamodb.Table('ai-codec-v3-experiments')
 control_table = dynamodb.Table('ai-video-codec-control')  # New table for control state
 
 # Instance ID
@@ -1302,10 +1302,10 @@ def get_experiments_list():
             )
             all_items.extend(response.get('Items', []))
         
-        # Sort by timestamp (descending) and take the latest 50
+        # Sort by timestamp (descending) - show ALL experiments
         all_items.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
-        total_count = len(all_items)  # Store total count before limiting
-        experiments = all_items[:50]  # Get latest 50 experiments
+        total_count = len(all_items)  # Store total count
+        experiments = all_items  # Show all experiments (no limit)
         
         # Also check SSM for running commands
         ssm_commands = []
