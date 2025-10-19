@@ -125,9 +125,9 @@ class PVCEncoder:
             if motion_seq:
                 obj['motion_model'] = self.motion_tracker.fit_motion_model(motion_seq)
         
-        # Analyze textures (simplified - assign procedural textures based on region properties)
+        # Analyze textures (extract real colors from video frames)
         logger.info("🎨 Analyzing textures...")
-        self._assign_textures(tracked_objects)
+        self._assign_textures(tracked_objects, frames)
         
         # Build scene description
         scene_desc = {
@@ -154,85 +154,95 @@ class PVCEncoder:
         
         return scene_desc
     
-    def _assign_textures(self, objects: List[Dict]):
+    def _assign_textures(self, objects: List[Dict], frames: List[np.ndarray] = None):
         """
-        Assign procedural textures to objects based on their properties.
+        Assign textures to objects by extracting real colors from video frames.
         
-        For prototype, use simple heuristics:
-        - Small objects: solid colors
-        - Large objects: procedural textures
+        Args:
+            objects: List of tracked objects with contours
+            frames: List of video frames to sample colors from
         """
         for obj in objects:
-            if not obj.get('contour_sequence'):
+            if not obj.get('contour_sequence') or not frames:
                 continue
             
-            # Get average area
-            areas = [c.get('area', 0) for c in obj['contour_sequence']]
-            avg_area = np.mean(areas) if areas else 0
+            # Sample texture from first frame where object appears
+            first_frame_idx = obj.get('keyframes', [0])[0]
+            if first_frame_idx >= len(frames):
+                first_frame_idx = 0
             
-            # Simple texture assignment
-            if avg_area < 1000:
-                # Small object - solid color
+            frame = frames[first_frame_idx]
+            contour = obj['contour_sequence'][0] if obj['contour_sequence'] else None
+            
+            if contour is None:
+                continue
+            
+            # Extract average color from object region
+            avg_color = self._extract_region_color(frame, contour)
+            
+            # Extract texture complexity (variance)
+            texture_variance = self._extract_texture_variance(frame, contour)
+            
+            # Assign texture based on complexity
+            if texture_variance < 100:  # Low variance = solid color
                 obj['texture'] = {
                     'type': 'solid',
-                    'color': [
-                        np.random.rand(),
-                        np.random.rand(),
-                        np.random.rand()
-                    ],
+                    'color': avg_color.tolist(),
                     'params': {}
                 }
-            elif avg_area < 10000:
-                # Medium object - Perlin noise
+            else:  # High variance = sample texture patch
+                # Store average color as base
                 obj['texture'] = {
-                    'type': 'perlin',
-                    'params': {
-                        'scale': np.random.uniform(5, 20),
-                        'octaves': 4,
-                        'persistence': 0.5,
-                        'lacunarity': 2.0,
-                        'seed': np.random.randint(0, 10000)
-                    },
-                    'color_map': [
-                        np.random.rand(),
-                        np.random.rand(),
-                        np.random.rand()
-                    ]
+                    'type': 'sampled',
+                    'color': avg_color.tolist(),
+                    'variance': float(texture_variance),
+                    'params': {}
                 }
-            else:
-                # Large object - fBM or Worley
-                texture_type = np.random.choice(['fbm', 'worley'])
-                
-                if texture_type == 'fbm':
-                    obj['texture'] = {
-                        'type': 'fbm',
-                        'params': {
-                            'base_scale': np.random.uniform(10, 30),
-                            'octaves': 6,
-                            'persistence': 0.5,
-                            'lacunarity': 2.0,
-                            'seed': np.random.randint(0, 10000)
-                        },
-                        'color_map': [
-                            np.random.rand(),
-                            np.random.rand(),
-                            np.random.rand()
-                        ]
-                    }
-                else:  # worley
-                    obj['texture'] = {
-                        'type': 'worley',
-                        'params': {
-                            'num_points': np.random.randint(10, 30),
-                            'distance_func': 'euclidean',
-                            'seed': np.random.randint(0, 10000)
-                        },
-                        'color_map': [
-                            np.random.rand(),
-                            np.random.rand(),
-                            np.random.rand()
-                        ]
-                    }
+    
+    def _extract_region_color(self, frame: np.ndarray, contour: Dict) -> np.ndarray:
+        """Extract average color from a contour region."""
+        # Get bounding box
+        x, y, w, h = contour['bounding_box']
+        
+        # Clip to frame bounds
+        x1 = max(0, x)
+        y1 = max(0, y)
+        x2 = min(frame.shape[1], x + w)
+        y2 = min(frame.shape[0], y + h)
+        
+        if x2 <= x1 or y2 <= y1:
+            return np.array([0.5, 0.5, 0.5])  # Gray default
+        
+        # Extract region
+        region = frame[y1:y2, x1:x2]
+        
+        # Calculate average color (in BGR, convert to RGB for consistency)
+        avg_bgr = np.mean(region, axis=(0, 1))
+        avg_rgb = avg_bgr[[2, 1, 0]]  # BGR to RGB
+        
+        # Normalize to [0, 1]
+        return avg_rgb / 255.0
+    
+    def _extract_texture_variance(self, frame: np.ndarray, contour: Dict) -> float:
+        """Calculate texture complexity (variance) in a region."""
+        # Get bounding box
+        x, y, w, h = contour['bounding_box']
+        
+        # Clip to frame bounds
+        x1 = max(0, x)
+        y1 = max(0, y)
+        x2 = min(frame.shape[1], x + w)
+        y2 = min(frame.shape[0], y + h)
+        
+        if x2 <= x1 or y2 <= y1:
+            return 0.0
+        
+        # Extract region and convert to grayscale
+        region = frame[y1:y2, x1:x2]
+        gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+        
+        # Calculate variance as measure of texture complexity
+        return float(np.var(gray))
     
     def save_scene(self, scene_desc: Dict, output_path: str):
         """

@@ -84,8 +84,11 @@ class ProceduralTextures:
                            scale: float) -> np.ndarray:
         """Helper function to interpolate Perlin noise from gradients."""
         height, width = shape
-        y_coords = np.arange(height)[:, None] / scale
-        x_coords = np.arange(width)[None, :] / scale
+        
+        # Create coordinate grids
+        y_grid, x_grid = np.meshgrid(np.arange(height), np.arange(width), indexing='ij')
+        x_coords = x_grid / scale
+        y_coords = y_grid / scale
         
         # Grid cell coordinates
         x0 = np.floor(x_coords).astype(int)
@@ -109,7 +112,7 @@ class ProceduralTextures:
         g01 = gradients[y1, x0]
         g11 = gradients[y1, x1]
         
-        # Distance vectors to corners
+        # Distance vectors to corners - now fx and fy have same shape
         d00 = np.stack([fx, fy], axis=-1)
         d10 = np.stack([fx - 1, fy], axis=-1)
         d01 = np.stack([fx, fy - 1], axis=-1)

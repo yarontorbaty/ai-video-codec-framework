@@ -163,13 +163,13 @@ class SceneRenderer:
         """
         Get color for an object based on its texture.
         
-        For simple prototype, we'll use solid colors or simple patterns.
-        Full implementation would generate texture patches.
+        Now uses real colors extracted from video during encoding.
         """
         texture_type = texture_info.get('type', 'solid')
         
-        if texture_type == 'solid':
-            # Solid color (stored as normalized RGB)
+        # For both 'solid' and 'sampled' types, use the real color from video
+        if texture_type in ['solid', 'sampled']:
+            # Real color extracted from video (stored as normalized RGB)
             rgb = texture_info.get('color', [0.5, 0.5, 0.5])
             return (
                 int(rgb[2] * 255),  # B
@@ -178,20 +178,8 @@ class SceneRenderer:
             )
         
         elif texture_type in ['perlin', 'worley', 'fbm']:
-            # For procedural textures, we'd ideally generate a texture patch
-            # and fill the contour with it. For simplicity, use avg color.
-            # This is a simplified version - full impl would be more sophisticated
-            
-            # Generate small sample
-            sample = self.texture_gen.generate_texture(
-                texture_type,
-                shape=(16, 16),
-                params=texture_info.get('params', {})
-            )
-            avg_value = np.mean(sample)
-            
-            # Map to color
-            color_map = texture_info.get('color_map', [avg_value, avg_value, avg_value])
+            # Legacy procedural textures - use color_map if available
+            color_map = texture_info.get('color_map', [0.5, 0.5, 0.5])
             return (
                 int(color_map[2] * 255),
                 int(color_map[1] * 255),
