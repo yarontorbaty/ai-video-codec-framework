@@ -15,6 +15,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
+import cv2
 import sys
 import time
 from pathlib import Path
@@ -26,7 +27,93 @@ from training.perceptual_loss import CombinedLoss, VGGPerceptualLoss
 from training.dataset_with_params import FunctionSequenceDatasetWithParams
 from training.synthetic_generator_extended import ExtendedSyntheticGenerator
 from graphics.primitives_extended import NUM_EXTENDED_FUNCTIONS
-from tests.complete_evaluation import execute_function_complete
+
+
+def execute_function_top10(func_id: int, params: np.ndarray, canvas: np.ndarray) -> np.ndarray:
+    """Execute top 10 graphics functions (simplified for training speed)."""
+    height, width = canvas.shape[:2]
+    
+    # Denormalize parameters
+    x1 = int(np.clip(params[0] * width, 0, width - 1))
+    y1 = int(np.clip(params[1] * height, 0, height - 1))
+    x2 = int(np.clip(params[2] * width, 0, width - 1))
+    y2 = int(np.clip(params[3] * height, 0, height - 1))
+    
+    color1 = tuple(np.clip(params[4:7] * 255, 0, 255).astype(int).tolist())
+    color2 = tuple(np.clip(params[7:10] * 255, 0, 255).astype(int).tolist())
+    
+    x1, x2 = min(x1, x2), max(x1, x2)
+    y1, y2 = min(y1, y2), max(y1, y2)
+    
+    cx = (x1 + x2) // 2
+    cy = (y1 + y2) // 2
+    w = max(1, x2 - x1)
+    h = max(1, y2 - y1)
+    
+    try:
+        if func_id == 0:  # fill_solid
+            canvas[:] = color1
+        elif func_id == 3:  # draw_rect
+            if x2 > x1 and y2 > y1:
+                cv2.rectangle(canvas, (x1, y1), (x2, y2), color1, -1)
+        elif func_id == 5:  # draw_circle
+            radius = max(5, min(w, h) // 2)
+            cv2.circle(canvas, (cx, cy), radius, color1, -1)
+        elif func_id == 10:  # fill_radial_gradient
+            radius = max(10, (w + h) // 2)
+            y_coords, x_coords = np.ogrid[:height, :width]
+            dist = np.sqrt((x_coords - cx)**2 + (y_coords - cy)**2)
+            dist_norm = np.clip(dist / max(radius, 1), 0, 1)
+            for c in range(3):
+                canvas[:, :, c] = (color1[c] * (1 - dist_norm) + color2[c] * dist_norm).astype(np.uint8)
+        elif func_id == 1 or func_id == 7:  # horizontal gradient
+            for c in range(3):
+                gradient = np.linspace(color1[c], color2[c], width)
+                canvas[:, :, c] = np.tile(gradient, (height, 1)).astype(np.uint8)
+        elif func_id == 6:  # vertical gradient
+            for c in range(3):
+                gradient = np.linspace(color1[c], color2[c], height)
+                canvas[:, :, c] = np.tile(gradient.reshape(-1, 1), (1, width)).astype(np.uint8)
+        elif func_id == 2:  # draw_ellipse
+            rx = max(5, w // 2)
+            ry = max(5, h // 2)
+            cv2.ellipse(canvas, (cx, cy), (rx, ry), 0, 0, 360, color1, -1)
+        elif func_id == 13:  # fill_checkerboard
+            square_size = max(8, min(32, w // 4))
+            y_grid, x_grid = np.ogrid[:height, :width]
+            pattern = ((x_grid // square_size) + (y_grid // square_size)) % 2
+            for c in range(3):
+                canvas[:, :, c] = np.where(pattern == 0, color1[c], color2[c]).astype(np.uint8)
+        elif func_id == 23:  # draw_rounded_rect
+            if x2 > x1 and y2 > y1:
+                radius = min(10, w // 4, h // 4)
+                cv2.rectangle(canvas, (x1 + radius, y1), (x2 - radius, y2), color1, -1)
+                cv2.rectangle(canvas, (x1, y1 + radius), (x2, y2 - radius), color1, -1)
+                if radius > 0:
+                    cv2.circle(canvas, (x1 + radius, y1 + radius), radius, color1, -1)
+                    cv2.circle(canvas, (x2 - radius, y1 + radius), radius, color1, -1)
+                    cv2.circle(canvas, (x1 + radius, y2 - radius), radius, color1, -1)
+                    cv2.circle(canvas, (x2 - radius, y2 - radius), radius, color1, -1)
+        elif func_id == 24:  # draw_star
+            outer_r = max(10, min(w, h) // 2)
+            inner_r = outer_r // 2
+            pts = []
+            for i in range(10):
+                angle = i * np.pi / 5 - np.pi / 2
+                radius = outer_r if i % 2 == 0 else inner_r
+                x = int(cx + radius * np.cos(angle))
+                y = int(cy + radius * np.sin(angle))
+                pts.append((x, y))
+            pts_array = np.array(pts, dtype=np.int32)
+            cv2.fillPoly(canvas, [pts_array], color1)
+        else:
+            # Fallback: average color
+            avg_color = tuple(((np.array(color1) + np.array(color2)) / 2).astype(int).tolist())
+            canvas[:] = avg_color
+    except:
+        pass
+    
+    return canvas
 
 
 def reconstruct_batch(model, frames_batch, device):
@@ -55,10 +142,10 @@ def reconstruct_batch(model, frames_batch, device):
             # Get predictions
             func_ids, params = model.predict_with_params(frame)
             
-            # Reconstruct using complete function set
+            # Reconstruct using top 10 functions (for speed)
             canvas = np.zeros_like(frame)
             for fid, param in zip(func_ids, params):
-                canvas = execute_function_complete(fid, param, canvas)
+                canvas = execute_function_top10(fid, param, canvas)
             
             # Convert to tensor [0, 1] range, shape (3, H, W)
             canvas_tensor = torch.from_numpy(canvas).float() / 255.0
@@ -105,7 +192,7 @@ def train_with_perceptual_loss(
     model = EnhancedPVCv2Model(
         feature_dim=256,
         hidden_dim=128,
-        num_functions=NUM_EXTENDED_FUNCTIONS,
+        num_functions=NUM_EXTENDED_FUNCTIONS + 1,  # +1 for END token (43 total)
         max_sequence_length=20
     ).to(device)
     
@@ -115,8 +202,9 @@ def train_with_perceptual_loss(
     # Initialize combined loss (includes perceptual loss)
     print(f"\n🎯 Initializing combined loss...")
     print(f"   Weights: 0.3 function + 0.3 param + 0.4 perceptual")
+    print(f"   Num classes: {NUM_EXTENDED_FUNCTIONS + 1} (including END token)")
     criterion = CombinedLoss(
-        num_functions=NUM_EXTENDED_FUNCTIONS,
+        num_functions=NUM_EXTENDED_FUNCTIONS + 1,  # +1 for END token
         device=device,
         weight_function=0.3,
         weight_param=0.3,
@@ -139,7 +227,8 @@ def train_with_perceptual_loss(
     train_dataset = FunctionSequenceDatasetWithParams(
         train_frames,
         train_sequences,
-        max_seq_len=20
+        max_seq_len=20,
+        end_token_id=NUM_EXTENDED_FUNCTIONS  # 42 for extended set
     )
     train_loader = DataLoader(
         train_dataset,
@@ -176,12 +265,14 @@ def train_with_perceptual_loss(
             
             # Reconstruct frames for perceptual loss (every 5 batches to save time)
             if batch_idx % 5 == 0:
-                # Convert original frames to [0, 1] range, CHW format
-                original_frames = frames_batch.float() / 255.0
-                original_frames = original_frames.permute(0, 3, 1, 2)  # BHWC -> BCHW
+                # Original frames are already in BCHW format from dataset, normalize to [0,1]
+                original_frames = frames_batch.float()
+                if original_frames.max() > 1.0:
+                    original_frames = original_frames / 255.0
                 
-                # Reconstruct frames
-                reconstructed_frames = reconstruct_batch(model, frames_batch, device)
+                # Convert to HWC format for reconstruction, then back to CHW
+                frames_hwc = frames_batch.permute(0, 2, 3, 1)  # BCHW -> BHWC
+                reconstructed_frames = reconstruct_batch(model, frames_hwc, device)
             else:
                 original_frames = None
                 reconstructed_frames = None

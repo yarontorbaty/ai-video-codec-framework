@@ -20,7 +20,7 @@ class FunctionSequenceDatasetWithParams(Dataset):
     """Dataset with function IDs AND parameter ground truth."""
     
     def __init__(self, frames: List[np.ndarray], function_sequences: List[List[FunctionCall]],
-                 max_seq_len: int = 20):
+                 max_seq_len: int = 20, end_token_id: int = 42):
         """
         Initialize dataset.
         
@@ -28,10 +28,12 @@ class FunctionSequenceDatasetWithParams(Dataset):
             frames: List of rendered frames (uint8, H x W x 3)
             function_sequences: List of function call lists (with params!)
             max_seq_len: Maximum sequence length
+            end_token_id: ID for END token (NUM_EXTENDED_FUNCTIONS)
         """
         self.frames = frames
         self.function_sequences = function_sequences
         self.max_seq_len = max_seq_len
+        self.end_token_id = end_token_id
     
     def __len__(self) -> int:
         return len(self.frames)
@@ -78,7 +80,7 @@ class FunctionSequenceDatasetWithParams(Dataset):
         
         # Pad sequences to max_seq_len
         while len(func_ids) < self.max_seq_len:
-            func_ids.append(10)  # END token
+            func_ids.append(self.end_token_id)  # END token
             params_list.append(np.zeros(10, dtype=np.float32))  # Zero padding
         
         # Truncate if too long

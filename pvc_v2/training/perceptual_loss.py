@@ -121,7 +121,7 @@ class CombinedLoss(nn.Module):
                  weight_perceptual=0.4):
         """
         Args:
-            num_functions: Number of function classes
+            num_functions: Number of function classes (should be NUM_EXTENDED_FUNCTIONS + 1 for END token)
             device: torch device
             weight_function: Weight for function prediction loss
             weight_param: Weight for parameter prediction loss
@@ -129,6 +129,7 @@ class CombinedLoss(nn.Module):
         """
         super(CombinedLoss, self).__init__()
         
+        # CrossEntropyLoss expects num_classes = num_functions + 1 (for END token)
         self.function_criterion = nn.CrossEntropyLoss()
         self.param_criterion = nn.MSELoss()
         self.perceptual_loss = VGGPerceptualLoss(device=device)
