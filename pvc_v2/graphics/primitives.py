@@ -19,6 +19,7 @@ class FunctionCall:
     func_id: int
     func_name: str
     params: dict
+    normalized_params: dict = None  # NEW: Normalized parameters for training
     
     def estimate_size(self) -> int:
         """Estimate compressed size in bytes."""
@@ -36,6 +37,63 @@ class FunctionCall:
                     size += len(value) * 2
         
         return size
+    
+    def get_normalized_params(self, frame_width: int = 256, frame_height: int = 256) -> np.ndarray:
+        """
+        Get parameters as normalized numpy array for neural network training.
+        
+        Returns:
+            Array of shape (10,) with normalized parameters:
+            [coords(4), color1(3), color2(3)]
+        """
+        if self.normalized_params is not None:
+            # Use pre-computed normalized params
+            coords = self.normalized_params.get('coords', [0, 0, 0, 0])
+            color1 = self.normalized_params.get('color1', [0.5, 0.5, 0.5])
+            color2 = self.normalized_params.get('color2', [0.5, 0.5, 0.5])
+            return np.array(coords + color1 + color2, dtype=np.float32)
+        
+        # Compute from params (fallback)
+        # Extract and normalize coordinates
+        if 'x' in self.params:
+            coords = [
+                self.params.get('x', 0) / frame_width,
+                self.params.get('y', 0) / frame_height,
+                self.params.get('w', frame_width) / frame_width,
+                self.params.get('h', frame_height) / frame_height,
+            ]
+        elif 'cx' in self.params:
+            coords = [
+                self.params.get('cx', frame_width/2) / frame_width,
+                self.params.get('cy', frame_height/2) / frame_height,
+                self.params.get('rx', 50) / frame_width,
+                self.params.get('ry', 50) / frame_height,
+            ]
+        else:
+            coords = [0.5, 0.5, 0.2, 0.2]
+        
+        # Extract colors (already normalized 0-1)
+        color1 = self.params.get('color', self.params.get('fill', self.params.get('color_inner', [0.5, 0.5, 0.5])))
+        if color1 is None:
+            color1 = [0.5, 0.5, 0.5]
+        elif isinstance(color1, (list, tuple)):
+            color1 = list(color1)[:3]  # Ensure 3 elements
+            while len(color1) < 3:
+                color1.append(0.5)
+        else:
+            color1 = [0.5, 0.5, 0.5]
+        
+        color2 = self.params.get('color2', self.params.get('stroke', self.params.get('color_outer', [0.5, 0.5, 0.5])))
+        if color2 is None:
+            color2 = [0.5, 0.5, 0.5]
+        elif isinstance(color2, (list, tuple)):
+            color2 = list(color2)[:3]  # Ensure 3 elements
+            while len(color2) < 3:
+                color2.append(0.5)
+        else:
+            color2 = [0.5, 0.5, 0.5]
+        
+        return np.array(coords + color1 + color2, dtype=np.float32)
 
 
 class GraphicsPrimitives:
