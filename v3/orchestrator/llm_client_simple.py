@@ -104,13 +104,42 @@ Create two Python functions:
 - The decoder must create a video file at `output_path`
 - Use only: cv2, numpy, pickle (no torch, no tensorflow)
 - Focus on REAL compression (not procedural generation)
-- Target: PSNR > 30dB, SSIM > 0.85, compression ratio > 10x
 - Keep it SIMPLE and FAST
 
+**PERFORMANCE CRITICAL:**
+- Processing 300 HD frames @ 1920x1080 = 622 million pixels!
+- ⚠️ AVOID nested pixel loops: for y in range(1080): for x in range(1920)
+- ✅ USE vectorized operations: frame * 0.5 (operates on all pixels at once)
+- ✅ USE numpy operations: np.mean(), np.clip(), frame[:,:,0]
+- Example SLOW (2M iterations): for y in range(1080): for x in range(1920): pixel[y,x]
+- Example FAST (instant): frame = frame * 0.5  # vectorized!
+
+**DIMENSION REQUIREMENTS:**
+- Input frames: 1920x1080 pixels (width x height, 3 channels)
+- Output frames: MUST be EXACTLY 1920x1080 (same as input)
+- If you downsample during encoding (e.g., to 960x540), you MUST upsample during decoding
+- Use: cv2.resize(frame, (1920, 1080)) to restore original size
+- Decoder output shape MUST match encoder input shape exactly!
+
+**REQUIRED IMPORTS:**
+Always include these imports at the top of BOTH functions:
+```python
+import cv2
+import numpy as np
+import pickle
+```
+
+**HEVC BASELINE TO BEAT:**
+- PSNR: 27.82 dB (vs source)
+- SSIM: 0.6826 (vs source)
+- Bitrate: 10.18 Mbps
+- Size: 12.14 MB
+Goal: Match or beat these metrics at lower bitrate!
+
 **Input:**
-- `frames`: List of ~60 numpy arrays (BGR images, 640x480)
+- `frames`: List of 300 numpy arrays (BGR images, 1920x1080)
 - `output_path`: Where to save compressed data
-- `frame_count`: Number of frames to decode (~60)
+- `frame_count`: Number of frames to decode (300)
 
 """
         

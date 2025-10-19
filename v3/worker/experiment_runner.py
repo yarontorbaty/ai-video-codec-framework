@@ -167,6 +167,70 @@ class ExperimentRunner:
                     'reconstructed_path': None
                 }
             
+            # Validate reconstructed video dimensions match source
+            logger.info(f"🔍 Validating reconstructed video dimensions...")
+            try:
+                cap_orig = cv2.VideoCapture(original_path)
+                cap_recon = cv2.VideoCapture(reconstructed_path)
+                
+                ret_orig, frame_orig = cap_orig.read()
+                ret_recon, frame_recon = cap_recon.read()
+                
+                if ret_orig and ret_recon:
+                    orig_shape = frame_orig.shape
+                    recon_shape = frame_recon.shape
+                    
+                    if orig_shape != recon_shape:
+                        logger.warning(f"⚠️ Dimension mismatch: {orig_shape} vs {recon_shape}")
+                        logger.info(f"🔧 Auto-fixing: Resizing all frames to {orig_shape}")
+                        
+                        # Rebuild video with correct dimensions
+                        cap_orig.release()
+                        cap_recon.release()
+                        
+                        temp_fixed_path = reconstructed_path + ".fixed.mp4"
+                        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                        out = cv2.VideoWriter(
+                            temp_fixed_path,
+                            fourcc,
+                            30,  # FPS
+                            (orig_shape[1], orig_shape[0])  # (width, height)
+                        )
+                        
+                        # Read all frames and resize
+                        cap_recon = cv2.VideoCapture(reconstructed_path)
+                        fixed_count = 0
+                        while True:
+                            ret, frame = cap_recon.read()
+                            if not ret:
+                                break
+                            
+                            # Resize to match original dimensions
+                            if frame.shape != orig_shape:
+                                frame = cv2.resize(frame, (orig_shape[1], orig_shape[0]))
+                            
+                            out.write(frame)
+                            fixed_count += 1
+                        
+                        cap_recon.release()
+                        out.release()
+                        
+                        # Replace original with fixed version
+                        os.replace(temp_fixed_path, reconstructed_path)
+                        logger.info(f"✅ Fixed {fixed_count} frames to {orig_shape}")
+                    else:
+                        logger.info(f"✅ Dimensions match: {orig_shape}")
+                        cap_orig.release()
+                        cap_recon.release()
+                else:
+                    cap_orig.release()
+                    cap_recon.release()
+                    logger.warning("⚠️ Could not read frames for dimension validation")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ Dimension validation failed: {e}")
+                # Continue anyway - metrics calculation will handle it
+            
             return {
                 'status': 'success',
                 'original_path': original_path,
@@ -305,6 +369,24 @@ class ExperimentRunner:
             # This is critical - we need HEVC for comparison
             raise Exception(f"Cannot proceed without HEVC baseline: {e}")
     
+    def _validate_imports(self, code: str) -> list:
+        """Validate that code has required imports for used symbols"""
+        issues = []
+        
+        # Check for numpy usage
+        if ('np.' in code or 'numpy.' in code) and 'import numpy' not in code:
+            issues.append("Code uses 'np' but missing: import numpy as np")
+        
+        # Check for cv2 usage
+        if 'cv2.' in code and 'import cv2' not in code:
+            issues.append("Code uses 'cv2' but missing: import cv2")
+        
+        # Check for pickle usage  
+        if 'pickle.' in code and 'import pickle' not in code:
+            issues.append("Code uses 'pickle' but missing: import pickle")
+        
+        return issues
+    
     def _execute_encoding(
         self,
         code: str,
@@ -313,6 +395,15 @@ class ExperimentRunner:
     ) -> Dict:
         """Execute user's encoding code with timeout"""
         try:
+            # Validate imports before execution
+            import_issues = self._validate_imports(code)
+            if import_issues:
+                logger.error(f"Import validation failed: {'; '.join(import_issues)}")
+                return {
+                    'success': False,
+                    'error': f"Missing imports: {'; '.join(import_issues)}"
+                }
+            
             # Create execution environment
             env = {}
             exec(code, env)
@@ -364,6 +455,15 @@ class ExperimentRunner:
     ) -> Dict:
         """Execute user's decoding code with timeout"""
         try:
+            # Validate imports before execution
+            import_issues = self._validate_imports(code)
+            if import_issues:
+                logger.error(f"Import validation failed: {'; '.join(import_issues)}")
+                return {
+                    'success': False,
+                    'error': f"Missing imports: {'; '.join(import_issues)}"
+                }
+            
             # Create execution environment
             env = {}
             exec(code, env)
