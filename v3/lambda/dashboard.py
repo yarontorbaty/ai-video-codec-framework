@@ -48,13 +48,18 @@ def lambda_handler(event, context):
 def get_experiments_api():
     """API endpoint for real-time experiment updates"""
     try:
-        # Get all experiments
+        # Get all experiments with pagination
         table = dynamodb.Table(DYNAMODB_TABLE)
         response = table.scan()
         experiments = response.get('Items', [])
         
-        # Sort by iteration
-        experiments.sort(key=lambda x: int(x.get('iteration', 0)), reverse=True)
+        # Handle pagination to get ALL experiments
+        while 'LastEvaluatedKey' in response:
+            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            experiments.extend(response.get('Items', []))
+        
+        # Sort by timestamp (most recent first)
+        experiments.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
         
         # Separate by status
         successful = [e for e in experiments if e.get('status') == 'success']
@@ -243,8 +248,8 @@ def render_dashboard():
         response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
         experiments.extend(response.get('Items', []))
     
-    # Sort by iteration
-    experiments.sort(key=lambda x: int(x.get('iteration', 0)), reverse=True)
+    # Sort by timestamp (most recent first) to show latest experiments
+    experiments.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
     
     # Separate by status
     successful = [e for e in experiments if e.get('status') == 'success']

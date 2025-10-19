@@ -105,12 +105,10 @@ def train_extended_model(
     # Create model
     print("\n🏗️  Creating model...")
     model = PVCv2Model(
-        input_channels=3,
         feature_dim=256,
         hidden_dim=128,
         num_functions=NUM_EXTENDED_FUNCTIONS,  # 47 functions
-        max_sequence_length=dataset.max_seq_len,
-        param_dim=10
+        max_sequence_length=dataset.max_seq_len
     ).to(device)
     
     total_params = sum(p.numel() for p in model.parameters())
