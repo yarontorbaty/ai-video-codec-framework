@@ -139,7 +139,6 @@ def train_extended_model(
         model.train()
         epoch_loss = 0.0
         epoch_func_acc = 0.0
-        epoch_param_loss = 0.0
         num_batches = 0
         
         for batch_idx, (frames_batch, func_ids_batch, params_batch) in enumerate(dataloader):
@@ -150,7 +149,7 @@ def train_extended_model(
             optimizer.zero_grad()
             
             # Forward pass
-            function_logits, predicted_params = model(frames_batch, func_ids_batch)
+            function_logits, predicted_sequences, _ = model(frames_batch, func_ids_batch)
             
             # Compute function loss (average over sequence)
             batch_size, seq_len = func_ids_batch.shape
@@ -159,12 +158,8 @@ def train_extended_model(
                 func_loss += criterion_func(function_logits[:, t, :], func_ids_batch[:, t])
             func_loss = func_loss / seq_len
             
-            # Compute parameter loss (average over sequence, only for non-END tokens)
-            mask = (func_ids_batch != NUM_EXTENDED_FUNCTIONS).float().unsqueeze(-1)  # (batch x seq x 1)
-            param_loss = criterion_param(predicted_params * mask, params_batch * mask)
-            
-            # Total loss: 0.5 function + 0.5 parameter
-            loss = 0.5 * func_loss + 0.5 * param_loss
+            # For now, only optimize function prediction (not parameters)
+            loss = func_loss
             
             # Backward pass
             loss.backward()
@@ -180,20 +175,17 @@ def train_extended_model(
             
             epoch_loss += loss.item()
             epoch_func_acc += correct.item()
-            epoch_param_loss += param_loss.item()
             num_batches += 1
         
         # Epoch statistics
         avg_loss = epoch_loss / num_batches
         avg_acc = epoch_func_acc / num_batches * 100
-        avg_param_loss = epoch_param_loss / num_batches
         
         elapsed = time.time() - start_time
         
         print(f"Epoch [{epoch+1}/{num_epochs}] "
               f"Loss: {avg_loss:.4f} | "
               f"Func Acc: {avg_acc:.1f}% | "
-              f"Param Loss: {avg_param_loss:.4f} | "
               f"Time: {elapsed:.1f}s")
         
         # Save best model

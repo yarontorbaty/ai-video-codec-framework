@@ -1303,11 +1303,17 @@ def render_blog_post(experiment_id):
     video_url = generate_presigned_url(video_s3_key, download=True, filename=f"{experiment_id}_video.mp4") if decoder_s3_key else None
     decoder_url = generate_presigned_url(decoder_s3_key, download=True, filename=f"{experiment_id}_decoder.py") if decoder_s3_key else None
     
-    # Get timestamp
+    # Get timestamp - try ISO first, fallback to unix timestamp
     timestamp_iso = exp.get('timestamp_iso', '')
+    timestamp_unix = exp.get('timestamp', 0)
     try:
-        dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00'))
-        timestamp_str = dt.strftime('%B %d, %Y at %I:%M %p')
+        if timestamp_iso:
+            dt = datetime.fromisoformat(timestamp_iso.replace('Z', '+00:00'))
+        elif timestamp_unix:
+            dt = datetime.fromtimestamp(int(timestamp_unix))
+        else:
+            dt = None
+        timestamp_str = dt.strftime('%B %d, %Y at %I:%M %p') if dt else 'Unknown date'
     except:
         timestamp_str = 'Unknown date'
     
