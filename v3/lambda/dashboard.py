@@ -48,18 +48,40 @@ def lambda_handler(event, context):
 def get_experiments_api():
     """API endpoint for real-time experiment updates"""
     try:
-        # Get all experiments with pagination
+        # Get experiments with pagination (limit to avoid response size limits)
         table = dynamodb.Table(DYNAMODB_TABLE)
-        response = table.scan()
+        response = table.scan(Limit=1000)
         experiments = response.get('Items', [])
         
-        # Handle pagination to get ALL experiments
-        while 'LastEvaluatedKey' in response:
-            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        # Get more experiments if needed (up to 5000 to stay under 6MB Lambda limit)
+        scan_count = 1
+        while 'LastEvaluatedKey' in response and scan_count < 5 and len(experiments) < 5000:
+            response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'], Limit=1000)
             experiments.extend(response.get('Items', []))
+            scan_count += 1
         
-        # Sort by timestamp (most recent first)
-        experiments.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
+        # Filter successful experiments and calculate composite score
+        successful_exps = [e for e in experiments if e.get('status') == 'success']
+        
+        # Calculate performance score for each experiment
+        for exp in successful_exps:
+            metrics = exp.get('metrics', {})
+            psnr = float(metrics.get('psnr_db', 0))
+            compression = float(metrics.get('compression_ratio', 1))
+            exp['_performance_score'] = psnr * compression
+        
+        # Sort by performance score (best first)
+        successful_exps.sort(key=lambda x: x.get('_performance_score', 0), reverse=True)
+        
+        # Take top 500 performers
+        top_experiments = successful_exps[:500]
+        
+        # Add back recent failed/in-progress
+        other_exps = [e for e in experiments if e.get('status') != 'success']
+        other_exps.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
+        
+        # Combine
+        experiments = top_experiments + other_exps[:50]
         
         # Separate by status
         successful = [e for e in experiments if e.get('status') == 'success']
@@ -238,18 +260,41 @@ def generate_llm_summary(experiments):
 def render_dashboard():
     """Render main dashboard page with dark theme and real-time updates"""
     
-    # Get all experiments with pagination
+    # Get all experiments with pagination (limit to avoid Lambda response size limits)
     table = dynamodb.Table(DYNAMODB_TABLE)
-    response = table.scan()
+    response = table.scan(Limit=1000)
     experiments = response.get('Items', [])
     
-    # Handle pagination to get ALL experiments
-    while 'LastEvaluatedKey' in response:
-        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+    # Get more experiments if needed (up to 5000 total to stay under 6MB Lambda limit)
+    scan_count = 1
+    while 'LastEvaluatedKey' in response and scan_count < 5 and len(experiments) < 5000:
+        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'], Limit=1000)
         experiments.extend(response.get('Items', []))
+        scan_count += 1
     
-    # Sort by timestamp (most recent first) to show latest experiments
-    experiments.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
+    # Filter successful experiments and calculate composite score
+    successful_exps = [e for e in experiments if e.get('status') == 'success']
+    
+    # Calculate performance score for each experiment (higher PSNR + lower bitrate = better)
+    for exp in successful_exps:
+        metrics = exp.get('metrics', {})
+        psnr = float(metrics.get('psnr_db', 0))
+        compression = float(metrics.get('compression_ratio', 1))
+        # Score = PSNR * compression_ratio (favor both quality and compression)
+        exp['_performance_score'] = psnr * compression
+    
+    # Sort by performance score (best first)
+    successful_exps.sort(key=lambda x: x.get('_performance_score', 0), reverse=True)
+    
+    # Take top 500 performers
+    top_experiments = successful_exps[:500]
+    
+    # Add back failed/in-progress from recent experiments for context
+    other_exps = [e for e in experiments if e.get('status') != 'success']
+    other_exps.sort(key=lambda x: int(x.get('timestamp', 0)), reverse=True)
+    
+    # Combine: top 500 successful + recent 50 failed/in-progress
+    experiments = top_experiments + other_exps[:50]
     
     # Separate by status
     successful = [e for e in experiments if e.get('status') == 'success']

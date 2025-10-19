@@ -743,3 +743,7 @@ EXTENDED_FUNCTION_MAP = {
 
 NUM_EXTENDED_FUNCTIONS = len(EXTENDED_FUNCTION_MAP)
 
+# Create a mapping from sparse IDs to contiguous IDs [0, NUM_EXTENDED_FUNCTIONS-1]
+SPARSE_TO_CONTIGUOUS = {sparse_id: contiguous_id for contiguous_id, sparse_id in enumerate(sorted(EXTENDED_FUNCTION_MAP.keys()))}
+CONTIGUOUS_TO_SPARSE = {v: k for k, v in SPARSE_TO_CONTIGUOUS.items()}
+

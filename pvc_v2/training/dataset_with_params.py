@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from graphics.primitives_extended import SPARSE_TO_CONTIGUOUS
 from graphics.primitives import FunctionCall
 
 
@@ -56,10 +58,11 @@ class FunctionSequenceDatasetWithParams(Dataset):
         if len(func_calls) > 0:
             if isinstance(func_calls[0], dict):
                 # Dictionary format from ExtendedSyntheticGenerator
-                func_ids = [f['func_id'] for f in func_calls]
+                # Convert sparse IDs to contiguous IDs
+                func_ids = [SPARSE_TO_CONTIGUOUS.get(f['func_id'], 0) for f in func_calls]
             else:
                 # FunctionCall objects
-                func_ids = [f.func_id for f in func_calls]
+                func_ids = [SPARSE_TO_CONTIGUOUS.get(f.func_id, 0) for f in func_calls]
         else:
             func_ids = []
         

@@ -26,7 +26,7 @@ from models.enhanced_network import EnhancedPVCv2Model
 from training.perceptual_loss import CombinedLoss, VGGPerceptualLoss
 from training.dataset_with_params import FunctionSequenceDatasetWithParams
 from training.synthetic_generator_extended import ExtendedSyntheticGenerator
-from graphics.primitives_extended import NUM_EXTENDED_FUNCTIONS
+from graphics.primitives_extended import NUM_EXTENDED_FUNCTIONS, CONTIGUOUS_TO_SPARSE
 
 
 def execute_function_top10(func_id: int, params: np.ndarray, canvas: np.ndarray) -> np.ndarray:
@@ -139,12 +139,15 @@ def reconstruct_batch(model, frames_batch, device):
         for i in range(batch_size):
             frame = frames_batch[i]
             
-            # Get predictions
+            # Get predictions (in contiguous ID space)
             func_ids, params = model.predict_with_params(frame)
+            
+            # Convert contiguous IDs back to sparse IDs for execution
+            sparse_func_ids = [CONTIGUOUS_TO_SPARSE.get(fid, 0) for fid in func_ids]
             
             # Reconstruct using top 10 functions (for speed)
             canvas = np.zeros_like(frame)
-            for fid, param in zip(func_ids, params):
+            for fid, param in zip(sparse_func_ids, params):
                 canvas = execute_function_top10(fid, param, canvas)
             
             # Convert to tensor [0, 1] range, shape (3, H, W)
@@ -259,6 +262,23 @@ def train_with_perceptual_loss(
             frames_batch = frames_batch.to(device)
             func_ids_batch = func_ids_batch.to(device)
             params_batch = params_batch.to(device)
+            
+            # DEBUG: Check tensor values on first batch
+            if batch_idx == 0 and epoch == 0:
+                print(f"\n🔍 DEBUG - First Batch:")
+                print(f"   func_ids_batch shape: {func_ids_batch.shape}")
+                print(f"   func_ids_batch min: {func_ids_batch.min().item()}")
+                print(f"   func_ids_batch max: {func_ids_batch.max().item()}")
+                print(f"   Unique values: {torch.unique(func_ids_batch).cpu().tolist()}")
+                print(f"   Model num_functions: {model.num_functions}")
+                print(f"   Expected range: [0, {model.num_functions - 1}]")
+                
+                # Check if any values are out of range
+                out_of_range = (func_ids_batch < 0) | (func_ids_batch >= model.num_functions)
+                if out_of_range.any():
+                    print(f"   ⚠️  WARNING: {out_of_range.sum().item()} values out of range!")
+                    bad_values = func_ids_batch[out_of_range].unique().cpu().tolist()
+                    print(f"   Bad values: {bad_values}")
             
             # Forward pass
             function_logits, predicted_sequences, predicted_params = model(frames_batch)
