@@ -218,14 +218,17 @@ def train_extended_model(
             
             # Predict functions
             frame_tensor = torch.from_numpy(original).permute(2, 0, 1).float().unsqueeze(0).to(device) / 255.0
-            func_logits, param_preds = model(frame_tensor)
+            function_logits, predicted_sequences, _ = model(frame_tensor)
             
-            # Decode (simplified - just use predicted functions)
-            predicted_funcs = torch.argmax(func_logits[0], dim=1).cpu().numpy()
+            # Decode predicted function IDs
+            predicted_funcs = predicted_sequences[0].cpu().numpy()
             
-            # Reconstruct (placeholder - would need full reconstruction pipeline)
-            # For now, just measure against original
-            reconstructed = original  # Placeholder
+            # Reconstruct using predicted functions (simplified - use solid colors)
+            # In a full implementation, we'd use the actual graphics primitives
+            reconstructed = np.zeros_like(original)
+            
+            # For now, just fill with average color as a baseline
+            reconstructed[:] = np.mean(original, axis=(0, 1)).astype(np.uint8)
             
             # Calculate PSNR and SSIM
             from skimage.metrics import peak_signal_noise_ratio, structural_similarity
@@ -242,6 +245,8 @@ def train_extended_model(
     print(f"\n   📊 Quality Metrics (20 test samples):")
     print(f"      PSNR: {avg_psnr:.2f} ± {np.std(psnrs):.2f} dB")
     print(f"      SSIM: {avg_ssim:.4f} ± {np.std(ssims):.4f}")
+    print(f"\n   ⚠️  Note: Using baseline reconstruction (average color)")
+    print(f"      Full reconstruction pipeline needed for accurate PSNR")
     
     print("\n" + "="*70)
     print("✅ Extended Training Complete!")
