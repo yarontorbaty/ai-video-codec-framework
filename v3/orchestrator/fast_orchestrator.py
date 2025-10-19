@@ -50,35 +50,62 @@ CODES_PER_GENERATION = 100
 SYSTEM_PROMPT = """You are a video compression codec generator. Generate SIMPLE, FAST compression algorithms.
 
 REQUIREMENTS:
-1. For tiny 64x64 10-frame videos
+1. For tiny 64x64 10-frame videos (numpy arrays)
 2. In-memory only (no file I/O)
 3. Must complete in <10 seconds
-4. encode(frames) -> bytes
-5. decode(data, num_frames) -> frames
+4. Function names: run_encoding_agent(frames) -> bytes, run_decoding_agent(data, num_frames) -> frames
 
-ENCODING FUNCTION:
-def encode(frames):
-    # frames: list of numpy arrays (H,W,3)
+AVAILABLE LIBRARIES (ONLY USE THESE):
+- numpy (as np) - for array operations
+- cv2 (opencv) - for image operations, DCT, DWT
+- pickle - for serialization
+- scipy - for signal processing, FFT, transforms
+- scikit-image (skimage) - for image processing
+
+DO NOT use: tensorflow, torch, PIL, matplotlib, pandas, or any other libraries!
+
+ENCODING FUNCTION TEMPLATE:
+import numpy as np
+import cv2
+import pickle
+# Optional: from scipy import fft, signal
+# Optional: from skimage import transform
+
+def run_encoding_agent(frames):
+    # frames: list of numpy arrays (64, 64, 3) uint8
     # return: bytes (compressed data)
-    import numpy as np
-    import pickle
-    # YOUR CODE HERE
+    # YOUR COMPRESSION CODE HERE
     return compressed_bytes
 
-DECODING FUNCTION:
-def decode(data, num_frames):
-    # data: bytes (compressed)
-    # num_frames: int (expected number of frames)
-    # return: list of numpy arrays (H,W,3) uint8
-    import numpy as np
-    import pickle
-    # YOUR CODE HERE
-    return frames
+DECODING FUNCTION TEMPLATE:
+import numpy as np
+import cv2
+import pickle
+# Optional: from scipy import fft, signal
+# Optional: from skimage import transform
 
-Generate 10 different compression approaches. Focus on SPEED and SIMPLICITY.
-Ideas: downsampling, color quantization, frame differencing, DCT, simple predictive coding.
+def run_decoding_agent(compressed_data, expected_frames):
+    # compressed_data: bytes
+    # expected_frames: int (should be 10)
+    # return: list of numpy arrays (64, 64, 3) uint8
+    # YOUR DECOMPRESSION CODE HERE
+    return frames  # Must be list of exactly 'expected_frames' arrays
 
-Output JSON array with 10 codec variations."""
+COMPRESSION IDEAS TO EXPLORE:
+- Downsampling + upsampling (cv2.resize)
+- Color space conversion (BGR->YCrCb, BGR->HSV)
+- Quantization (reduce bit depth)
+- DCT/DWT transforms (cv2.dct, scipy.fft)
+- Frame differencing (only store deltas)
+- Run-length encoding
+- Simple motion compensation
+- Subsampling (skip pixels/frames)
+- Huffman-like encoding
+- PCA/SVD compression
+
+Generate 10 DIFFERENT, SIMPLE, FAST codec variations.
+Each must use ONLY the allowed libraries above.
+Output as JSON array: [{"encoding_code": "...", "decoding_code": "..."}, ...]"""
 
 
 class FastOrchestrator:
