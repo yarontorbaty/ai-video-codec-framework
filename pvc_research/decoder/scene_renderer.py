@@ -64,11 +64,11 @@ class SceneRenderer:
         return frame
     
     def _render_object(self,
-                      frame: np.ndarray,
-                      obj: Dict,
-                      frame_idx: int):
+                     frame: np.ndarray,
+                     obj: Dict,
+                     frame_idx: int):
         """
-        Render a single object onto the frame.
+        Render a single object onto the frame with texture patch support.
         
         Args:
             frame: Frame to render into (modified in-place)
@@ -96,16 +96,20 @@ class SceneRenderer:
         
         # Get texture
         texture_info = obj.get('texture', {})
-        color = self._get_object_color(texture_info, contour_data)
+        texture_type = texture_info.get('type', 'solid')
         
-        # Draw filled contour
-        cv2.fillPoly(frame, [points], color=color)
-        
-        # Draw contour outline for sharp edges
-        cv2.polylines(frame, [points], 
-                     isClosed=True, 
-                     color=color,
-                     thickness=1)
+        # Handle different texture types
+        if texture_type == 'patch':
+            # Render with texture patch
+            self._draw_textured_contour(frame, points, texture_info, contour_data)
+        else:
+            # Simple solid color fill
+            color = self._get_object_color(texture_info, contour_data)
+            cv2.fillPoly(frame, [points], color=color)
+            cv2.polylines(frame, [points], 
+                         isClosed=True, 
+                         color=color,
+                         thickness=1)
     
     def _get_contour_at_frame(self,
                              obj: Dict,
@@ -168,7 +172,7 @@ class SceneRenderer:
         texture_type = texture_info.get('type', 'solid')
         
         # For both 'solid' and 'sampled' types, use the real color from video
-        if texture_type in ['solid', 'sampled']:
+        if texture_type in ['solid', 'sampled', 'patch']:
             # Real color extracted from video (stored as normalized RGB)
             rgb = texture_info.get('color', [0.5, 0.5, 0.5])
             return (
@@ -189,6 +193,101 @@ class SceneRenderer:
         else:
             # Default gray
             return (128, 128, 128)
+    
+    def _draw_textured_contour(self,
+                              frame: np.ndarray,
+                              points: np.ndarray,
+                              texture_info: Dict,
+                              contour_data: Dict):
+        """
+        Draw a contour filled with a tiled texture patch.
+        
+        Args:
+            frame: Frame to draw into
+            points: Contour points (already transformed)
+            texture_info: Texture information including patch data
+            contour_data: Contour metadata
+        """
+        import base64
+        
+        # Decode texture patch
+        patch_b64 = texture_info.get('patch')
+        if not patch_b64:
+            # Fallback to solid color
+            color = self._get_object_color(texture_info, contour_data)
+            cv2.fillPoly(frame, [points], color=color)
+            return
+        
+        try:
+            # Decode base64 JPEG
+            patch_bytes = base64.b64decode(patch_b64)
+            patch_img = cv2.imdecode(
+                np.frombuffer(patch_bytes, dtype=np.uint8),
+                cv2.IMREAD_COLOR
+            )
+            
+            if patch_img is None:
+                raise ValueError("Failed to decode patch")
+            
+        except Exception as e:
+            # Fallback to solid color on error
+            color = self._get_object_color(texture_info, contour_data)
+            cv2.fillPoly(frame, [points], color=color)
+            return
+        
+        # Get bounding box of contour
+        x, y, w, h = cv2.boundingRect(points)
+        
+        # Clamp to frame bounds
+        x1 = max(0, x)
+        y1 = max(0, y)
+        x2 = min(frame.shape[1], x + w)
+        y2 = min(frame.shape[0], y + h)
+        
+        if x2 <= x1 or y2 <= y1:
+            return
+        
+        # Create a mask for the contour
+        mask = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
+        cv2.fillPoly(mask, [points], 255)
+        
+        # Tile the texture patch across the bounding box
+        patch_h, patch_w = patch_img.shape[:2]
+        
+        for y_offset in range(y1, y2, patch_h):
+            for x_offset in range(x1, x2, patch_w):
+                # Calculate tile bounds
+                tile_y1 = y_offset
+                tile_y2 = min(y2, y_offset + patch_h)
+                tile_x1 = x_offset
+                tile_x2 = min(x2, x_offset + patch_w)
+                
+                # Calculate source patch region
+                src_h = tile_y2 - tile_y1
+                src_w = tile_x2 - tile_x1
+                
+                if src_h <= 0 or src_w <= 0:
+                    continue
+                
+                # Extract patch region
+                patch_region = patch_img[:src_h, :src_w]
+                
+                # Apply mask and blend into frame
+                tile_mask = mask[tile_y1:tile_y2, tile_x1:tile_x2]
+                
+                # Use masked copy
+                frame[tile_y1:tile_y2, tile_x1:tile_x2] = np.where(
+                    tile_mask[:, :, np.newaxis] > 0,
+                    patch_region,
+                    frame[tile_y1:tile_y2, tile_x1:tile_x2]
+                )
+        
+        # Draw contour outline for sharp edges
+        color = self._get_object_color(texture_info, contour_data)
+        cv2.polylines(frame, [points], 
+                     isClosed=True, 
+                     color=color,
+                     thickness=1)
     
     def _apply_residual(self,
                        frame: np.ndarray,

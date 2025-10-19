@@ -156,12 +156,14 @@ class PVCEncoder:
     
     def _assign_textures(self, objects: List[Dict], frames: List[np.ndarray] = None):
         """
-        Assign textures to objects by extracting real colors from video frames.
+        Assign textures to objects by extracting real colors AND texture patches.
         
         Args:
             objects: List of tracked objects with contours
-            frames: List of video frames to sample colors from
+            frames: List of video frames to sample colors and textures from
         """
+        import base64
+        
         for obj in objects:
             if not obj.get('contour_sequence') or not frames:
                 continue
@@ -183,21 +185,46 @@ class PVCEncoder:
             # Extract texture complexity (variance)
             texture_variance = self._extract_texture_variance(frame, contour)
             
-            # Assign texture based on complexity
-            if texture_variance < 100:  # Low variance = solid color
+            # Get object area to decide texture patch size
+            area = contour.get('area', 0)
+            
+            # Assign texture based on complexity and size
+            if texture_variance < 50:  # Very low variance = solid color
                 obj['texture'] = {
                     'type': 'solid',
                     'color': avg_color.tolist(),
                     'params': {}
                 }
-            else:  # High variance = sample texture patch
-                # Store average color as base
+            elif area < 500:  # Small object = just color
                 obj['texture'] = {
-                    'type': 'sampled',
+                    'type': 'solid',
                     'color': avg_color.tolist(),
-                    'variance': float(texture_variance),
                     'params': {}
                 }
+            else:  # High variance or large object = extract texture patch
+                # Extract texture patch from object region
+                texture_patch = self._extract_texture_patch(frame, contour, patch_size=16)
+                
+                if texture_patch is not None:
+                    # Compress patch with JPEG
+                    _, encoded = cv2.imencode('.jpg', texture_patch, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                    patch_b64 = base64.b64encode(encoded.tobytes()).decode('ascii')
+                    
+                    obj['texture'] = {
+                        'type': 'patch',
+                        'color': avg_color.tolist(),  # Fallback color
+                        'patch': patch_b64,
+                        'patch_size': list(texture_patch.shape[:2]),  # [height, width]
+                        'variance': float(texture_variance),
+                        'params': {}
+                    }
+                else:
+                    # Fallback to solid color
+                    obj['texture'] = {
+                        'type': 'solid',
+                        'color': avg_color.tolist(),
+                        'params': {}
+                    }
     
     def _extract_region_color(self, frame: np.ndarray, contour: Dict) -> np.ndarray:
         """Extract average color from a contour region."""
@@ -243,6 +270,60 @@ class PVCEncoder:
         
         # Calculate variance as measure of texture complexity
         return float(np.var(gray))
+    
+    def _extract_texture_patch(self, frame: np.ndarray, contour: Dict, patch_size: int = 16) -> np.ndarray:
+        """
+        Extract a representative texture patch from an object region.
+        
+        Args:
+            frame: Video frame
+            contour: Object contour
+            patch_size: Size of square patch to extract
+            
+        Returns:
+            Texture patch (patch_size x patch_size x 3) or None
+        """
+        # Get bounding box
+        x, y, w, h = contour['bounding_box']
+        
+        # Clip to frame bounds
+        x1 = max(0, x)
+        y1 = max(0, y)
+        x2 = min(frame.shape[1], x + w)
+        y2 = min(frame.shape[0], y + h)
+        
+        if x2 <= x1 or y2 <= y1:
+            return None
+        
+        # Extract region
+        region = frame[y1:y2, x1:x2]
+        
+        # If region is smaller than patch_size, use entire region
+        if region.shape[0] < patch_size or region.shape[1] < patch_size:
+            # Resize to patch_size
+            if region.shape[0] > 0 and region.shape[1] > 0:
+                patch = cv2.resize(region, (patch_size, patch_size))
+                return patch
+            else:
+                return None
+        
+        # Extract center patch
+        center_y = region.shape[0] // 2
+        center_x = region.shape[1] // 2
+        
+        half_patch = patch_size // 2
+        patch_y1 = max(0, center_y - half_patch)
+        patch_y2 = min(region.shape[0], center_y + half_patch)
+        patch_x1 = max(0, center_x - half_patch)
+        patch_x2 = min(region.shape[1], center_x + half_patch)
+        
+        patch = region[patch_y1:patch_y2, patch_x1:patch_x2]
+        
+        # Ensure exactly patch_size x patch_size
+        if patch.shape[0] != patch_size or patch.shape[1] != patch_size:
+            patch = cv2.resize(patch, (patch_size, patch_size))
+        
+        return patch
     
     def save_scene(self, scene_desc: Dict, output_path: str):
         """
