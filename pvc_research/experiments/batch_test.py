@@ -15,12 +15,29 @@ from datetime import datetime
 import logging
 
 # Add pvc_research to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+pvc_root = Path(__file__).parent.parent
+sys.path.insert(0, str(pvc_root))
 
-from encoder import PVCEncoder
-from decoder import PVCDecoder
+# Import PVC modules directly
+sys.path.insert(0, str(pvc_root))
+from encoder.contour_extractor import ContourExtractor
+from encoder.motion_tracker import MotionTracker
+from decoder.procedural_textures import ProceduralTextures
+from decoder.scene_renderer import SceneRenderer
 from utils.quality_metrics import QualityMetrics
 from utils.bitrate_calculator import BitrateCalculator
+
+# Import main encoder/decoder classes
+import importlib.util
+encoder_spec = importlib.util.spec_from_file_location("pvc_encoder", pvc_root / "encoder.py")
+encoder_module = importlib.util.module_from_spec(encoder_spec)
+encoder_spec.loader.exec_module(encoder_module)
+PVCEncoder = encoder_module.PVCEncoder
+
+decoder_spec = importlib.util.spec_from_file_location("pvc_decoder", pvc_root / "decoder.py")
+decoder_module = importlib.util.module_from_spec(decoder_spec)
+decoder_spec.loader.exec_module(decoder_module)
+PVCDecoder = decoder_module.PVCDecoder
 
 logging.basicConfig(
     level=logging.INFO,
