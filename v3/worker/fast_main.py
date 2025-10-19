@@ -44,10 +44,15 @@ class FastWorkerHandler(BaseHTTPRequestHandler):
             request = json.loads(body)
             
             experiments = request.get('experiments', [])
-            logger.info(f"🚀 Received batch: {len(experiments)} experiments")
+            generation = request.get('generation', 0)  # Support evolutionary mode
+            logger.info(f"🚀 Received batch: {len(experiments)} experiments (generation {generation})")
             
             # Run batch
             results = runner.run_batch(experiments)
+            
+            # Add generation to all results
+            for result in results:
+                result['generation'] = generation
             
             # Store results in DynamoDB (batch write)
             self._store_results_batch(results)
@@ -83,6 +88,7 @@ class FastWorkerHandler(BaseHTTPRequestHandler):
                     item = {
                         'experiment_id': result['experiment_id'],
                         'timestamp': int(time.time()),
+                        'generation': result.get('generation', 0),  # Track evolutionary generation
                         'status': result['status'],
                         'mse': Decimal(str(result['mse'])) if result.get('mse') is not None else None,
                         'compression_ratio': Decimal(str(result['compression_ratio'])) if result.get('compression_ratio') is not None else None,
