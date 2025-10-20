@@ -213,12 +213,24 @@ class EvolutionaryOrchestrator:
             
             experiments = response['Items']
             
-            # Convert Decimals to floats
+            # Convert Decimals to floats and flatten metrics
             for exp in experiments:
+                metrics = exp.get('metrics', {})
+                # Handle both old flat schema and new nested metrics schema
                 if 'compression_ratio' in exp:
                     exp['compression_ratio'] = float(exp['compression_ratio'])
+                elif 'compression_ratio' in metrics:
+                    exp['compression_ratio'] = float(metrics['compression_ratio'])
+                else:
+                    exp['compression_ratio'] = 0
+                
                 if 'mse' in exp:
                     exp['mse'] = float(exp['mse'])
+                elif 'mse' in metrics:
+                    exp['mse'] = float(metrics['mse'])
+                else:
+                    exp['mse'] = 9999
+                
                 if 'generation' in exp:
                     exp['generation'] = int(exp['generation'])
             
@@ -292,17 +304,9 @@ YOUR TASK: Generate 10 NEW codecs that IMPROVE upon these top performers.
             
             content = message.content[0].text
             
-            # Extract JSON
-            start = content.find('[')
-            end = content.rfind(']') + 1
-            if start == -1 or end == 0:
-                logger.warning("No JSON array found")
-                return []
-            
-            try:
-                codecs_raw = json.loads(content[start:end])
-            except json.JSONDecodeError as e:
-                logger.error(f"❌ JSON parsing error: {e}")
+            # Robust JSON extraction
+            codecs_raw = self._extract_json_robust(content)
+            if not codecs_raw:
                 return []
             
             # Normalize codec format
@@ -324,6 +328,83 @@ YOUR TASK: Generate 10 NEW codecs that IMPROVE upon these top performers.
         except Exception as e:
             logger.error(f"❌ Generation error: {e}")
             return []
+    
+    def _extract_json_robust(self, content: str) -> List[Dict]:
+        """Robustly extract JSON from Claude's response, handling markdown and formatting issues"""
+        import re
+        
+        # Strategy 1: Strip markdown code blocks
+        content = re.sub(r'```json\s*', '', content)
+        content = re.sub(r'```\s*', '', content)
+        
+        # Strategy 2: Find JSON array
+        start = content.find('[')
+        end = content.rfind(']') + 1
+        
+        if start == -1 or end == 0:
+            logger.warning("No JSON array found in response")
+            return []
+        
+        json_str = content[start:end]
+        
+        # Strategy 3: Try parsing as-is
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Initial parse failed: {e}")
+        
+        # Strategy 4: Fix common issues
+        try:
+            # Replace literal newlines in strings with \n
+            json_str = re.sub(r'(?<!\\)\n(?=\s*")', r'\\n', json_str)
+            
+            # Fix unescaped quotes in strings (heuristic)
+            json_str = json_str.replace('\\"', '"')  # Unescape all first
+            json_str = re.sub(r'(?<!\\)"(?=\s*[^,\]\}:\[])', r'\\"', json_str)  # Re-escape where needed
+            
+            return json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Repair attempt failed: {e}")
+        
+        # Strategy 5: Extract individual objects
+        try:
+            # Find all object patterns
+            objects = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', json_str)
+            codecs = []
+            for obj_str in objects:
+                try:
+                    codec = json.loads(obj_str)
+                    if 'encoding_code' in codec or 'encode' in codec:
+                        codecs.append(codec)
+                except:
+                    continue
+            
+            if codecs:
+                logger.info(f"✅ Recovered {len(codecs)} codecs via object extraction")
+                return codecs
+        except Exception as e:
+            logger.warning(f"Object extraction failed: {e}")
+        
+        # Strategy 6: Last resort - try to extract code blocks manually
+        try:
+            encoding_blocks = re.findall(r'"encoding_code":\s*"([^"]+)"', content, re.DOTALL)
+            decoding_blocks = re.findall(r'"decoding_code":\s*"([^"]+)"', content, re.DOTALL)
+            
+            if len(encoding_blocks) == len(decoding_blocks):
+                codecs = []
+                for enc, dec in zip(encoding_blocks, decoding_blocks):
+                    codecs.append({
+                        'encoding_code': enc.replace('\\n', '\n').replace('\\"', '"'),
+                        'decoding_code': dec.replace('\\n', '\n').replace('\\"', '"')
+                    })
+                if codecs:
+                    logger.info(f"✅ Recovered {len(codecs)} codecs via regex extraction")
+                    return codecs
+        except Exception as e:
+            logger.warning(f"Regex extraction failed: {e}")
+        
+        logger.error("❌ All JSON extraction strategies failed")
+        return []
 
 
 def main():
