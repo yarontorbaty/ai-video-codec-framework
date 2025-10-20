@@ -127,7 +127,8 @@ class EvolutionaryOrchestrator:
                 if best_performers:
                     logger.info(f"✅ Found {len(best_performers)} top performers:")
                     for i, perf in enumerate(best_performers, 1):
-                        logger.info(f"   {i}. Compression: {perf['compression_ratio']:.2f}x | MSE: {perf['mse']:.2f}")
+                        score = perf.get('_performance_score', 0)
+                        logger.info(f"   {i}. Score: {score:.0f} (Compression: {perf['compression_ratio']:.2f}x, PSNR: {perf['psnr']:.2f} dB)")
                 else:
                     logger.info("⚠️  No successful experiments yet, using random exploration")
             
@@ -231,11 +232,25 @@ class EvolutionaryOrchestrator:
                 else:
                     exp['mse'] = 9999
                 
+                # Get PSNR for scoring
+                if 'psnr_db' in metrics:
+                    exp['psnr'] = float(metrics['psnr_db'])
+                else:
+                    # Calculate from MSE if not available
+                    import math
+                    if exp['mse'] > 0:
+                        exp['psnr'] = 10 * math.log10((255.0 ** 2) / exp['mse'])
+                    else:
+                        exp['psnr'] = 100.0
+                
                 if 'generation' in exp:
                     exp['generation'] = int(exp['generation'])
+                
+                # Calculate performance score (same as dashboard: PSNR × compression)
+                exp['_performance_score'] = exp['psnr'] * exp['compression_ratio']
             
-            # Sort by compression ratio (higher is better)
-            experiments.sort(key=lambda x: x.get('compression_ratio', 0), reverse=True)
+            # Sort by performance score (PSNR × compression - balances quality and compression)
+            experiments.sort(key=lambda x: x.get('_performance_score', 0), reverse=True)
             
             # Return top performers
             return experiments[:limit]
@@ -252,17 +267,30 @@ class EvolutionaryOrchestrator:
             # EVOLUTIONARY MODE: Improve upon best
             context = "PREVIOUS TOP PERFORMERS:\n\n"
             for i, perf in enumerate(best_performers, 1):
-                context += f"Performer {i}: {perf['compression_ratio']:.2f}x compression, {perf['mse']:.2f} MSE\n"
+                score = perf.get('_performance_score', 0)
+                context += f"Performer {i}:\n"
+                context += f"  - Performance Score: {score:.0f} (PSNR × Compression)\n"
+                context += f"  - PSNR: {perf['psnr']:.2f} dB (quality)\n"
+                context += f"  - Compression: {perf['compression_ratio']:.2f}x\n"
+                context += f"  - MSE: {perf['mse']:.2f}\n\n"
             
             system_prompt = f"""{BASE_SYSTEM_PROMPT}
 
 {context}
 
 YOUR TASK: Generate 10 NEW codecs that IMPROVE upon these top performers.
-- Try variations of their techniques
+
+GOAL: Maximize Performance Score = PSNR × Compression Ratio
+- High PSNR means good quality (low distortion)
+- High compression means small file size
+- You need BOTH to get a high score!
+
+STRATEGIES:
+- Study the top performers' techniques and try variations
 - Combine their best features
-- Fix their weaknesses (if high MSE, improve quality)
-- Try to beat the compression ratio while maintaining quality
+- If a codec has high compression but low PSNR, try to improve quality
+- If a codec has high PSNR but low compression, try to compress more
+- Balance is key - 100x compression with 20 PSNR beats 500x with 5 PSNR!
 - Be creative but build upon what worked!"""
         else:
             # EXPLORATION MODE: Random search

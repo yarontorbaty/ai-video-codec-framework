@@ -75,6 +75,7 @@ class FastWorkerHandler(BaseHTTPRequestHandler):
     def _store_results_batch(self, results: list):
         """Store experiment results in DynamoDB (batch operation)"""
         import time
+        import math
         from decimal import Decimal
         
         # DynamoDB batch write (25 items at a time)
@@ -84,20 +85,57 @@ class FastWorkerHandler(BaseHTTPRequestHandler):
             
             with experiments_table.batch_writer() as writer:
                 for result in batch:
+                    # Build metrics object for dashboard compatibility
+                    metrics = {}
+                    
+                    if result.get('mse') is not None and result['status'] == 'success':
+                        mse = float(result['mse'])
+                        compression_ratio = float(result.get('compression_ratio', 1.0))
+                        compressed_size = int(result.get('compressed_size', 0))
+                        
+                        # Calculate PSNR from MSE
+                        if mse > 0:
+                            psnr_db = 10 * math.log10((255.0 ** 2) / mse)
+                        else:
+                            psnr_db = 100.0
+                        
+                        # Estimate SSIM from PSNR (rough heuristic)
+                        if psnr_db >= 40: ssim = 0.99
+                        elif psnr_db >= 35: ssim = 0.95
+                        elif psnr_db >= 30: ssim = 0.85
+                        elif psnr_db >= 25: ssim = 0.75
+                        else: ssim = 0.5
+                        
+                        # Calculate bitrate (assuming 10 frames @ 30fps = 0.33s)
+                        video_duration_seconds = 10 / 30.0
+                        bitrate_mbps = (compressed_size * 8) / (video_duration_seconds * 1000 * 1000)
+                        
+                        metrics = {
+                            'psnr_db': Decimal(str(round(psnr_db, 2))),
+                            'ssim': Decimal(str(round(ssim, 4))),
+                            'mse': Decimal(str(round(mse, 2))),
+                            'compression_ratio': Decimal(str(round(compression_ratio, 2))),
+                            'compressed_size_bytes': Decimal(str(compressed_size)),
+                            'bitrate_mbps': Decimal(str(round(bitrate_mbps, 3))),
+                            'encoding_time_ms': Decimal(str(result.get('time_ms', 0)))
+                        }
+                    
                     # Convert floats to Decimal for DynamoDB
                     item = {
                         'experiment_id': result['experiment_id'],
                         'timestamp': int(time.time()),
                         'generation': result.get('generation', 0),  # Track evolutionary generation
-                        'status': result['status'],
-                        'mse': Decimal(str(result['mse'])) if result.get('mse') is not None else None,
-                        'compression_ratio': Decimal(str(result['compression_ratio'])) if result.get('compression_ratio') is not None else None,
-                        'time_ms': result.get('time_ms'),
-                        'compressed_size': result.get('compressed_size'),
-                        'error': result.get('error')
+                        'status': result['status']
                     }
-                    # Remove None values
-                    item = {k: v for k, v in item.items() if v is not None}
+                    
+                    # Add metrics if available
+                    if metrics:
+                        item['metrics'] = metrics
+                    
+                    # Add error for failed experiments
+                    if result.get('error'):
+                        item['error'] = result['error']
+                    
                     writer.put_item(Item=item)
         
         logger.info(f"💾 Stored {len(results)} results in DynamoDB")
