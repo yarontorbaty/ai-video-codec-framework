@@ -166,8 +166,8 @@ def train_sota_full(
         print(f"✅ Resumed from epoch {start_epoch}")
     
     # Optimizer
-    params = list(encoder.parameters()) + list(decoder.parameters())
-    optimizer = optim.Adam(params, lr=learning_rate, betas=(0.9, 0.999))
+    model_params = list(encoder.parameters()) + list(decoder.parameters())
+    optimizer = optim.Adam(model_params, lr=learning_rate, betas=(0.9, 0.999))
     
     # Loss function
     criterion = nn.MSELoss()
@@ -251,7 +251,7 @@ def train_sota_full(
             
             # Backward pass
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(model_params, max_norm=1.0)
             optimizer.step()
             
             epoch_loss += loss.item()
