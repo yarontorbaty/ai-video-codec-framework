@@ -1,16 +1,31 @@
 # PVC v2.0 - Trained Model Files
 
-## Model Downloads
+## 📥 Public Model Downloads
 
-The trained SOTA model files are available via AWS S3:
+The trained SOTA model files are **publicly available** for download:
 
-### Download Links:
+### Direct Download Links (No AWS Account Required):
+
+**Option 1: Browser Download**
+- [SOTA Residual Encoder (77 MB)](https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_encoder_best.pth)
+- [SOTA Residual Decoder (47 MB)](https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_decoder_best.pth)
+
+**Option 2: Command Line**
 
 ```bash
-# Download encoder (77 MB)
-aws s3 cp s3://ai-codec-v3-artifacts-580473065386/pvc/models/sota_residual_encoder_best.pth .
+# Using wget
+wget https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_encoder_best.pth
+wget https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_decoder_best.pth
 
-# Download decoder (47 MB)
+# Or using curl
+curl -O https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_encoder_best.pth
+curl -O https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_decoder_best.pth
+```
+
+**Option 3: AWS CLI (if you have it configured)**
+
+```bash
+aws s3 cp s3://ai-codec-v3-artifacts-580473065386/pvc/models/sota_residual_encoder_best.pth .
 aws s3 cp s3://ai-codec-v3-artifacts-580473065386/pvc/models/sota_residual_decoder_best.pth .
 ```
 

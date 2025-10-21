@@ -61,9 +61,13 @@ cd pvc_v2
 # Install dependencies
 pip install -r requirements.txt
 
-# Download trained models (see MODEL_DOWNLOAD.md)
-aws s3 cp s3://ai-codec-v3-artifacts-580473065386/pvc/models/sota_residual_encoder_best.pth models/sota_full/
-aws s3 cp s3://ai-codec-v3-artifacts-580473065386/pvc/models/sota_residual_decoder_best.pth models/sota_full/
+# Download trained models (publicly available)
+wget https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_encoder_best.pth -P models/sota_full/
+wget https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_decoder_best.pth -P models/sota_full/
+
+# Or using curl
+curl -o models/sota_full/sota_residual_encoder_best.pth https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_encoder_best.pth
+curl -o models/sota_full/sota_residual_decoder_best.pth https://ai-codec-v3-artifacts-580473065386.s3.us-east-1.amazonaws.com/pvc/models/sota_residual_decoder_best.pth
 
 # Evaluate SOTA model (generates comparison images)
 python3 tests/eval_sota.py
