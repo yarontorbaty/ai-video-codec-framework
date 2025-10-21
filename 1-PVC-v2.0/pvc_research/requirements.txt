@@ -1,0 +1,28 @@
+# Procedural Video Codec (PVC) Requirements
+
+# Core libraries
+opencv-python>=4.8.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Graphics and rendering
+Pillow>=10.0.0
+moderngl>=5.8.0
+
+# Video I/O
+av>=10.0.0
+ffmpeg-python>=0.2.0
+
+# Metrics
+scikit-image>=0.21.0
+
+# Utilities
+matplotlib>=3.7.0
+tqdm>=4.65.0
+
+# Noise generation
+noise>=1.2.2
+
+# AWS integration
+boto3>=1.28.0
+
