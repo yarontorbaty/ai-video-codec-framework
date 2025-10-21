@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Training outputs & large files
+*.pth
+*.pt
+*.mp4
+*.avi
+/tmp/
+
+# Keep comparison images (small)
+!pvc_v2/tests/*.png
+!pvc_v2/tests/*.jpg
