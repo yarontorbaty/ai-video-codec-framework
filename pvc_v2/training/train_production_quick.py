@@ -147,12 +147,12 @@ def train_production_quick(
     
     # Generate training data
     print(f"\n📊 Generating {num_samples} training samples...")
-    generator = ExtendedSyntheticGenerator(img_size=256)
+    generator = ExtendedSyntheticGenerator(width=256, height=256)
     
     frames = []
     start_gen = time.time()
     for i in range(num_samples):
-        frame = generator.generate_frame()
+        frame, _ = generator.generate_scene(num_functions=10)  # Generate scene with 10 functions
         frames.append(frame)
         
         if (i + 1) % 1000 == 0:

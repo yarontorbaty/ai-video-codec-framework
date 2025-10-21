@@ -38,7 +38,7 @@ class UpsampleBlock(nn.Module):
         
         # Optional attention
         if use_attention:
-            from production_residual_encoder import AttentionBlock
+            from models.production_residual_encoder import AttentionBlock
             self.attention = AttentionBlock(out_channels)
         else:
             self.attention = None
