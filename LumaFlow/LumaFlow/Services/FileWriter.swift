@@ -17,6 +17,10 @@ class FileWriter {
     private var firstFrameTimestamp: TimeInterval?
     private var frameCount: Int = 0
     
+    // Motion metadata storage
+    private var motionMetadata: [[String: Any]] = []
+    private var metadataURL: URL?
+    
     func startNewRecording() {
         // Create unique filename
         let timestamp = Date().timeIntervalSince1970
@@ -27,11 +31,17 @@ class FileWriter {
         let url = documentsPath.appendingPathComponent(filename)
         currentURL = url
         
-        // Reset timing
+        // Create metadata sidecar file path
+        let metadataFilename = "lumaflow_\(Int(timestamp)).json"
+        metadataURL = documentsPath.appendingPathComponent(metadataFilename)
+        
+        // Reset timing and metadata
         firstFrameTimestamp = nil
         frameCount = 0
+        motionMetadata = []
         
         print("📁 Saving to Documents: \(url.path)")
+        print("📝 Metadata file: \(metadataURL?.path ?? "none")")
         
         // Setup asset writer
         guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) else {
@@ -148,6 +158,9 @@ class FileWriter {
         if let sampleBuffer = sampleBuffer {
             videoInput.append(sampleBuffer)
             print("✅ Wrote RGB frame")
+            
+            // Collect motion metadata for this frame
+            collectMotionMetadata(frame: frame, frameIndex: frameCount - 1, timestamp: relativeTimestamp)
             
             // Update size
             if let url = currentURL,
@@ -270,6 +283,102 @@ class FileWriter {
         return outputBuffer
     }
     
+    // MARK: - Motion Metadata Collection
+    
+    private func collectMotionMetadata(frame: CapturedFrame, frameIndex: Int, timestamp: TimeInterval) {
+        var frameMetadata: [String: Any] = [:]
+        
+        // Basic info
+        frameMetadata["frame"] = frameIndex
+        frameMetadata["timestamp"] = timestamp
+        frameMetadata["tracking_state"] = frame.trackingState
+        frameMetadata["tracking_confidence"] = frame.trackingConfidence
+        
+        // Camera position (x, y, z in meters)
+        frameMetadata["position"] = [
+            "x": frame.cameraPosition.x,
+            "y": frame.cameraPosition.y,
+            "z": frame.cameraPosition.z
+        ]
+        
+        // Camera rotation (quaternion: x, y, z, w)
+        frameMetadata["rotation"] = [
+            "x": frame.cameraRotation.vector.x,
+            "y": frame.cameraRotation.vector.y,
+            "z": frame.cameraRotation.vector.z,
+            "w": frame.cameraRotation.vector.w
+        ]
+        
+        // Linear velocity (m/s)
+        if let linearVel = frame.linearVelocity {
+            frameMetadata["linear_velocity"] = [
+                "x": linearVel.x,
+                "y": linearVel.y,
+                "z": linearVel.z
+            ]
+        }
+        
+        // Angular velocity (rad/s)
+        if let angularVel = frame.angularVelocity {
+            frameMetadata["angular_velocity"] = [
+                "x": angularVel.x,
+                "y": angularVel.y,
+                "z": angularVel.z
+            ]
+        }
+        
+        // Camera intrinsics
+        frameMetadata["intrinsics"] = [
+            "focal_length": [
+                "x": frame.focalLength.x,
+                "y": frame.focalLength.y
+            ],
+            "principal_point": [
+                "x": frame.principalPoint.x,
+                "y": frame.principalPoint.y
+            ],
+            "resolution": [
+                "width": frame.imageResolution.width,
+                "height": frame.imageResolution.height
+            ]
+        ]
+        
+        // Camera transform (4x4 matrix - for reference/debugging)
+        let t = frame.cameraTransform
+        frameMetadata["transform"] = [
+            [t.columns.0.x, t.columns.0.y, t.columns.0.z, t.columns.0.w],
+            [t.columns.1.x, t.columns.1.y, t.columns.1.z, t.columns.1.w],
+            [t.columns.2.x, t.columns.2.y, t.columns.2.z, t.columns.2.w],
+            [t.columns.3.x, t.columns.3.y, t.columns.3.z, t.columns.3.w]
+        ]
+        
+        motionMetadata.append(frameMetadata)
+    }
+    
+    private func saveMotionMetadata() {
+        guard let metadataURL = metadataURL else {
+            print("⚠️ No metadata URL configured")
+            return
+        }
+        
+        // Create JSON structure
+        let metadata: [String: Any] = [
+            "version": "1.0",
+            "format": "lumaflow_motion",
+            "frame_count": motionMetadata.count,
+            "frames": motionMetadata
+        ]
+        
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
+            try jsonData.write(to: metadataURL)
+            print("✅ Saved motion metadata: \(metadataURL.lastPathComponent)")
+            print("📊 Total frames with metadata: \(motionMetadata.count)")
+        } catch {
+            print("❌ Failed to save motion metadata: \(error)")
+        }
+    }
+    
     func finalize(completion: @escaping (URL) -> Void) {
         videoInput?.markAsFinished()
         depthInput?.markAsFinished()
@@ -277,6 +386,9 @@ class FileWriter {
         
         videoWriter?.finishWriting { [weak self] in
             guard let url = self?.currentURL else { return }
+            
+            // Save motion metadata to JSON sidecar file
+            self?.saveMotionMetadata()
             
             // Move to Photos library
             self?.saveToPhotosLibrary(url: url) { savedURL in
