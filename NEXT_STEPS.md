@@ -1,236 +1,226 @@
-# Next Steps - AI Video Codec V3.0
+# 🎯 LumaFlow - Next Steps
 
-**Current Status:** October 19, 2025  
-**PVC v2.0 Research:** Complete ✅  
-**Best PSNR:** 11.22 dB ✅  
-**V3.0 Framework:** Running and operational ✅
+**Current Status:** 1 training video captured ✅  
+**Goal:** Train LCM-based generative codec for 50-70x compression
 
 ---
 
-## 🎯 Where We Are
+## 📱 Step 1: Capture More Training Data (THIS WEEK)
 
-### PVC v2.0 (Procedural Video Codec)
-- ✅ Research complete
-- ✅ Best result: 11.22 dB PSNR
-- ✅ Perceptual loss tested (9.83 dB - didn't help)
-- ✅ All code committed
-- **Status:** Proof-of-concept successful, not production-ready
+### What You Need:
+- **10-15 more videos** using your iPhone LumaFlow app
+- **Total training data:** ~15-20 videos (you have 1, need 14 more)
 
-### V3.0 Neural Codec Framework
-- ✅ Orchestrator + GPU worker running
-- ✅ Dashboard operational at aiv1codec.com
-- ✅ Experiments running successfully
-- ✅ Real metrics and video files
-- **Status:** Production system working
+### Capture Variety:
 
----
+#### 🏠 Indoor Scenes (4-5 videos)
+- Living room with furniture at different depths
+- Kitchen with objects
+- Office/desk setup
+- Hallway/corridor
 
-## 🚀 Option 1: Focus on V3.0 Neural Codec ⭐ **RECOMMENDED**
+#### 🌳 Outdoor Scenes (4-5 videos)
+- Buildings/architecture
+- Trees and nature
+- Street scenes
+- Parks
 
-**Rationale:** You have a working production system with real experiments
+#### 🎨 Objects & Details (4-5 videos)
+- Close-up objects (phone, book, cup)
+- Person sitting/standing at various distances
+- Moving objects (car, person walking)
+- Textured surfaces (wall, fabric, wood)
 
-### Priority Tasks:
+### Recording Tips:
+1. **Duration:** 10-30 seconds per clip
+2. **Movement:** Slow panning or stationary
+3. **Lighting:** Mix of bright, dim, and mixed lighting
+4. **Depth variation:** Include near/far objects in same scene
 
-#### A. **System Optimization** (2-3 hours)
-- Analyze current experiments for patterns
-- Optimize orchestrator prompts based on failures
-- Add more sophisticated fitness functions
-- Expected: 10-20% improvement in success rate
-
-#### B. **Scale Up** (1-2 hours)
-- Add more GPU workers (2-3 instances)
-- Increase experiment throughput
-- Run longer evolution cycles
-- Expected: Faster convergence to better codecs
-
-#### C. **Advanced Features** (3-4 hours)
-- Add experiment genealogy tracking
-- Implement cross-breeding of successful codecs
-- Add adaptive mutation rates
-- Expected: More sophisticated evolution
-
-**Best for:** Getting real codec improvements with production system
+### Where Files Go:
+```bash
+# Your app saves to Downloads, then move them:
+~/Downloads/lumaflow_*.mov → ~/lumaflow_training_data/
+```
 
 ---
 
-## 🧪 Option 2: Complete PVC v2.0 Research
+## 🔬 Step 2: Test Data Loading (AFTER CAPTURING 10+ VIDEOS)
 
-**Rationale:** Finish what we started with PVC
+### Check Python Environment:
+```bash
+cd /Users/yarontorbaty/Documents/Code/Aiv1-LumaFlow/generative_codec
 
-### Priority Tasks:
+# Install dependencies
+pip install -r requirements.txt
+```
 
-#### A. **Fix Perceptual Loss Training** (4-6 hours)
-- Debug why reconstruction is mostly black
-- Fix sparse ID conversion in prediction
-- Retrain with corrected pipeline
-- Expected: 12-15 dB PSNR
+### Test the Data Loader:
+```bash
+# This will verify your videos load correctly
+python data/iphone_loader.py
+```
 
-#### B. **Implement Hybrid Approach** (6-8 hours)
-- Use PVC for structure (11 dB)
-- Add residual encoder for details
-- Target: 30-40 dB PSNR
-- Expected: Production-quality procedural codec
-
-#### C. **Real Video Testing** (2-3 hours)
-- Test on actual anime clips
-- Measure vs AV1/HEVC
-- Document real-world performance
-- Expected: Validate compression ratios
-
-**Best for:** Completing PVC research to publication quality
-
----
-
-## 📊 Option 3: Hybrid - PVC for V3.0
-
-**Rationale:** Integrate PVC research into V3.0 framework
-
-### Implementation:
-
-#### A. **Add PVC Worker** (3-4 hours)
-- Launch dedicated PVC worker
-- Integrate with orchestrator
-- Run PVC experiments alongside neural
-- Compare results side-by-side
-
-#### B. **Hybrid Codec** (6-8 hours)
-- Combine neural + procedural approaches
-- Neural for prediction, procedural for structure
-- Best of both worlds
-- Expected: Novel hybrid codec
-
-**Best for:** Leveraging all research into one system
+**Expected output:**
+```
+✅ Loaded video: lumaflow_1761095137.mov
+   - RGB frames: 359 (1920x1080)
+   - Depth frames: 359 (256x192)
+✅ Loaded video: lumaflow_1761095200.mov
+   ...
+```
 
 ---
 
-## 🛠️ Option 4: Infrastructure & Monitoring
+## 🚀 Step 3: Start Training (AFTER DATA COLLECTION)
 
-**Rationale:** Make the systems more robust and observable
+### Training Requirements:
 
-### Priority Tasks:
+#### **Option A: Local Training (Mac with GPU)**
+- ⚠️ Only if you have Apple Silicon M1/M2/M3 Max/Ultra
+- Training time: ~8-12 hours
+- Free!
 
-#### A. **Advanced Monitoring** (2-3 hours)
-- Set up CloudWatch dashboards
-- Add experiment analytics
-- Create alerting for failures
-- Better visibility into system health
+```bash
+python train.py \
+  --data_dir ~/lumaflow_training_data \
+  --batch_size 2 \
+  --epochs 50 \
+  --device mps
+```
 
-#### B. **Cost Optimization** (1-2 hours)
-- Analyze AWS spending
-- Optimize instance usage
-- Set up auto-scaling
-- Reduce unnecessary costs
+#### **Option B: AWS GPU Instance (RECOMMENDED)**
+- Instance: g4dn.xlarge ($0.526/hour)
+- Training time: ~4-8 hours
+- Cost: ~$4-5 total
 
-#### C. **Backup & Recovery** (1-2 hours)
-- Implement experiment checkpointing
-- Add model versioning
-- Create backup procedures
-- Protect against data loss
+```bash
+# On AWS instance:
+python train.py \
+  --data_dir ~/lumaflow_training_data \
+  --batch_size 4 \
+  --epochs 50 \
+  --device cuda
+```
 
-**Best for:** Making systems production-grade
+### Monitor Training:
+```bash
+# In another terminal:
+tensorboard --logdir runs/lumaflow --port 6006
+```
 
----
-
-## 🎓 Option 5: Documentation & Publication
-
-**Rationale:** Document findings for sharing/publication
-
-### Deliverables:
-
-#### A. **Research Paper** (8-10 hours)
-- Write up PVC v2.0 findings
-- Document V3.0 architecture
-- Create visualizations
-- Prepare for publication
-
-#### B. **Technical Documentation** (4-6 hours)
-- API documentation
-- Architecture diagrams
-- Deployment guides
-- User manuals
-
-#### C. **Demo & Presentation** (2-3 hours)
-- Create demo videos
-- Build presentation
-- Prepare for showcasing
-- Marketing materials
-
-**Best for:** Sharing your work with the world
+Open: http://localhost:6006
 
 ---
 
-## 💡 My Strong Recommendation
+## 📊 Expected Training Results
 
-### **Option 1A: Optimize V3.0 Neural Codec** (2-3 hours)
+### Target Metrics:
 
-**Why:**
-1. ✅ **Highest ROI** - Working system with real experiments
-2. ✅ **Immediate results** - See improvements quickly
-3. ✅ **Production value** - Real codec improvements
-4. ✅ **Momentum** - Build on what's working
+| Epoch | Train PSNR | Notes |
+|-------|-----------|-------|
+| 1-10 | 20-25 dB | Initial learning |
+| 10-30 | 25-32 dB | Convergence |
+| 30-50 | 32-38 dB | Fine-tuning |
+| **Goal** | **35+ dB** | Production quality |
 
-**Specific Next Steps:**
+### Compression Performance:
 
-1. **Analyze Recent Experiments** (30 min)
-   - Look at failure patterns
-   - Identify common issues
-   - Extract learnings
-
-2. **Optimize Orchestrator Prompts** (1 hour)
-   - Refine LLM instructions based on failures
-   - Add guardrails for common mistakes
-   - Improve code generation quality
-
-3. **Improve Fitness Function** (30 min)
-   - Weight PSNR/SSIM better
-   - Add compression ratio importance
-   - Consider runtime performance
-
-4. **Run New Experiments** (30 min)
-   - Start fresh batch with improvements
-   - Monitor for better results
-   - Iterate quickly
-
-**Expected Outcome:** 10-20% improvement in codec quality within 3 hours
+- **Original video:** ~60 MB/minute (uncompressed RGB)
+- **HEVC (baseline):** ~5-10 MB/minute
+- **LumaFlow (target):** ~1 MB/minute (50-60x compression)
 
 ---
 
-## 🤔 Decision Framework
+## 🎯 Training Timeline
 
-Choose based on your priority:
+### Week 1 (This Week):
+- [x] Capture first video ✅
+- [ ] Capture 14 more videos
+- [ ] Move all videos to `~/lumaflow_training_data/`
+- [ ] Test data loader
 
-| Priority | Recommended Option | Time | Outcome |
-|----------|-------------------|------|---------|
-| **Quick wins** | Option 1A | 2-3 hrs | Better codecs now |
-| **Complete research** | Option 2B | 6-8 hrs | Hybrid PVC codec |
-| **Novel approach** | Option 3B | 6-8 hrs | Neural+procedural |
-| **Production ready** | Option 4 | 4-6 hrs | Robust system |
-| **Share findings** | Option 5 | 10-15 hrs | Publication |
+### Week 2:
+- [ ] Set up training environment (AWS or local)
+- [ ] Start training run
+- [ ] Monitor convergence
+- [ ] Checkpoint best model
 
----
-
-## 📋 Quick Action Items (If Choosing Option 1A)
-
-1. Check current experiment status
-2. Analyze failure logs
-3. Update orchestrator prompts
-4. Restart experiments
-5. Monitor improvements
-
-**Ready to execute immediately!**
+### Week 3:
+- [ ] Export trained model to CoreML
+- [ ] Integrate into iPhone app
+- [ ] Test on-device encoding
+- [ ] Benchmark quality
 
 ---
 
-## 🎯 Your Decision?
+## 💰 Cost Breakdown
 
-What would you like to focus on?
+### Development (Spent: $0)
+- ✅ iPhone app built
+- ✅ Codec architecture designed
+- ✅ Training pipeline ready
 
-- **1A** - Optimize V3.0 (quick wins, recommended)
-- **2B** - Hybrid PVC (complete research)
-- **3B** - Integrate PVC into V3.0 (novel)
-- **4** - Infrastructure (make robust)
-- **5** - Documentation (share work)
-- **Something else?**
+### Training Phase (Next 2 weeks)
+- AWS g4dn.xlarge: ~$4-5 (one training run)
+- Storage: ~$1
+- **Total: ~$5-6**
 
-Tell me your priority and I'll start immediately! 🚀
+**WAY CHEAPER than the $757 estimate!** 🎉
 
+(The $757 was for 10 weeks of continuous GPU. We only need 4-8 hours!)
+
+---
+
+## 🔧 Troubleshooting
+
+### "Not enough training data"
+- **Solution:** Capture at least 10 videos total
+- More diversity = better generalization
+
+### "CUDA out of memory"
+- **Solution:** Reduce batch size to 2
+- Or use smaller model
+
+### "Low PSNR after 30 epochs"
+- Check video quality (clear, well-lit?)
+- Try lower learning rate: `--lr 5e-5`
+- More training epochs: `--epochs 100`
+
+---
+
+## 📞 Questions?
+
+### How many samples is ideal?
+- **Minimum:** 10 videos (will work, but limited)
+- **Good:** 15-20 videos (recommended)
+- **Optimal:** 30+ videos (best quality)
+
+### Can I train with just 1 video?
+- Technically yes, but it will overfit
+- Won't generalize to new scenes
+- **Recommendation:** Capture at least 10
+
+### How long to capture 15 videos?
+- ~30 minutes of recording time
+- Different locations recommended
+- Can split across multiple days
+
+---
+
+## ✅ Current Status
+
+**Videos Captured:** 1/15  
+**Next Action:** Use your iPhone app to capture 14 more videos!  
+**Time Estimate:** 30-60 minutes of capture time  
+**Training ETA:** Week 2 (after you have 10+ videos)
+
+---
+
+## 🚀 Ready to Continue?
+
+1. **Now:** Capture 10-15 more videos with the iPhone app
+2. **After capturing:** Run data loader test
+3. **After test passes:** Start training!
+
+Your first video looks great - now let's get more training data! 📱✨

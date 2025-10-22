@@ -3,7 +3,7 @@
 ## ✅ Quick Checklist
 
 ### 1. Files Status
-- ✅ **ContentView.swift** - Located in `LumeFlow/Views/`
+- ✅ **ContentView.swift** - Located in `LumaFlow/Views/`
 - ✅ **LumaFlowApp.swift** - App entry point
 - ✅ **CaptureMode.swift** - Capture modes enum
 - ✅ **LiDARCaptureService.swift** - ARKit integration (syntax error fixed)
@@ -12,19 +12,21 @@
 - ✅ **OnDeviceEncoder.swift** - On-device encoding
 - ✅ **Info.plist** - Permissions configured
 
-### 2. Required Capabilities in Xcode
+### 2. Required Setup in Xcode
 
+#### A. ARKit Framework (REQUIRED)
+ARKit is **not** a capability - it's automatically available when you:
+1. Import ARKit in your Swift files: `import ARKit`
+2. Set the required device capabilities in Info.plist (already configured ✅)
+3. Use a device with LiDAR (iPhone 12 Pro or later)
+
+**No manual framework linking needed** - it's automatic in modern Xcode!
+
+#### B. Background Modes (Recommended for streaming)
 Open your project in Xcode and go to:
 **Target → LumaFlow → Signing & Capabilities**
 
-Add these capabilities by clicking **"+ Capability"**:
-
-#### A. ARKit (REQUIRED)
-```
-+ Capability → ARKit
-```
-
-#### B. Background Modes (Recommended for streaming)
+Add this capability by clicking **"+ Capability"**:
 ```
 + Capability → Background Modes
 ```
@@ -142,19 +144,20 @@ xcrun xctrace list devices
 
 ### Clean build:
 ```bash
-cd /Users/yarontorbaty/Documents/Code/AiV1/LumeFlow
-xcodebuild clean -project LumeFlow.xcodeproj -scheme LumeFlow
+cd /Users/yarontorbaty/Documents/Code/AiV1/LumaFlow
+xcodebuild clean -project LumaFlow.xcodeproj -scheme LumaFlow
 ```
 
 ## 🎯 Summary
 
 Your project is **ready to build**! Just:
-1. Open `LumeFlow.xcodeproj` in Xcode
-2. Add **ARKit** capability
-3. Add **Background Modes** capability (optional)
-4. Select your Development Team
-5. Connect iPhone 12 Pro or later
-6. Build & Run (Cmd+R)
+1. Open `LumaFlow.xcodeproj` in Xcode
+2. Select your Development Team in Signing & Capabilities
+3. (Optional) Add **Background Modes** capability for streaming
+4. Connect iPhone 12 Pro or later
+5. Build & Run (Cmd+R)
+
+**Note**: ARKit doesn't need to be manually added - it's automatically available!
 
 The ContentView and all necessary files are in place. The only syntax error has been fixed.
 

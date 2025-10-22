@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import VideoToolbox
 import Network
 
 // MARK: - Mode 2: Streaming Service (HEVC + SRT to AWS)
@@ -123,24 +124,18 @@ class StreamingService {
         // Encode frame
         let presentationTime = CMTime(seconds: frame.timestamp, preferredTimescale: 600)
         
-        VTCompressionSessionEncodeFrame(
-            compressionSession,
-            imageBuffer: frame.rgbBuffer,
-            presentationTimeStamp: presentationTime,
-            duration: .invalid,
-            frameProperties: nil,
-            sourceFrameRefcon: nil
-        ) { [weak self] status, infoFlags, sampleBuffer in
+        let encodeCallback: VTCompressionOutputCallback = { refcon, sourceFrameRefcon, status, infoFlags, sampleBuffer in
             guard status == noErr, let sampleBuffer = sampleBuffer else {
-                completion(0)
-                self?.processNextFrame()
                 return
             }
             
+            // Get the StreamingService instance from context
+            let context = Unmanaged<StreamingServiceContext>.fromOpaque(refcon!).takeUnretainedValue()
+            
             // Get compressed data
             guard let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else {
-                completion(0)
-                self?.processNextFrame()
+                context.completion(0)
+                context.service.processNextFrame()
                 return
             }
             
@@ -149,23 +144,36 @@ class StreamingService {
             CMBlockBufferGetDataPointer(dataBuffer, atOffset: 0, lengthAtOffsetOut: nil, totalLengthOut: &length, dataPointerOut: &dataPointer)
             
             guard let dataPointer = dataPointer else {
-                completion(0)
-                self?.processNextFrame()
+                context.completion(0)
+                context.service.processNextFrame()
                 return
             }
             
             // Send over network
             let data = Data(bytes: dataPointer, count: length)
-            self?.sendData(data) { bytesSent in
-                completion(bytesSent)
-                self?.processNextFrame()
+            context.service.sendData(data) { bytesSent in
+                context.completion(bytesSent)
+                context.service.processNextFrame()
             }
             
             // Also send depth data (compressed)
-            if let depthBuffer = frame.depthBuffer {
-                self?.sendDepthData(depthBuffer)
+            if let depthBuffer = context.frame.depthBuffer {
+                context.service.sendDepthData(depthBuffer)
             }
         }
+        
+        let context = StreamingServiceContext(service: self, frame: frame, completion: completion)
+        let contextPtr = Unmanaged.passRetained(context).toOpaque()
+        
+        VTCompressionSessionEncodeFrame(
+            compressionSession,
+            imageBuffer: frame.rgbBuffer,
+            presentationTimeStamp: presentationTime,
+            duration: .invalid,
+            frameProperties: nil,
+            sourceFrameRefcon: contextPtr,
+            infoFlagsOut: nil
+        )
     }
     
     private func sendData(_ data: Data, completion: @escaping (Int) -> Void) {
@@ -197,6 +205,19 @@ class StreamingService {
         if let compressed = try? (depthData as NSData).compressed(using: .lzfse) as Data {
             sendData(compressed) { _ in }
         }
+    }
+}
+
+// Helper context for passing to VideoToolbox callback
+class StreamingServiceContext {
+    let service: StreamingService
+    let frame: CapturedFrame
+    let completion: (Int) -> Void
+    
+    init(service: StreamingService, frame: CapturedFrame, completion: @escaping (Int) -> Void) {
+        self.service = service
+        self.frame = frame
+        self.completion = completion
     }
 }
 

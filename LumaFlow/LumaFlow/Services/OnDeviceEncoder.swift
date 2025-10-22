@@ -195,7 +195,7 @@ class OnDeviceEncoder {
         // Header
         let header = LumaFlowHeader(
             version: 1,
-            frameCount: encodedFrames.count,
+            frameCount: UInt32(encodedFrames.count),
             width: 1920,
             height: 1080,
             frameRate: 30

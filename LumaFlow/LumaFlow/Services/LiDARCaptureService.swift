@@ -45,7 +45,8 @@ class LiDARCaptureService: NSObject, ObservableObject {
     
     // MARK: - UI
     let previewView: UIView
-    private var previewLayer: CALayer?
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var imageView: UIImageView?
     
     // MARK: - Performance
     private var lastFrameTime: TimeInterval = 0
@@ -55,6 +56,17 @@ class LiDARCaptureService: NSObject, ObservableObject {
     override init() {
         self.previewView = UIView()
         super.init()
+        
+        // Setup image view for camera preview
+        let imageView = UIImageView(frame: previewView.bounds)
+        imageView.contentMode = .scaleAspectFill
+        imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        
+        // Fix camera orientation (ARKit captures in landscape right)
+        imageView.transform = CGAffineTransform(rotationAngle: .pi / 2)
+        
+        previewView.addSubview(imageView)
+        self.imageView = imageView
         
         setupAR()
         setupFPSTimer()
@@ -67,6 +79,10 @@ class LiDARCaptureService: NSObject, ObservableObject {
         AVCaptureDevice.requestAccess(for: .video) { granted in
             print("Camera access: \(granted)")
         }
+        
+        // Start AR session for preview (even when not recording)
+        arSession.run(arConfiguration)
+        print("✅ ARKit session started")
     }
     
     private func setupAR() {
@@ -97,7 +113,7 @@ class LiDARCaptureService: NSObject, ObservableObject {
         }
         
         if let format = formats.first(where: {
-            $0.imageResolution.width == targetWidth &&
+            Int($0.imageResolution.width) == targetWidth &&
             $0.framesPerSecond == frameRate
         }) {
             arConfiguration.videoFormat = format
@@ -266,7 +282,12 @@ extension LiDARCaptureService: ARSessionDelegate {
         
         // Update preview (simplified - would use Metal for better performance)
         DispatchQueue.main.async { [weak self] in
-            // Update preview layer with current frame
+            guard let self = self, let imageView = self.imageView else { return }
+            let ciImage = CIImage(cvPixelBuffer: frame.capturedImage)
+            let context = CIContext()
+            if let cgImage = context.createCGImage(ciImage, from: ciImage.extent) {
+                imageView.image = UIImage(cgImage: cgImage)
+            }
         }
     }
     
