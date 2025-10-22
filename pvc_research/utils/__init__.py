@@ -1,2 +1,0 @@
-"""PVC Utility modules"""
-
