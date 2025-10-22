@@ -22,7 +22,7 @@
 
 ### 📸 Sample Capture
 
-![LumaFlow Sample](lumaflow_sample.png)
+![LumaFlow Sample](lumaflow_capture_example.png)
 
 *Real iPhone capture showing RGB video (1920×1080) and LiDAR depth map (256×192) side-by-side. The depth data provides accurate scene geometry for depth-aware compression.*
 
