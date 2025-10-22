@@ -15,16 +15,29 @@
 **LumaFlow** is a revolutionary video codec that combines:
 - 🧠 **Latent Consistency Models (LCM)** - Fast 4-step diffusion for generative reconstruction
 - 📱 **iPhone LiDAR** - Real-world depth data for depth-aware compression
+- 🎯 **6DOF Motion Tracking** - Camera position, rotation, velocity for temporal consistency
 - 🎨 **Generative AI** - Reconstruct high-quality frames from compact latent representations
 - ⚡ **Real-time Performance** - On-device encoding on iPhone 14 Pro+
 
-**The Innovation:** Instead of storing pixel data, LumaFlow stores semantic information + depth, then uses generative AI to reconstruct frames with perceptual quality at 50-70x compression.
+**The Innovation:** Instead of storing pixel data, LumaFlow stores semantic information + depth + camera motion, then uses generative AI to reconstruct frames with perceptual quality at 50-70x compression.
 
 ### 📸 Sample Capture
 
 ![LumaFlow Sample](lumaflow_capture_example.png)
 
 *Real iPhone capture showing RGB video (1920×1080) and LiDAR depth map (256×192) side-by-side. The depth data provides accurate scene geometry for depth-aware compression.*
+
+**Per-Frame Capture:**
+- 📹 **RGB Video:** 1920×1080 @ 30 FPS (HEVC)
+- 🌐 **Depth Map:** 256×192 LiDAR depth (normalized grayscale)
+- 📐 **Camera Position:** (x, y, z) in meters
+- 🧭 **Camera Rotation:** Quaternion orientation
+- ⚡ **Linear Velocity:** m/s in each axis
+- 🔄 **Angular Velocity:** rad/s rotation speed
+- 🎯 **Camera Intrinsics:** Focal length, principal point
+- ✅ **Tracking Quality:** ARKit confidence level
+
+[Full motion data documentation →](LumaFlow/MOTION_DATA_GUIDE.md)
 
 ---
 
@@ -40,7 +53,8 @@
 
 **Comparison to HEVC:**
 - 📉 **90%+ bitrate reduction** at similar quality
-- 📊 Leverages depth data for better scene understanding
+- 📊 Leverages depth + motion data for scene understanding
+- 🎬 Temporal consistency through motion prediction
 - 🎨 Generative refinement for perceptual quality
 
 ---
@@ -52,11 +66,11 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                  1. iPhone Capture App                   │
-│  • Real-time video + LiDAR capture                       │
+│  • Real-time video + LiDAR + 6DOF motion capture         │
 │  • Three modes: Save / Stream / On-device encode         │
 │  • Swift + ARKit + AVFoundation                          │
 └───────────────────────┬─────────────────────────────────┘
-                        │ .mov files (RGB + depth)
+                        │ .mov files (RGB + depth + metadata)
                         ▼
 ┌─────────────────────────────────────────────────────────┐
 │              2. Python Training Pipeline                 │
