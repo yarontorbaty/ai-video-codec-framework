@@ -20,6 +20,12 @@
 
 **The Innovation:** Instead of storing pixel data, LumaFlow stores semantic information + depth, then uses generative AI to reconstruct frames with perceptual quality at 50-70x compression.
 
+### 📸 Sample Capture
+
+![LumaFlow Sample](lumaflow_sample.png)
+
+*Real iPhone capture showing RGB video (1920×1080) and LiDAR depth map (256×192) side-by-side. The depth data provides accurate scene geometry for depth-aware compression.*
+
 ---
 
 ## 📊 Target Performance
@@ -133,17 +139,34 @@ lumaflow-codec/
 
 **Status:** All code written and tested locally.
 
-### 🔄 Phase 2: Data Capture (IN PROGRESS)
+### ✅ Phase 1.5: Bug Fixes & Polish (COMPLETE)
 
-**Current Task:** Build iPhone app in Xcode and capture training data
+**Critical fixes applied:**
+- [x] Fixed UV plane initialization bug (eliminated green artifacts in depth)
+- [x] Added timestamp normalization for correct video duration
+- [x] Fixed camera preview orientation
+- [x] Enabled Files app access for easy video transfer
+- [x] Created depth analysis and visualization tools
+- [x] Cleaned repository (removed 462 legacy files)
 
-**Steps:**
-1. ⏳ Create Xcode project manually
-2. ⏳ Deploy to iPhone 14 Pro Max
-3. ⏳ Capture 10-20 diverse videos with LiDAR
-4. ⏳ Transfer .mov files to Mac
+**Result:** Production-quality depth capture with clean grayscale depth maps!
 
-**Estimated Time:** 1-2 days
+### 🔄 Phase 2: Data Capture (IN PROGRESS - 13% Complete)
+
+**Current Task:** Capture training dataset with diverse scenes
+
+**Progress:**
+- [x] Deploy to iPhone 14 Pro Max
+- [x] Capture initial test videos (2/15)
+- [x] Verify depth quality (clean, no artifacts ✅)
+- [ ] Capture remaining videos (need 8-13 more)
+  - [ ] Indoor scenes (5 videos)
+  - [ ] Outdoor scenes (5 videos)
+  - [ ] Object focus (3 videos)
+
+**Status:** 2 videos captured, 8-13 more needed for training
+
+**Estimated Time:** 1-2 hours of capture remaining
 
 ### ⏳ Phase 3: Training (PENDING DATA)
 
@@ -395,28 +418,39 @@ Fully open source and compatible with commercial use.
 ## 🎯 Current Status
 
 **Branch:** `lumaflow-codec`  
-**Last Updated:** October 21, 2025  
-**Phase:** Data Capture (iPhone app deployment)  
-**Progress:** 40% complete
+**Last Updated:** October 22, 2025  
+**Phase:** Data Capture (Training data collection)  
+**Progress:** 50% complete
 
 ### Latest Results:
 - ✅ Codec implementation complete (~1,000 lines Python)
 - ✅ iPhone app implementation complete (~800 lines Swift)
-- 🔄 iPhone app deployment in progress
-- ⏳ Training data collection pending
-- ⏳ Model training pending (~4-8 hours)
+- ✅ iPhone app deployed and tested on device
+- ✅ **UV plane bug fixed** - Clean depth capture verified
+- ✅ Repository cleaned (removed 462 legacy files)
+- 🔄 Training data collection: 2/15 videos captured (13%)
+- ⏳ Model training pending (waiting for 10+ videos)
+
+### Recent Accomplishments (Oct 21-22, 2025):
+1. **Fixed critical UV plane bug** causing green artifacts in depth data
+2. **Normalized timestamps** for correct video duration
+3. **Fixed camera orientation** for proper preview
+4. **Enabled Files app access** for easy video transfer
+5. **Created depth analysis tools** (`analyze_depth.py`)
+6. **Massive cleanup:** Removed 462 files, 108K+ lines of old framework code
+7. **Verified depth quality:** Clean grayscale depth maps confirmed
 
 ### Next Steps:
-1. Complete Xcode project setup
-2. Capture 10-20 training videos with LiDAR
-3. Transfer data to Mac
-4. Start training pipeline
+1. Capture 8-13 more training videos with diverse scenes
+2. Transfer data to Mac (videos stored in `~/lumaflow_training_data/`)
+3. Test data loader and verify all videos load correctly
+4. Start training pipeline (estimated 4-8 hours on AWS GPU)
 5. Monitor convergence (target: 35+ dB PSNR)
 
 ### Cost Tracking:
-- **Development:** $0
-- **Training (estimated):** ~$20
-- **Total:** ~$20 (vs $707 estimate = 97% savings!)
+- **Development:** $0 ✅
+- **Training (estimated):** ~$5 (AWS g4dn.xlarge, 4-8 hours)
+- **Total:** ~$5 (vs $707 original estimate = 99% savings!)
 
 ---
 
