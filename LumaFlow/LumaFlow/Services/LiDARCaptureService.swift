@@ -38,6 +38,11 @@ class LiDARCaptureService: NSObject, ObservableObject {
     private var recordingStartTime: Date?
     private var frameBuffer: [CapturedFrame] = []
     
+    // Motion tracking for velocity calculation
+    private var lastCameraPosition: simd_float3?
+    private var lastCameraRotation: simd_quatf?
+    private var lastFrameTimestamp: TimeInterval?
+    
     // MARK: - Services
     private var streamingService: StreamingService?
     private var onDeviceEncoder: OnDeviceEncoder?
@@ -224,12 +229,80 @@ class LiDARCaptureService: NSObject, ObservableObject {
             currentDepthData = convertDepthToData(sceneDepth.depthMap)
         }
         
-        // Create captured frame
+        // Extract camera transform and pose
+        let transform = frame.camera.transform
+        let position = simd_float3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
+        let rotation = simd_quatf(transform)
+        
+        // Calculate velocities from frame-to-frame motion
+        var linearVelocity: simd_float3? = nil
+        var angularVelocity: simd_float3? = nil
+        
+        if let lastPos = lastCameraPosition,
+           let lastRot = lastCameraRotation,
+           let lastTime = lastFrameTimestamp {
+            
+            let deltaTime = Float(frame.timestamp - lastTime)
+            if deltaTime > 0 {
+                // Linear velocity (m/s)
+                linearVelocity = (position - lastPos) / deltaTime
+                
+                // Angular velocity (rad/s) - calculate from quaternion difference
+                let deltaRotation = rotation * lastRot.inverse
+                let angle = 2.0 * acos(min(1.0, abs(deltaRotation.vector.w)))
+                let axis = normalize(simd_float3(deltaRotation.vector.x, deltaRotation.vector.y, deltaRotation.vector.z))
+                angularVelocity = axis * (angle / deltaTime)
+            }
+        }
+        
+        // Store for next frame
+        lastCameraPosition = position
+        lastCameraRotation = rotation
+        lastFrameTimestamp = frame.timestamp
+        
+        // Extract camera intrinsics
+        let intrinsics = frame.camera.intrinsics
+        let focalLength = CGPoint(x: CGFloat(intrinsics[0, 0]), y: CGFloat(intrinsics[1, 1]))
+        let principalPoint = CGPoint(x: CGFloat(intrinsics[2, 0]), y: CGFloat(intrinsics[2, 1]))
+        let imageResolution = frame.camera.imageResolution
+        
+        // Extract tracking state
+        let trackingStateString: String
+        switch frame.camera.trackingState {
+        case .normal:
+            trackingStateString = "normal"
+        case .limited:
+            trackingStateString = "limited"
+        case .notAvailable:
+            trackingStateString = "notAvailable"
+        }
+        
+        // Calculate tracking confidence (simplified - based on tracking state)
+        let confidence: Float
+        switch frame.camera.trackingState {
+        case .normal:
+            confidence = 1.0
+        case .limited:
+            confidence = 0.5
+        case .notAvailable:
+            confidence = 0.0
+        }
+        
+        // Create captured frame with all motion data
         let capturedFrame = CapturedFrame(
             timestamp: frame.timestamp,
             rgbBuffer: pixelBuffer,
             depthBuffer: depthData,
-            cameraTransform: frame.camera.transform
+            cameraTransform: transform,
+            cameraPosition: position,
+            cameraRotation: rotation,
+            linearVelocity: linearVelocity,
+            angularVelocity: angularVelocity,
+            focalLength: focalLength,
+            principalPoint: principalPoint,
+            imageResolution: imageResolution,
+            trackingState: trackingStateString,
+            trackingConfidence: confidence
         )
         
         // Process based on mode
@@ -303,6 +376,23 @@ struct CapturedFrame {
     let timestamp: TimeInterval
     let rgbBuffer: CVPixelBuffer
     let depthBuffer: CVPixelBuffer?
+    
+    // Camera pose (position + orientation in 3D space)
     let cameraTransform: simd_float4x4
+    
+    // Motion data (for temporal prediction)
+    let cameraPosition: simd_float3       // (x, y, z) in meters
+    let cameraRotation: simd_quatf        // Orientation as quaternion
+    let linearVelocity: simd_float3?      // m/s in each axis
+    let angularVelocity: simd_float3?     // rad/s around each axis
+    
+    // Camera intrinsics (for 3D reconstruction)
+    let focalLength: CGPoint              // (fx, fy) in pixels
+    let principalPoint: CGPoint           // (cx, cy) in pixels
+    let imageResolution: CGSize           // Native camera resolution
+    
+    // Tracking quality
+    let trackingState: String             // "normal", "limited", "notAvailable"
+    let trackingConfidence: Float         // 0.0 to 1.0
 }
 
