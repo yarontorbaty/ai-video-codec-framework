@@ -9,6 +9,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Import AttentionBlock from encoder
+try:
+    from pvc_v2.models.production_residual_encoder import AttentionBlock
+except ImportError:
+    # Fallback for when running as part of package
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from models.production_residual_encoder import AttentionBlock
+
 
 class UpsampleBlock(nn.Module):
     """Upsampling block with skip connection."""
@@ -38,7 +48,6 @@ class UpsampleBlock(nn.Module):
         
         # Optional attention
         if use_attention:
-            from pvc_v2.models.production_residual_encoder import AttentionBlock
             self.attention = AttentionBlock(out_channels)
         else:
             self.attention = None
