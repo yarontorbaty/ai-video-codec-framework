@@ -28,6 +28,28 @@ A hybrid neural codec combining procedural graphics generation with learned resi
 
 ---
 
+## 🎯 Matched Quality Comparison
+
+**Question:** "How much smaller is our codec at the SAME quality level?"
+
+We tested AV1 at multiple CRF values to find one that matches our 48.02 dB PSNR:
+
+| Codec | PSNR | SSIM | File Size (960×540) | File Size (1080p) |
+|-------|------|------|---------------------|-------------------|
+| **Our Neural Codec** | 48.02 dB | 0.9965 | **12.60 KB** | **50.36 KB** |
+| **AV1 (CRF 12)** | 48.20 dB | ~0.993 | **74.97 KB** | **~300 KB** |
+
+### 💡 At Matched Quality (~48 dB):
+
+✅ **5.95× smaller file size** (83.2% reduction)  
+✅ **Better SSIM** (0.9965 vs ~0.993)  
+✅ **99.2% compression** vs original (vs 95.1% for AV1)  
+✅ **Storage savings:** 1 hour of 1080p video = 5.4 GB (ours) vs 32.4 GB (AV1)  
+
+**📄 Full Analysis:** [docs/MATCHED_QUALITY_COMPARISON.md](docs/MATCHED_QUALITY_COMPARISON.md)
+
+---
+
 ## 📥 Download Trained Model
 
 **Latest Model:** Tier 1 Hybrid (52.89 dB trained PSNR)
