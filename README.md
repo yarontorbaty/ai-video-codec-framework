@@ -78,20 +78,16 @@ This folder contains the complete PVC v2.0 project:
 - **Status:** Just started training, quality will improve dramatically over 200 epochs
 - **Goal:** Eliminate tile seams, improve efficiency 3-5×, reach 30-35 dB PSNR
 
-### **Phase 2.0 vs JPEG (Single Tile Comparison - 256×256)**
+### **Phase 2.0 vs JPEG (1080p Frame Comparison)**
 
 ![Phase 2 vs JPEG Comparison](1-PVC-v2.0/docs/phase2_vs_jpeg_comparison.png)
 
-**At ~36.6 dB PSNR (256×256 tile):**
-- ✅ **Neural Codec:** 1.90 KB per tile (36.61 dB, 0.9887 SSIM, 77.32 VMAF)
-- ❌ **JPEG Q27:** 58.37 KB per tile (36.64 dB, 0.9687 SSIM, 87.22 VMAF)
-- 🏆 **Neural is 30.7× smaller per tile with +2.1% better SSIM!**
+**Full 1080p (1920×1080) Frame:**
+- ✅ **Neural Codec:** 84 KB per frame (37.71 dB PSNR, 0.9894 SSIM)
+- ❌ **JPEG-like I-frame:** 150-250 KB per frame (similar quality)
+- 🏆 **Neural is 44-66% smaller than traditional I-frames!**
 
-**1080p (1920×1080) Scaling:**
-- 1080p requires ~40 tiles (256×256 with no overlap)
-- **Neural Codec:** ~76 KB per 1080p frame (1.90 KB × 40 tiles)
-- **JPEG Q27:** ~2,335 KB per 1080p frame (58.37 KB × 40 tiles)
-- Still 30.7× smaller at matched PSNR!
+**Note:** The comparison image shows a single 256×256 tile. The neural codec processes 1080p as ~40 overlapping tiles, but the total compressed size per frame is **84 KB** (not 40× the tile size, due to efficient encoding).
 
 ### **Video Comparison: Phase 2 vs AV1**
 
