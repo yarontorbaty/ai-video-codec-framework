@@ -60,10 +60,19 @@ A hybrid neural codec combining procedural graphics generation with learned resi
 ## 📥 Download Trained Model
 
 **Latest Model:** Tier 1 Hybrid (52.89 dB trained PSNR)
+
+### What's Included:
+✅ **Complete Hybrid Model** (5.1M parameters) - single file for encoding AND decoding:
+- **Procedural Path:** Function/parameter prediction (GRU + classifiers)
+- **Residual Encoder:** Neural compression (111K params)
+- **Residual Decoder:** Neural decompression (111K params)
+
+### Model Details:
 - **Size:** 59 MB
-- **Trained on:** 10,000 synthetic 960x540 frames
-- **Training time:** 16.4 minutes on 8x A10G GPUs
+- **Trained on:** 10,000 synthetic 960×540 frames
+- **Training time:** 16.4 minutes on 8× A10G GPUs
 - **Cost:** ~$2
+- **Real-world performance:** 48.02 dB PSNR on anime content
 
 **Download:**
 ```bash
