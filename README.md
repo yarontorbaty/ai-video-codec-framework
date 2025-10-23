@@ -129,6 +129,37 @@ See: [Full Video Comparison Results](1-PVC-v2.0/docs/VIDEO_COMPARISON_RESULTS.md
 
 ---
 
+## 🚀 Future: Phase 3 - Neural Temporal Compression
+
+**Goal:** Add P/B frame compression to reduce bitrate from **2 Mbps → 0.6-1.2 Mbps**
+
+### Novel Approach: Beyond Block-Based Motion Compensation
+
+Instead of tracking pixel blocks like traditional codecs, Phase 3 will track **semantic objects** and their **transformations**:
+
+**Five Innovative Techniques:**
+1. **Object-Aware Motion Compensation** - Track faces/bodies with transformation parameters (rotation, scale, perspective)
+2. **Neural Scene Representation** - Encode 3D scene once, transmit only camera/view changes (NeRF-like)
+3. **Semantic Motion Prediction** - Learn anime motion patterns, transmit only prediction corrections
+4. **Spatiotemporal Augmentation** - Transmit transformation recipes to synthesize frames from base objects
+5. **Hybrid Adaptive Strategy** - Intelligently combine all approaches based on scene content
+
+**Expected Results:**
+- **Conservative:** 1,200 Kbps @ 35-38 dB (competitive with AV1)
+- **Optimistic:** 600-800 Kbps @ 35-38 dB (2× better than AV1!)
+
+**Why This Works for Anime:**
+- ✅ Limited character poses → Build reusable object libraries
+- ✅ Static backgrounds → Encode scene once, reuse across frames
+- ✅ Predictable motion → Learn common anime motion patterns
+- ✅ Clear object boundaries → Easy segmentation and tracking
+
+**Timeline:** 3.5-5 months after Phase 2.5 completes
+
+**📄 See:** [docs/PHASE3_TEMPORAL_COMPRESSION_PLAN.md](docs/PHASE3_TEMPORAL_COMPRESSION_PLAN.md) for complete technical plan
+
+---
+
 ## 🎯 Production Roadmap: 50% → 70% → 90% Bitrate Reduction
 
 ### **Phase 1: Baseline (Tonight) - 14.5 Mbps**
