@@ -10,6 +10,8 @@ A hybrid neural codec combining procedural graphics generation with learned resi
 
 ### Performance (Measured on Real Anime)
 
+**Comparison 1: vs AV1 Typical Streaming Quality (CRF 30)**
+
 | Metric | Our Codec | AV1 (CRF 30) | Improvement |
 |--------|-----------|--------------|-------------|
 | **PSNR** | **48.02 dB** | 43.00 dB | **+5.01 dB** |
@@ -18,7 +20,21 @@ A hybrid neural codec combining procedural graphics generation with learned resi
 | **Size (960x540)** | **12.60 KB** | 16.84 KB | **25.2% smaller** |
 | **Size (1080p)** | **50.36 KB** | 67.37 KB | **25.2% smaller** |
 
-✅ **Better quality at smaller file size across ALL metrics**
+✅ **Better quality AND smaller file size across ALL metrics**
+
+---
+
+**Comparison 2: vs AV1 at Matched Quality (~48 dB PSNR)**
+
+| Metric | Our Codec | AV1 (CRF 12) | Improvement |
+|--------|-----------|--------------|-------------|
+| **PSNR** | **48.02 dB** | 48.20 dB | -0.18 dB (negligible) |
+| **SSIM** | **0.9965** | ~0.993 | **+0.35%** |
+| **VMAF** | **94.48** | ~95 (est.) | Similar |
+| **Size (960x540)** | **12.60 KB** | **74.97 KB** | **🎯 5.95× smaller** |
+| **Size (1080p)** | **50.36 KB** | **~300 KB** | **🎯 5.96× smaller** |
+
+✅ **At matched quality: 5.95× smaller file size (83.2% reduction)**
 
 ### Visual Comparison
 
@@ -26,25 +42,16 @@ A hybrid neural codec combining procedural graphics generation with learned resi
 
 *Left: Original | Middle: Our Codec (48dB) | Right: AV1 (43dB)*
 
----
+### 💡 Key Takeaways
 
-## 🎯 Matched Quality Comparison
+**At typical streaming quality (CRF 30):**
+- ✅ We deliver **+5 dB better quality** at **25% smaller file size**
+- ✅ Better on ALL metrics: PSNR, SSIM, VMAF, and size
 
-**Question:** "How much smaller is our codec at the SAME quality level?"
-
-We tested AV1 at multiple CRF values to find one that matches our 48.02 dB PSNR:
-
-| Codec | PSNR | SSIM | File Size (960×540) | File Size (1080p) |
-|-------|------|------|---------------------|-------------------|
-| **Our Neural Codec** | 48.02 dB | 0.9965 | **12.60 KB** | **50.36 KB** |
-| **AV1 (CRF 12)** | 48.20 dB | ~0.993 | **74.97 KB** | **~300 KB** |
-
-### 💡 At Matched Quality (~48 dB):
-
-✅ **5.95× smaller file size** (83.2% reduction)  
-✅ **Better SSIM** (0.9965 vs ~0.993)  
-✅ **99.2% compression** vs original (vs 95.1% for AV1)  
-✅ **Storage savings:** 1 hour of 1080p video = 5.4 GB (ours) vs 32.4 GB (AV1)  
+**At matched quality (~48 dB PSNR):**
+- ✅ We deliver **same quality** at **5.95× smaller file size**
+- ✅ Storage: 5.4 GB vs 32.4 GB per hour of 1080p video
+- ✅ Bitrate: 12.1 Mbps vs 72 Mbps for 1080p
 
 **📄 Full Analysis:** [docs/MATCHED_QUALITY_COMPARISON.md](docs/MATCHED_QUALITY_COMPARISON.md)
 
