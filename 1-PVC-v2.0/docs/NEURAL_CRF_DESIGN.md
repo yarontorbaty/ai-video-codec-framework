@@ -350,3 +350,27 @@ pvc_encode input.mp4 output.pvc --neural-crf 10
 ---
 
 **Conclusion:** Neural CRF is highly feasible and maps well to traditional CRF. Phase 1 (multi-model) can be implemented in 2-3 weeks and provides AV1-equivalent quality control.
+
+---
+
+## UPDATE: Single-Model Approach Recommended
+
+**After considering deployment constraints (mobile device storage), we recommend a single variable-channel model instead of 5 separate models.**
+
+### Key Advantage:
+- **Multi-model:** 250 MB (5 × 50 MB models) ❌
+- **Single model:** 50 MB (one unified model) ✅
+- **Mobile-optimized:** 2.5-9 MB (pruned + quantized) ✅
+
+**See:** [NEURAL_CRF_SINGLE_MODEL.md](NEURAL_CRF_SINGLE_MODEL.md) for the recommended implementation design.
+
+### How it Works:
+1. Train ONE encoder that outputs 64 latent channels
+2. Train ONE decoder that can reconstruct from ANY channel count (8, 16, 24, 32, 48, 64)
+3. Encoder learns "channel importance" - which channels matter most
+4. At encoding time, keep only the top-N most important channels based on CRF
+5. Decoder adapts to the provided channel count using small adapter layers (8 KB each)
+
+**Storage:** 50 MB for full quality, 2.5 MB for mobile-optimized version
+
+**Timeline:** 4 weeks to implement and validate
