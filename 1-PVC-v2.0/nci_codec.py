@@ -124,10 +124,16 @@ class NCICodec:
         
         Args:
             model_path: Path to model weights (.pth file)
-            device: 'cpu', 'cuda', or None (auto-detect)
+            device: 'cpu', 'cuda', 'mps', or None (auto-detect)
         """
         if device is None:
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            # Auto-detect best device
+            if torch.cuda.is_available():
+                self.device = 'cuda'
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                self.device = 'mps'
+            else:
+                self.device = 'cpu'
         else:
             self.device = device
         
@@ -394,7 +400,7 @@ Examples:
                        help='Preserve EXIF metadata (encode mode)')
     parser.add_argument('--add-metrics', action='store_true',
                        help='Add PSNR/SSIM to EXIF (decode mode)')
-    parser.add_argument('--device', type=str, choices=['cpu', 'cuda'], default=None,
+    parser.add_argument('--device', type=str, choices=['cpu', 'cuda', 'mps'], default=None,
                        help='Device to use (default: auto-detect)')
     
     args = parser.parse_args()
