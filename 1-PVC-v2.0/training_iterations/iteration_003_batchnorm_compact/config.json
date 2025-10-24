@@ -1,0 +1,129 @@
+{
+  "iteration": "001",
+  "name": "True Autoencoder - Anime Frames 960x540",
+  "objective": "Train pure autoencoder (not additive-residual) for anime frame compression",
+  "created": "2025-10-24",
+  "status": "in_progress",
+  
+  "dataset": {
+    "name": "anime_frames_960x540_50k.npy",
+    "s3_uri": "s3://ai-codec-v3-artifacts-580473065386/pvc/datasets/anime_frames_960x540_50k.npy",
+    "size_gb": 71,
+    "total_frames": 48672,
+    "train_frames": 43804,
+    "val_frames": 4868,
+    "resolution": [960, 540],
+    "format": "npy",
+    "dtype": "float32",
+    "normalized": true,
+    "shape": ["N", "H", "W", "3"]
+  },
+  
+  "model": {
+    "architecture": "CompressionAutoencoder",
+    "type": "pure_autoencoder",
+    "latent_channels": 32,
+    "total_parameters": 222723,
+    "input_size": [544, 960, 3],
+    "notes": "Input cropped to multiples of 32 for proper downsampling/upsampling"
+  },
+  
+  "training": {
+    "optimizer": {
+      "type": "AdamW",
+      "learning_rate": 0.0001,
+      "weight_decay": 0.00001
+    },
+    "scheduler": {
+      "type": "CosineAnnealingLR",
+      "T_max": 100
+    },
+    "loss": {
+      "primary": "MSE",
+      "perceptual": false,
+      "perceptual_note": "Disabled due to urllib3/OpenSSL compatibility"
+    },
+    "batch_size": {
+      "per_gpu": 8,
+      "total": 64,
+      "num_gpus": 8
+    },
+    "gradient_clipping": 1.0,
+    "epochs": 100,
+    "val_split": 0.1
+  },
+  
+  "hardware": {
+    "instance_type": "g5.48xlarge",
+    "gpu": "NVIDIA A10G",
+    "gpu_count": 8,
+    "gpu_memory_gb": 24,
+    "vcpus": 192,
+    "ram_gb": 768,
+    "storage_gb": 100,
+    "cost_per_hour": 10.85
+  },
+  
+  "performance": {
+    "time_per_epoch_seconds": 693,
+    "time_per_epoch_minutes": 11.5,
+    "total_training_time_hours": 19,
+    "gpu_utilization_percent": "0-50",
+    "gpu_memory_used_gb": "4-7",
+    "estimated_cost_usd": 206
+  },
+  
+  "checkpointing": {
+    "save_every_epoch": true,
+    "save_best_model": true,
+    "save_periodic_epochs": 10,
+    "s3_bucket": "ai-codec-v3-artifacts-580473065386",
+    "s3_prefix": "pvc/"
+  },
+  
+  "expected_results": {
+    "epoch_1_psnr_db": -41.88,
+    "epoch_10_psnr_db": "10-15",
+    "epoch_25_psnr_db": "18-22",
+    "epoch_50_psnr_db": "23-26",
+    "epoch_100_psnr_db": "26-30"
+  },
+  
+  "resolved_issues": [
+    {
+      "issue": "DDP port conflict",
+      "solution": "Share random port across all workers before spawning"
+    },
+    {
+      "issue": "RAM overload (568GB required)",
+      "solution": "Memory-mapped dataset with explicit .copy() per batch"
+    },
+    {
+      "issue": "urllib3/OpenSSL incompatibility",
+      "solution": "Disabled perceptual loss or downgrade urllib3"
+    },
+    {
+      "issue": "DataLoader hang",
+      "solution": "Set num_workers=0 to avoid multiprocessing deadlock"
+    }
+  ],
+  
+  "dependencies": {
+    "python": "3.7+",
+    "torch": "latest",
+    "torchvision": "latest",
+    "flask": "latest",
+    "urllib3": "<2.0",
+    "numpy": "latest",
+    "opencv-python": "optional"
+  },
+  
+  "files": {
+    "training_script": "train_autoencoder_multigpu.py",
+    "model_definition": "models/true_autoencoder.py",
+    "dashboard": "autoencoder_dashboard.py",
+    "launch_script": "launch_training.sh",
+    "readme": "README.md"
+  }
+}
+
