@@ -169,14 +169,15 @@ class NCICodec:
             self.model = self.model.to(self.device)
             self.model.eval()
     
-    def encode(self, input_path, output_path, preserve_metadata=True):
+    def encode(self, input_path, output_path, preserve_metadata=True, tile_size=960):
         """
-        Encode image to .nci format
+        Encode image to .nci format using sequential tile processing
         
         Args:
             input_path: Path to input image
             output_path: Path to output .nci file
             preserve_metadata: Whether to preserve EXIF metadata
+            tile_size: Size of tiles for processing large images (default: 960)
         
         Returns:
             dict with compression stats (psnr, ssim, sizes, etc.)
@@ -218,18 +219,31 @@ class NCICodec:
         img_rgb = cv2.cvtColor(img_bgr_resized, cv2.COLOR_BGR2RGB)
         img_norm = img_rgb.astype(np.float32) / 255.0
         
-        # Convert to tensor
-        img_tensor = torch.from_numpy(img_norm).permute(2, 0, 1).unsqueeze(0).to(self.device)
+        # Check if we need tiling (large images)
+        need_tiling = new_h > tile_size or new_w > tile_size
         
-        # Encode
-        with torch.no_grad():
-            output, latent, func_logits, params = self.model(img_tensor)
+        if need_tiling:
+            # Process in tiles sequentially to avoid OOM
+            print(f"Large image detected ({new_w}×{new_h}), processing in tiles...", file=sys.stderr)
+            output_np, latent_list, func_logits_list, params_list = self._encode_tiled(
+                img_norm, tile_size
+            )
             
-            # Get numpy arrays
-            output_np = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
-            latent_np = latent.cpu().numpy()
-            func_logits_np = func_logits.cpu().numpy()
-            params_np = params.cpu().numpy()
+            # Concatenate tile latents
+            latent_np = np.concatenate([l.cpu().numpy() for l in latent_list], axis=0)
+            func_logits_np = np.concatenate([f.cpu().numpy() for f in func_logits_list], axis=0)
+            params_np = np.concatenate([p.cpu().numpy() for p in params_list], axis=0)
+        else:
+            # Small image - process normally
+            img_tensor = torch.from_numpy(img_norm).permute(2, 0, 1).unsqueeze(0).to(self.device)
+            
+            with torch.no_grad():
+                output, latent, func_logits, params = self.model(img_tensor)
+                
+                output_np = output.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                latent_np = latent.cpu().numpy()
+                func_logits_np = func_logits.cpu().numpy()
+                params_np = params.cpu().numpy()
         
         # Calculate quality metrics
         mse = np.mean((img_norm - output_np) ** 2)
@@ -257,7 +271,8 @@ class NCICodec:
             'metadata': metadata,
             'psnr': psnr,
             'ssim': ssim,
-            'model': str(self.model_path.name)
+            'model': str(self.model_path.name),
+            'tiled': need_tiling
         }
         
         # Compress and save
@@ -277,8 +292,100 @@ class NCICodec:
             'original_size_bytes': original_size_bytes,
             'compressed_size_bytes': compressed_size_bytes,
             'compression_ratio': compression_ratio,
-            'original_dims': original_size
+            'original_dims': original_size,
+            'tiled': need_tiling
         }
+    
+    def _encode_tiled(self, img_norm, tile_size):
+        """
+        Encode large image using sequential tile processing
+        
+        Args:
+            img_norm: Normalized image (H, W, 3)
+            tile_size: Size of tiles
+        
+        Returns:
+            tuple of (output_img, latents, func_logits, params)
+        """
+        h, w = img_norm.shape[:2]
+        output_img = np.zeros_like(img_norm)
+        weight_map = np.zeros((h, w), dtype=np.float32)
+        
+        latent_list = []
+        func_logits_list = []
+        params_list = []
+        
+        # Calculate tile grid
+        overlap = 64  # Larger overlap for better blending
+        stride = tile_size - overlap
+        num_tiles_h = (h + stride - 1) // stride
+        num_tiles_w = (w + stride - 1) // stride
+        total_tiles = num_tiles_h * num_tiles_w
+        
+        print(f"Processing {num_tiles_h}×{num_tiles_w} = {total_tiles} tiles...", file=sys.stderr)
+        
+        tile_count = 0
+        for i in range(num_tiles_h):
+            for j in range(num_tiles_w):
+                tile_count += 1
+                
+                # Calculate tile boundaries
+                y1 = i * stride
+                x1 = j * stride
+                y2 = min(y1 + tile_size, h)
+                x2 = min(x1 + tile_size, w)
+                
+                # Extract tile
+                tile = img_norm[y1:y2, x1:x2]
+                tile_h, tile_w = tile.shape[:2]
+                
+                # Pad tile to tile_size if needed
+                tile_padded = np.zeros((tile_size, tile_size, 3), dtype=np.float32)
+                tile_padded[:tile_h, :tile_w] = tile
+                
+                # Process tile
+                tile_tensor = torch.from_numpy(tile_padded).permute(2, 0, 1).unsqueeze(0).to(self.device)
+                
+                with torch.no_grad():
+                    tile_output, tile_latent, tile_func, tile_params = self.model(tile_tensor)
+                    
+                    # Store latents
+                    latent_list.append(tile_latent)
+                    func_logits_list.append(tile_func)
+                    params_list.append(tile_params)
+                    
+                    # Get output
+                    tile_output_np = tile_output.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                    tile_output_np = tile_output_np[:tile_h, :tile_w]  # Crop to actual size
+                
+                # Create blend weights (higher in center, lower at edges)
+                tile_weight = np.ones((tile_h, tile_w), dtype=np.float32)
+                blend_width = min(overlap, tile_h // 4, tile_w // 4)
+                
+                for k in range(blend_width):
+                    alpha = k / blend_width
+                    # Apply to edges
+                    if y1 > 0:  # Not top edge
+                        tile_weight[k, :] = alpha
+                    if y2 < h:  # Not bottom edge
+                        tile_weight[tile_h - 1 - k, :] = np.minimum(tile_weight[tile_h - 1 - k, :], alpha)
+                    if x1 > 0:  # Not left edge
+                        tile_weight[:, k] = np.minimum(tile_weight[:, k], alpha)
+                    if x2 < w:  # Not right edge
+                        tile_weight[:, tile_w - 1 - k] = np.minimum(tile_weight[:, tile_w - 1 - k], alpha)
+                
+                # Blend into output
+                output_img[y1:y2, x1:x2] += tile_output_np * tile_weight[:, :, np.newaxis]
+                weight_map[y1:y2, x1:x2] += tile_weight
+                
+                # Progress indicator
+                if tile_count % 10 == 0 or tile_count == total_tiles:
+                    print(f"  {tile_count}/{total_tiles} tiles completed ({tile_count*100//total_tiles}%)", file=sys.stderr)
+        
+        # Normalize by weights
+        output_img /= weight_map[:, :, np.newaxis] + 1e-8
+        
+        return output_img, latent_list, func_logits_list, params_list
     
     def decode(self, input_path, output_path, add_metrics_to_exif=False):
         """
