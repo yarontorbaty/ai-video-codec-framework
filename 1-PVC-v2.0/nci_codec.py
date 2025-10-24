@@ -387,6 +387,86 @@ class NCICodec:
         
         return output_img, latent_list, func_logits_list, params_list
     
+    def _decode_tiled(self, latent_all, processed_size, tile_size=960):
+        """
+        Decode tiled image sequentially
+        
+        Args:
+            latent_all: All tile latents concatenated (num_tiles, C, H, W)
+            processed_size: (width, height) of processed image
+            tile_size: Size of tiles used during encoding
+        
+        Returns:
+            output_img: Decoded image (H, W, 3)
+        """
+        w, h = processed_size
+        output_img = np.zeros((h, w, 3), dtype=np.float32)
+        weight_map = np.zeros((h, w), dtype=np.float32)
+        
+        # Calculate tile grid (same as encoding)
+        overlap = 64
+        stride = tile_size - overlap
+        num_tiles_h = (h + stride - 1) // stride
+        num_tiles_w = (w + stride - 1) // stride
+        total_tiles = num_tiles_h * num_tiles_w
+        
+        print(f"Decoding {num_tiles_h}×{num_tiles_w} = {total_tiles} tiles...", file=sys.stderr)
+        
+        tile_idx = 0
+        for i in range(num_tiles_h):
+            for j in range(num_tiles_w):
+                # Calculate tile boundaries
+                y1 = i * stride
+                x1 = j * stride
+                y2 = min(y1 + tile_size, h)
+                x2 = min(x1 + tile_size, w)
+                
+                tile_h = y2 - y1
+                tile_w = x2 - x1
+                
+                # Get latent for this tile
+                tile_latent = latent_all[tile_idx:tile_idx+1]
+                tile_latent_tensor = torch.from_numpy(tile_latent).to(self.device)
+                
+                # Decode tile
+                with torch.no_grad():
+                    tile_residual = self.model.res_decoder(tile_latent_tensor)
+                    tile_output_np = tile_residual.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                    tile_output_np = np.clip(tile_output_np + 0.5, 0, 1)  # Shift to [0, 1]
+                    
+                    # Crop to actual tile size
+                    tile_output_np = tile_output_np[:tile_h, :tile_w]
+                
+                # Create blend weights
+                tile_weight = np.ones((tile_h, tile_w), dtype=np.float32)
+                blend_width = min(overlap, tile_h // 4, tile_w // 4)
+                
+                for k in range(blend_width):
+                    alpha = k / blend_width
+                    if y1 > 0:
+                        tile_weight[k, :] = alpha
+                    if y2 < h:
+                        tile_weight[tile_h - 1 - k, :] = np.minimum(tile_weight[tile_h - 1 - k, :], alpha)
+                    if x1 > 0:
+                        tile_weight[:, k] = np.minimum(tile_weight[:, k], alpha)
+                    if x2 < w:
+                        tile_weight[:, tile_w - 1 - k] = np.minimum(tile_weight[:, tile_w - 1 - k], alpha)
+                
+                # Blend into output
+                output_img[y1:y2, x1:x2] += tile_output_np * tile_weight[:, :, np.newaxis]
+                weight_map[y1:y2, x1:x2] += tile_weight
+                
+                tile_idx += 1
+                
+                # Progress indicator
+                if tile_idx % 10 == 0 or tile_idx == total_tiles:
+                    print(f"  {tile_idx}/{total_tiles} tiles decoded ({tile_idx*100//total_tiles}%)", file=sys.stderr)
+        
+        # Normalize by weights
+        output_img /= weight_map[:, :, np.newaxis] + 1e-8
+        
+        return output_img
+    
     def decode(self, input_path, output_path, add_metrics_to_exif=False):
         """
         Decode .nci file to image
@@ -414,22 +494,28 @@ class NCICodec:
         metadata = nci_data.get('metadata', {})
         psnr = nci_data.get('psnr')
         ssim = nci_data.get('ssim')
+        is_tiled = nci_data.get('tiled', False)
         
         # Dequantize latent
         latent_fp32 = latent_int8.astype(np.float32) / 127.0
-        latent_tensor = torch.from_numpy(latent_fp32).to(self.device)
         
-        # Decode
-        with torch.no_grad():
-            residual = self.model.res_decoder(latent_tensor)
+        if is_tiled:
+            # Decode tiled image
+            print(f"Decoding tiled image ({processed_size[0]}×{processed_size[1]})...", file=sys.stderr)
+            output_np = self._decode_tiled(latent_fp32, processed_size)
+        else:
+            # Decode single image
+            latent_tensor = torch.from_numpy(latent_fp32).to(self.device)
             
-            # We need the original input to add residual to
-            # Since we don't have it, we'll just output the residual reconstruction
-            # This is a simplified decoder - full version would need procedural reconstruction
-            output_np = residual.squeeze(0).permute(1, 2, 0).cpu().numpy()
-            output_np = torch.clamp(
-                torch.from_numpy(output_np), -0.5, 0.5
-            ).numpy() + 0.5  # Shift to [0, 1]
+            with torch.no_grad():
+                residual = self.model.res_decoder(latent_tensor)
+                
+                # This is a simplified decoder - just using residual
+                # Full version would need procedural reconstruction
+                output_np = residual.squeeze(0).permute(1, 2, 0).cpu().numpy()
+                output_np = torch.clamp(
+                    torch.from_numpy(output_np), -0.5, 0.5
+                ).numpy() + 0.5  # Shift to [0, 1]
         
         # Resize back to original dimensions
         output_bgr = cv2.cvtColor((output_np * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
