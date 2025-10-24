@@ -260,12 +260,20 @@ class NCICodec:
         # Quantize latent to INT8
         latent_int8 = (latent_np * 127).astype(np.int8)
         
+        # Store a downsampled base image for decoding (10% of original size)
+        base_scale = 0.1
+        base_h = int(new_h * base_scale)
+        base_w = int(new_w * base_scale)
+        base_img = cv2.resize(img_norm, (base_w, base_h))
+        base_img_int8 = (base_img * 255).astype(np.uint8)
+        
         # Create .nci file
         nci_data = {
             'version': self.VERSION,
             'original_size': original_size,
             'processed_size': (new_w, new_h),
             'latent': latent_int8,
+            'base_image': base_img_int8,  # Store low-res base
             'func_logits': func_logits_np.astype(np.float16),  # FP16 to save space
             'params': params_np.astype(np.float16),
             'metadata': metadata,
@@ -354,7 +362,7 @@ class NCICodec:
                     func_logits_list.append(tile_func)
                     params_list.append(tile_params)
                     
-                    # Get output
+                    # Get FULL output (not just residual, but input + residual)
                     tile_output_np = tile_output.squeeze(0).permute(1, 2, 0).cpu().numpy()
                     tile_output_np = tile_output_np[:tile_h, :tile_w]  # Crop to actual size
                 
@@ -387,13 +395,14 @@ class NCICodec:
         
         return output_img, latent_list, func_logits_list, params_list
     
-    def _decode_tiled(self, latent_all, processed_size, tile_size=960):
+    def _decode_tiled(self, latent_all, processed_size, base_img_full, tile_size=960):
         """
         Decode tiled image sequentially
         
         Args:
             latent_all: All tile latents concatenated (num_tiles, C, H, W)
             processed_size: (width, height) of processed image
+            base_img_full: Base image for adding residuals (H, W, 3)
             tile_size: Size of tiles used during encoding
         
         Returns:
@@ -428,14 +437,23 @@ class NCICodec:
                 tile_latent = latent_all[tile_idx:tile_idx+1]
                 tile_latent_tensor = torch.from_numpy(tile_latent).to(self.device)
                 
+                # Get base image for this tile
+                tile_base = base_img_full[y1:y2, x1:x2]
+                tile_base_tensor = torch.from_numpy(tile_base).permute(2, 0, 1).unsqueeze(0).to(self.device)
+                
                 # Decode tile
                 with torch.no_grad():
                     tile_residual = self.model.res_decoder(tile_latent_tensor)
-                    tile_output_np = tile_residual.squeeze(0).permute(1, 2, 0).cpu().numpy()
-                    tile_output_np = np.clip(tile_output_np + 0.5, 0, 1)  # Shift to [0, 1]
+                    # Resize residual to match tile size
+                    tile_residual = torch.nn.functional.interpolate(
+                        tile_residual, size=(tile_h, tile_w),
+                        mode='bilinear', align_corners=False
+                    )
+                    tile_residual = torch.clamp(tile_residual, -0.5, 0.5)
                     
-                    # Crop to actual tile size
-                    tile_output_np = tile_output_np[:tile_h, :tile_w]
+                    # Add residual to base
+                    tile_output_tensor = torch.clamp(tile_base_tensor + tile_residual, 0, 1)
+                    tile_output_np = tile_output_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
                 
                 # Create blend weights
                 tile_weight = np.ones((tile_h, tile_w), dtype=np.float32)
@@ -491,6 +509,7 @@ class NCICodec:
         original_size = nci_data['original_size']
         processed_size = nci_data['processed_size']
         latent_int8 = nci_data['latent']
+        base_img_int8 = nci_data.get('base_image', None)
         metadata = nci_data.get('metadata', {})
         psnr = nci_data.get('psnr')
         ssim = nci_data.get('ssim')
@@ -499,23 +518,35 @@ class NCICodec:
         # Dequantize latent
         latent_fp32 = latent_int8.astype(np.float32) / 127.0
         
+        # Get base image if available
+        if base_img_int8 is not None:
+            base_img = base_img_int8.astype(np.float32) / 255.0
+            # Upscale base to processed size
+            base_img_full = cv2.resize(base_img, (processed_size[0], processed_size[1]))
+        else:
+            # No base image - create neutral gray
+            base_img_full = np.ones((processed_size[1], processed_size[0], 3), dtype=np.float32) * 0.5
+        
         if is_tiled:
             # Decode tiled image
             print(f"Decoding tiled image ({processed_size[0]}×{processed_size[1]})...", file=sys.stderr)
-            output_np = self._decode_tiled(latent_fp32, processed_size)
+            output_np = self._decode_tiled(latent_fp32, processed_size, base_img_full)
         else:
             # Decode single image
             latent_tensor = torch.from_numpy(latent_fp32).to(self.device)
+            base_tensor = torch.from_numpy(base_img_full).permute(2, 0, 1).unsqueeze(0).to(self.device)
             
             with torch.no_grad():
                 residual = self.model.res_decoder(latent_tensor)
+                residual = torch.nn.functional.interpolate(
+                    residual, size=(processed_size[1], processed_size[0]), 
+                    mode='bilinear', align_corners=False
+                )
+                residual = torch.clamp(residual, -0.5, 0.5)
                 
-                # This is a simplified decoder - just using residual
-                # Full version would need procedural reconstruction
-                output_np = residual.squeeze(0).permute(1, 2, 0).cpu().numpy()
-                output_np = torch.clamp(
-                    torch.from_numpy(output_np), -0.5, 0.5
-                ).numpy() + 0.5  # Shift to [0, 1]
+                # Add residual to base
+                output_tensor = torch.clamp(base_tensor + residual, 0, 1)
+                output_np = output_tensor.squeeze(0).permute(1, 2, 0).cpu().numpy()
         
         # Resize back to original dimensions
         output_bgr = cv2.cvtColor((output_np * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
