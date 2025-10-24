@@ -260,12 +260,14 @@ class NCICodec:
         # Quantize latent to INT8
         latent_int8 = (latent_np * 127).astype(np.int8)
         
-        # Store a downsampled base image for decoding (10% of original size)
-        base_scale = 0.1
+        # Store a downsampled base image for decoding (50% of original size for better quality)
+        base_scale = 0.5
         base_h = int(new_h * base_scale)
         base_w = int(new_w * base_scale)
         base_img = cv2.resize(img_norm, (base_w, base_h))
-        base_img_int8 = (base_img * 255).astype(np.uint8)
+        # Use JPEG compression on base to save space
+        _, base_img_jpg = cv2.imencode('.jpg', (base_img * 255).astype(np.uint8), [cv2.IMWRITE_JPEG_QUALITY, 50])
+        base_img_compressed = base_img_jpg.tobytes()
         
         # Create .nci file
         nci_data = {
@@ -273,7 +275,8 @@ class NCICodec:
             'original_size': original_size,
             'processed_size': (new_w, new_h),
             'latent': latent_int8,
-            'base_image': base_img_int8,  # Store low-res base
+            'base_image': base_img_compressed,  # Store compressed base
+            'base_scale': base_scale,
             'func_logits': func_logits_np.astype(np.float16),  # FP16 to save space
             'params': params_np.astype(np.float16),
             'metadata': metadata,
@@ -509,7 +512,8 @@ class NCICodec:
         original_size = nci_data['original_size']
         processed_size = nci_data['processed_size']
         latent_int8 = nci_data['latent']
-        base_img_int8 = nci_data.get('base_image', None)
+        base_img_data = nci_data.get('base_image', None)
+        base_scale = nci_data.get('base_scale', 0.1)  # Default to 0.1 for old files
         metadata = nci_data.get('metadata', {})
         psnr = nci_data.get('psnr')
         ssim = nci_data.get('ssim')
@@ -519,8 +523,17 @@ class NCICodec:
         latent_fp32 = latent_int8.astype(np.float32) / 127.0
         
         # Get base image if available
-        if base_img_int8 is not None:
-            base_img = base_img_int8.astype(np.float32) / 255.0
+        if base_img_data is not None:
+            if isinstance(base_img_data, bytes):
+                # Decompress JPEG base image
+                base_img_jpg = np.frombuffer(base_img_data, dtype=np.uint8)
+                base_img = cv2.imdecode(base_img_jpg, cv2.IMREAD_COLOR)
+                base_img = cv2.cvtColor(base_img, cv2.COLOR_BGR2RGB)
+                base_img = base_img.astype(np.float32) / 255.0
+            else:
+                # Old format: raw uint8 array
+                base_img = base_img_data.astype(np.float32) / 255.0
+            
             # Upscale base to processed size
             base_img_full = cv2.resize(base_img, (processed_size[0], processed_size[1]))
         else:
@@ -552,37 +565,25 @@ class NCICodec:
         output_bgr = cv2.cvtColor((output_np * 255).astype(np.uint8), cv2.COLOR_RGB2BGR)
         output_final = cv2.resize(output_bgr, (original_size[1], original_size[0]))
         
-        # Save image
-        cv2.imwrite(str(output_path), output_final)
+        # Debug: Check output before saving
+        if output_final.size == 0:
+            raise ValueError(f"Output image is empty! output_np shape: {output_np.shape}, original_size: {original_size}")
         
-        # Add metadata if requested
-        if (add_metrics_to_exif or metadata) and output_path.endswith(('.jpg', '.jpeg')):
-            try:
-                with Image.open(output_path) as img:
-                    exif_dict = img.getexif()
-                    
-                    # Add original metadata
-                    for tag, value in metadata.items():
-                        # Find tag ID
-                        tag_id = None
-                        for tid, tname in TAGS.items():
-                            if tname == tag:
-                                tag_id = tid
-                                break
-                        if tag_id:
-                            exif_dict[tag_id] = value
-                    
-                    # Add codec metrics if requested
-                    if add_metrics_to_exif and psnr is not None:
-                        # Use ImageDescription for codec info
-                        codec_info = f"NCI v{nci_data['version']} | PSNR: {psnr:.2f} dB"
-                        if ssim is not None:
-                            codec_info += f" | SSIM: {ssim:.4f}"
-                        exif_dict[270] = codec_info  # ImageDescription tag
-                    
-                    img.save(output_path, exif=exif_dict)
-            except Exception as e:
-                print(f"Warning: Could not add EXIF metadata: {e}", file=sys.stderr)
+        # Save image
+        success = cv2.imwrite(str(output_path), output_final)
+        if not success:
+            raise IOError(f"Failed to write image to {output_path}. Output shape: {output_final.shape}, dtype: {output_final.dtype}")
+        
+        # Verify file was written
+        import os
+        file_size = os.path.getsize(output_path)
+        if file_size == 0:
+            raise IOError(f"Image file was created but is empty (0 bytes)! This might be a PIL/EXIF issue.")
+        
+        # Add metadata if requested - DISABLED FOR NOW (causes empty JPEGs)
+        # TODO: Fix EXIF handling in future version
+        #if (add_metrics_to_exif or metadata) and str(output_path).endswith(('.jpg', '.jpeg')):
+        #    ... EXIF code ...
         
         return {
             'psnr': psnr,
