@@ -14,15 +14,30 @@
     {
       "id": "2",
       "name": "column_2",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 6,
+          "duration": 6,
+          "level_id": "1",
+          "frame_name": "0001"
+        }
+      ],
+      "cell_count": 1
     }
   ],
   "layer_structure": {
-    "total_unique_assets": 0,
-    "total_asset_instances": 0,
-    "average_reuse": 0,
-    "top_reused_assets": []
+    "total_unique_assets": 1,
+    "total_asset_instances": 1,
+    "average_reuse": 1.0,
+    "top_reused_assets": [
+      {
+        "level_id": "1",
+        "frame_name": "0001",
+        "level_name": "level_1",
+        "reuse_count": 1
+      }
+    ]
   },
   "procedural_operations": [
     {

@@ -131,16 +131,31 @@ def extract_column_info(col, levels: List[Dict]) -> Dict[str, Any]:
     cells_elem = col.find('cells')
     if cells_elem is not None:
         for cell in cells_elem.findall('cell'):
+            # Reconstruct full cell text including <level> tag
+            cell_parts = []
             if cell.text:
-                cell_text = cell.text.strip()
-                # Parse: "0 3 <level id='9'/>0001 0"
+                cell_parts.append(cell.text.strip())
+            
+            # Add child elements (level tags)
+            for child in cell:
+                if child.tag == 'level':
+                    level_id_attr = child.get('id')
+                    cell_parts.append(f"<level id='{level_id_attr}'/>")
+                if child.tail:
+                    cell_parts.append(child.tail.strip())
+            
+            if cell_parts:
+                # Normalize whitespace
+                cell_text = ' '.join(' '.join(cell_parts).split())
+                # Parse: "0 3 <level id='9'/>0001 0" or "0 72 <level id='1'/>"-"0"
                 # Format: start_frame duration level_ref frame_number flags
-                match = re.match(r'(\d+)\s+(\d+)\s+<level id=\'(\d+)\'/>([\w-]+)\s+(\d+)', cell_text)
+                match = re.match(r'(\d+)\s+(\d+)\s+<level\s+id=[\'"](\d+)[\'"]\s*/>\s*(?:"([^"]+)"|(\w+))\s*(\d+)', cell_text)
                 if match:
                     start_frame = int(match.group(1))
                     duration = int(match.group(2))
                     level_id = match.group(3)
-                    frame_name = match.group(4)
+                    # Frame name is either group 4 (quoted) or group 5 (unquoted)
+                    frame_name = match.group(4) or match.group(5)
                     
                     cells.append({
                         'start_frame': start_frame,

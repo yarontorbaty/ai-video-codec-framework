@@ -9,13 +9,14 @@
 
 ## Asset Reuse Analysis
 
-- **Unique Assets:** 0
-- **Total Asset Instances:** 0
-- **Average Reuse per Asset:** 0.00x
-- **Compression Opportunity:** 100.0%
+- **Unique Assets:** 1
+- **Total Asset Instances:** 1
+- **Average Reuse per Asset:** 1.00x
+- **Compression Opportunity:** 0.0%
 
 ### Top 10 Most Reused Assets
 
+- **level_1** (Frame: 0001) - Used 1x
 
 ## Levels (Assets)
 
@@ -35,7 +36,7 @@ Total: 5
 
 Based on this project's structure:
 
-1. **Asset Storage:** Only 0 unique drawings need to be stored
+1. **Asset Storage:** Only 1 unique drawings need to be stored
 2. **Temporal Compression:** 0 frames are references (0 bytes each)
 3. **Parametric Effects:** 5 operations can be stored as parameters (~20-50 bytes each)
-4. **Estimated Savings:** 100.0% from asset reuse alone
+4. **Estimated Savings:** 0.0% from asset reuse alone

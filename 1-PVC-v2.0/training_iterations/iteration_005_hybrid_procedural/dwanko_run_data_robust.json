@@ -68,69 +68,532 @@
     {
       "id": "11",
       "name": "column_11",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "1",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "13",
       "name": "column_13",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "2",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "15",
       "name": "column_15",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "3",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "17",
       "name": "column_17",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 3,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 3,
+          "end_frame": 6,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 6,
+          "end_frame": 9,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 9,
+          "end_frame": 12,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 12,
+          "end_frame": 15,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 15,
+          "end_frame": 18,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0006"
+        },
+        {
+          "start_frame": 18,
+          "end_frame": 21,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 21,
+          "end_frame": 24,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 24,
+          "end_frame": 27,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 27,
+          "end_frame": 30,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 30,
+          "end_frame": 33,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 33,
+          "end_frame": 36,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0006"
+        },
+        {
+          "start_frame": 36,
+          "end_frame": 39,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 39,
+          "end_frame": 42,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 42,
+          "end_frame": 45,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 45,
+          "end_frame": 48,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 48,
+          "end_frame": 51,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 51,
+          "end_frame": 54,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0006"
+        },
+        {
+          "start_frame": 54,
+          "end_frame": 57,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 57,
+          "end_frame": 60,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 60,
+          "end_frame": 63,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 63,
+          "end_frame": 66,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 66,
+          "end_frame": 69,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 69,
+          "end_frame": 72,
+          "duration": 3,
+          "level_id": "9",
+          "frame_name": "0006"
+        }
+      ],
+      "cell_count": 24
     },
     {
       "id": "19",
       "name": "column_19",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 3,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 3,
+          "end_frame": 6,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 6,
+          "end_frame": 9,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 9,
+          "end_frame": 12,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 12,
+          "end_frame": 15,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 15,
+          "end_frame": 18,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0006"
+        },
+        {
+          "start_frame": 18,
+          "end_frame": 21,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 21,
+          "end_frame": 24,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 24,
+          "end_frame": 27,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 27,
+          "end_frame": 30,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 30,
+          "end_frame": 33,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 33,
+          "end_frame": 36,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0006"
+        },
+        {
+          "start_frame": 36,
+          "end_frame": 39,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 39,
+          "end_frame": 42,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 42,
+          "end_frame": 45,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 45,
+          "end_frame": 48,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 48,
+          "end_frame": 51,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 51,
+          "end_frame": 54,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0006"
+        },
+        {
+          "start_frame": 54,
+          "end_frame": 57,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0001"
+        },
+        {
+          "start_frame": 57,
+          "end_frame": 60,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0002"
+        },
+        {
+          "start_frame": 60,
+          "end_frame": 63,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0003"
+        },
+        {
+          "start_frame": 63,
+          "end_frame": 66,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0004"
+        },
+        {
+          "start_frame": 66,
+          "end_frame": 69,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0005"
+        },
+        {
+          "start_frame": 69,
+          "end_frame": 72,
+          "duration": 3,
+          "level_id": "8",
+          "frame_name": "0006"
+        }
+      ],
+      "cell_count": 24
     },
     {
       "id": "21",
       "name": "column_21",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "5",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "23",
       "name": "column_23",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "7",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "25",
       "name": "column_25",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "4",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "27",
       "name": "column_27",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "6",
+          "frame_name": "-"
+        }
+      ],
+      "cell_count": 1
     },
     {
       "id": "32",
       "name": "column_32",
-      "cells": [],
-      "cell_count": 0
+      "cells": [
+        {
+          "start_frame": 0,
+          "end_frame": 72,
+          "duration": 72,
+          "level_id": "10",
+          "frame_name": "0001"
+        }
+      ],
+      "cell_count": 1
     }
   ],
   "layer_structure": {
-    "total_unique_assets": 0,
-    "total_asset_instances": 0,
-    "average_reuse": 0,
-    "top_reused_assets": []
+    "total_unique_assets": 20,
+    "total_asset_instances": 56,
+    "average_reuse": 2.8,
+    "top_reused_assets": [
+      {
+        "level_id": "9",
+        "frame_name": "0001",
+        "level_name": "level_9",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "9",
+        "frame_name": "0002",
+        "level_name": "level_9",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "9",
+        "frame_name": "0003",
+        "level_name": "level_9",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "9",
+        "frame_name": "0004",
+        "level_name": "level_9",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "9",
+        "frame_name": "0005",
+        "level_name": "level_9",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "9",
+        "frame_name": "0006",
+        "level_name": "level_9",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "8",
+        "frame_name": "0001",
+        "level_name": "level_8",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "8",
+        "frame_name": "0002",
+        "level_name": "level_8",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "8",
+        "frame_name": "0003",
+        "level_name": "level_8",
+        "reuse_count": 4
+      },
+      {
+        "level_id": "8",
+        "frame_name": "0004",
+        "level_name": "level_8",
+        "reuse_count": 4
+      }
+    ]
   },
   "procedural_operations": [
     {
