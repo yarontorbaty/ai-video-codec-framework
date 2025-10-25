@@ -1,0 +1,56 @@
+{
+  "filename": "cleanup.tnz",
+  "framecount": "6",
+  "version": "71.0",
+  "levels": [
+    {
+      "id": "1",
+      "name": "level_1",
+      "path": "\"$scenefolder\\\\dwanko\\\\scan\\\\A..tif\"",
+      "type": "Unknown"
+    }
+  ],
+  "columns": [
+    {
+      "id": "2",
+      "name": "column_2",
+      "cells": [],
+      "cell_count": 0
+    }
+  ],
+  "layer_structure": {
+    "total_unique_assets": 0,
+    "total_asset_instances": 0,
+    "average_reuse": 0,
+    "top_reused_assets": []
+  },
+  "procedural_operations": [
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "3",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Camera",
+      "has_movement": true,
+      "parameters": {}
+    },
+    {
+      "type": "Camera",
+      "has_movement": true,
+      "parameters": {}
+    },
+    {
+      "type": "Camera",
+      "has_movement": true,
+      "parameters": {}
+    },
+    {
+      "type": "Camera",
+      "has_movement": true,
+      "parameters": {}
+    }
+  ]
+}

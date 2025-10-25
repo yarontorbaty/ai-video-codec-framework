@@ -1,0 +1,217 @@
+{
+  "filename": "dwanko_run.tnz",
+  "framecount": "72",
+  "version": "71.0",
+  "levels": [
+    {
+      "id": "1",
+      "name": "level_1",
+      "path": "\"$scenefolder\\\\BG\\\\01_sky.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "2",
+      "name": "level_2",
+      "path": "\"$scenefolder\\\\BG\\\\02_trees.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "3",
+      "name": "level_3",
+      "path": "\"$scenefolder\\\\BG\\\\03_ground.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "4",
+      "name": "level_4",
+      "path": "\"$scenefolder\\\\BG\\\\04_bush1.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "5",
+      "name": "level_5",
+      "path": "\"$scenefolder\\\\BG\\\\05_bush2.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "6",
+      "name": "level_6",
+      "path": "\"$scenefolder\\\\BG\\\\06_bush3.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "7",
+      "name": "level_7",
+      "path": "\"$scenefolder\\\\BG\\\\07_bush4.tif\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "8",
+      "name": "level_8",
+      "path": "\"$scenefolder\\\\dwanko\\\\A_painted.tlv\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "9",
+      "name": "level_9",
+      "path": "\"$scenefolder\\\\other_materials\\\\shadow.pli\"",
+      "type": "Unknown"
+    },
+    {
+      "id": "10",
+      "name": "level_10",
+      "path": "\"$scenefolder\\\\other_materials\\\\raylit_source.pli\"",
+      "type": "Unknown"
+    }
+  ],
+  "columns": [
+    {
+      "id": "11",
+      "name": "column_11",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "13",
+      "name": "column_13",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "15",
+      "name": "column_15",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "17",
+      "name": "column_17",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "19",
+      "name": "column_19",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "21",
+      "name": "column_21",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "23",
+      "name": "column_23",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "25",
+      "name": "column_25",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "27",
+      "name": "column_27",
+      "cells": [],
+      "cell_count": 0
+    },
+    {
+      "id": "32",
+      "name": "column_32",
+      "cells": [],
+      "cell_count": 0
+    }
+  ],
+  "layer_structure": {
+    "total_unique_assets": 0,
+    "total_asset_instances": 0,
+    "average_reuse": 0,
+    "top_reused_assets": []
+  },
+  "procedural_operations": [
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "12",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "14",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "16",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "18",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "20",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "22",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "24",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "26",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "28",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Effect",
+      "effect_type": "columnFx",
+      "id": "33",
+      "parameters": {},
+      "param_count": 0
+    },
+    {
+      "type": "Camera",
+      "has_movement": true,
+      "parameters": {}
+    },
+    {
+      "type": "Camera",
+      "has_movement": true,
+      "parameters": {}
+    }
+  ]
+}

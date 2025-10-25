@@ -1,0 +1,41 @@
+# OpenToonz Project Analysis: tga_paint.tnz
+
+## Project Overview
+
+- **Total Frames:** 6
+- **OpenToonz Version:** 71.0
+- **Total Levels (Assets):** 1
+- **Total Columns (Layers):** 1
+
+## Asset Reuse Analysis
+
+- **Unique Assets:** 0
+- **Total Asset Instances:** 0
+- **Average Reuse per Asset:** 0.00x
+- **Compression Opportunity:** 100.0%
+
+### Top 10 Most Reused Assets
+
+
+## Levels (Assets)
+
+### Unknown (1 assets)
+
+- **level_1** (ID: 1)
+  - Path: `"$scenefolder\\dwanko\\tga\\A_converted.tlv"`
+
+## Procedural Operations
+
+Total: 3
+
+- **Camera:Unknown:** 2 instance(s)
+- **Effect:columnFx:** 1 instance(s)
+
+## Codec Implications
+
+Based on this project's structure:
+
+1. **Asset Storage:** Only 0 unique drawings need to be stored
+2. **Temporal Compression:** 0 frames are references (0 bytes each)
+3. **Parametric Effects:** 3 operations can be stored as parameters (~20-50 bytes each)
+4. **Estimated Savings:** 100.0% from asset reuse alone

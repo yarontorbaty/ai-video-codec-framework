@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/yarontorbaty/Documents/Code/AiV1/1-PVC-v2.0/training_iterations/iteration_005_hybrid_procedural/train_phase1_extended.py", line 21, in <module>
+    from anime_functions import render_anime_frame
+ImportError: cannot import name 'render_anime_frame' from 'anime_functions' (/Users/yarontorbaty/Documents/Code/AiV1/1-PVC-v2.0/training_iterations/iteration_005_hybrid_procedural/anime_functions.py)
