@@ -1,0 +1,149 @@
+// === CONFIG ===
+var INPUT_DIR   = "C:/OpenToonz_stuff/assets/anime_masks/"; // <-- change to your folder
+var OUTPUT_DIR  = "C:/OpenToonz_stuff/output/anime_head/";  // <-- change to your folder
+var SCENE_NAME  = "anime_head_scene.tnz";                   // saved under +scenes unless absolute
+
+// Overall proportions (tune these to match the tutorial look)
+var FACE_SCALE      = 1.00;   // overall head scale
+var EYE_DISTANCE    = 1.00;   // 1.0 = base spacing; >1 wider
+var EYE_SCALE       = 1.00;   // eye size
+var HAIR_SCALE      = 1.00;   // hair size
+var MOUTH_SCALE     = 1.00;   // mouth size
+var HEAD_Y_OFFSET   = 0;      // move head up/down
+var HAIR_Y_OFFSET   = 5;      // nudge hair down toward brows
+var EYE_Y_OFFSET    = -5;     // nudge eyes up (negative is up)
+var MOUTH_Y_OFFSET  = 20;     // move mouth downward
+
+// Angle (degrees) if the head is slightly tilted
+var HEAD_ROT_DEG    = 0;
+var HAIR_ROT_DEG    = 0;
+var EYE_ROT_DEG     = 0;
+var MOUTH_ROT_DEG   = 0;
+
+// Input assets
+var FILES = {
+  head:  INPUT_DIR + "head_base.png",
+  eyeL:  INPUT_DIR + "eye_left.png",
+  eyeR:  INPUT_DIR + "eye_right.png",
+  hair:  INPUT_DIR + "hair_main.png",
+  mouth: INPUT_DIR + "mouth.png"
+};
+
+// === HELPERS ===
+function ensureDirs() {
+  // ToonzScript doesn't provide mkdir; just proceed assuming dirs exist.
+  print("Using OUTPUT_DIR:", OUTPUT_DIR);
+}
+
+function vecFromPng(pngPath) {
+  var img = new Image(pngPath);
+  var v   = new OutlineVectorizer();
+  // Vectorizer settings: tune for cleaner lines
+  v.accuracy = 8;            // 1..10 higher=closer to raster
+  v.despeckling = 2;         // remove small dots
+  v.preservePaintedAreas = false;
+  v.maxColors = 2;           // b/w lines
+  var pli = v.vectorize(img); // returns Image/Level (vector)
+  return pli;
+}
+
+function levelFromVectorImage(pliImg, name) {
+  var lvl = new Level();
+  lvl.name = name;
+  // place the vector image on frame "1"
+  lvl.setFrame(1, pliImg);
+  return lvl;
+}
+
+function saveLevelToPLI(levelObj, outPath) {
+  // If saving a single-image Level, ensure .pli extension:
+  levelObj.save(outPath);
+  print("Saved:", outPath);
+}
+
+function addLevelToScene(scene, levelObj, colIndex) {
+  // The level must be added to the scene before setCell using name:
+  // scene.newLevel doesn't take an existing Level object, so we set by cell with {level, fid}
+  // We'll just use the Level object directly in setCell.
+  scene.setCell(0, colIndex, { level: levelObj, fid: 1 });
+}
+
+function applyTransformToImage(image, sx, sy, degrees, tx, ty) {
+  var ib = new ImageBuilder(); // comp builder
+  var t  = new Transform();
+  t = t.scale(sx, sy).rotate(degrees).translate(tx, ty);
+  ib.add(image, t);
+  return ib.image;
+}
+
+function buildPart(pngPath, name, sx, sy, rotDeg, tx, ty) {
+  var vecImg = vecFromPng(pngPath);
+  var transformed = applyTransformToImage(vecImg, sx, sy, rotDeg, tx, ty);
+  var lvl = levelFromVectorImage(transformed, name);
+  saveLevelToPLI(lvl, OUTPUT_DIR + name + ".pli");
+  return lvl;
+}
+
+// === MAIN ===
+ensureDirs();
+
+// Create new scene
+var scn = new Scene();
+print("New scene created");
+
+// HEAD (base)
+var headScale = FACE_SCALE;
+var headLvl = buildPart(
+  FILES.head, "head_base",
+  headScale, headScale,
+  HEAD_ROT_DEG, 0, HEAD_Y_OFFSET
+);
+
+// HAIR
+var hairLvl = buildPart(
+  FILES.hair, "hair_main",
+  HAIR_SCALE, HAIR_SCALE,
+  HAIR_ROT_DEG, 0, HAIR_Y_OFFSET
+);
+
+// EYES
+var eyeOffsetX = 18 * EYE_DISTANCE; // tweak spacing unit as needed
+var eyeScale   = EYE_SCALE;
+var eyeLeftLvl = buildPart(
+  FILES.eyeL, "eye_left",
+  eyeScale, eyeScale,
+  EYE_ROT_DEG, -eyeOffsetX, EYE_Y_OFFSET
+);
+var eyeRightLvl = buildPart(
+  FILES.eyeR, "eye_right",
+  eyeScale, eyeScale,
+  EYE_ROT_DEG,  eyeOffsetX, EYE_Y_OFFSET
+);
+
+// MOUTH
+var mouthLvl = buildPart(
+  FILES.mouth, "mouth",
+  MOUTH_SCALE, MOUTH_SCALE,
+  MOUTH_ROT_DEG, 0, MOUTH_Y_OFFSET
+);
+
+// Insert levels as columns (order matters: head behind, hair, eyes, mouth)
+addLevelToScene(scn, headLvl, 0);
+addLevelToScene(scn, hairLvl, 1);
+addLevelToScene(scn, eyeLeftLvl, 2);
+addLevelToScene(scn, eyeRightLvl, 3);
+addLevelToScene(scn, mouthLvl, 4);
+
+// Save scene (relative to +scenes if not absolute)
+scn.save(SCENE_NAME);
+print("Scene saved:", SCENE_NAME);
+
+// Optional: render frame 1 to a PNG (rasterize vector)
+var rz = new Rasterizer();
+rz.xres = 1080; rz.yres = 1080; rz.dpi = 72;
+var renderer = new Renderer();
+var frame0 = renderer.renderFrame(scn, 0); // index 0 = frame 1
+var outLevel = new Level();
+outLevel.setFrame(1, frame0);
+outLevel.save(OUTPUT_DIR + "final_frame0001.tif"); // or .png if fullcolor
+print("Rendered preview saved");
